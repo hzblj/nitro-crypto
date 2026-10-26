@@ -2009,15 +2009,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hzblj/kara-components@npm:^0.15.2":
-  version: 0.15.2
-  resolution: "@hzblj/kara-components@npm:0.15.2"
+"@hzblj/kara-components@npm:^0.15.3":
+  version: 0.15.3
+  resolution: "@hzblj/kara-components@npm:0.15.3"
   dependencies:
     "@hzblj/expo-native-icons": "npm:^0.1.0"
     "@hzblj/expo-rich-haptics": "npm:^0.1.0"
-    "@hzblj/kara-native": "npm:^0.15.2"
-    "@hzblj/kara-sx": "npm:^0.15.2"
-    "@hzblj/kara-theme": "npm:^0.15.2"
+    "@hzblj/kara-native": "npm:^0.15.3"
+    "@hzblj/kara-sx": "npm:^0.15.3"
+    "@hzblj/kara-theme": "npm:^0.15.3"
     sf-symbols-typescript: "npm:^2.2.0"
   peerDependencies:
     "@expo/ui": ~57.0.0
@@ -2027,24 +2027,24 @@ __metadata:
     react: "*"
     react-native: "*"
     react-native-reanimated: ">=4.0.0"
-  checksum: 10c0/99b7ad31e718742ad40458c1199d4bd40155bb9f0cb8bf24fb7c2a0437faf57aecbb9c946b139e4faa69fc3e9da2ef231dc4dc96a5af66a3a1454d21d150ead1
+  checksum: 10c0/e06bde6d62f97b9b39d5f83893e1321b8edf8c8b78cf52179971298de80fa4882769d3e0ef2c46f0eb53ac0b4498a4bc4ba6609ceaf9ddb9d4bd4b993b3bba4d
   languageName: node
   linkType: hard
 
-"@hzblj/kara-expo-plugin@npm:^0.15.2":
-  version: 0.15.2
-  resolution: "@hzblj/kara-expo-plugin@npm:0.15.2"
+"@hzblj/kara-expo-plugin@npm:^0.15.3":
+  version: 0.15.3
+  resolution: "@hzblj/kara-expo-plugin@npm:0.15.3"
   dependencies:
     "@hzblj/expo-native-icons": "npm:^0.1.0"
   peerDependencies:
     expo: "*"
-  checksum: 10c0/ca2e4c83278c5ec1f587a8bc7d3730efd36b19a4e254e74949472000f33d73b2f66d90cb4d0ec1410de6a849f5d5f8b78960c71895016b3b8480a40a508a54b9
+  checksum: 10c0/033efbc24ee5613884f13930334de311444fecc564a1aeb9f062ec9f129823cae92fce61581c8bba0d37add939707a1c664e38d943ed5bea6d59a72183385116
   languageName: node
   linkType: hard
 
-"@hzblj/kara-native@npm:^0.15.2":
-  version: 0.15.2
-  resolution: "@hzblj/kara-native@npm:0.15.2"
+"@hzblj/kara-native@npm:^0.15.3":
+  version: 0.15.3
+  resolution: "@hzblj/kara-native@npm:0.15.3"
   dependencies:
     "@hzblj/expo-zoom-transition": "npm:^0.1.0"
     sf-symbols-typescript: "npm:^2.2.0"
@@ -2053,65 +2053,65 @@ __metadata:
     expo: ~57.0.0
     react: "*"
     react-native: "*"
-  checksum: 10c0/7c02e0080adc160f2613e9c1f23c0aeb21319bb77dc9bc4d0f6598feee36b03fbbfac4d10099542487595416aa259a531cdab0df6cde5b7474187659658b51c9
+  checksum: 10c0/12c8b3bb73456ae55933b64dc140452917933e7e1d00581b95445ea40af069d919063ccbd4309cabfd52b33c4cdc7b3cf06a63f5c2fe514bace7b787469c4876
   languageName: node
   linkType: hard
 
-"@hzblj/kara-router@npm:^0.15.2":
-  version: 0.15.2
-  resolution: "@hzblj/kara-router@npm:0.15.2"
+"@hzblj/kara-router@npm:^0.15.3":
+  version: 0.15.3
+  resolution: "@hzblj/kara-router@npm:0.15.3"
   dependencies:
     "@hzblj/expo-native-icons": "npm:^0.1.0"
     "@hzblj/expo-zoom-transition": "npm:^0.1.0"
-    "@hzblj/kara-components": "npm:^0.15.2"
-    "@hzblj/kara-native": "npm:^0.15.2"
-    "@hzblj/kara-theme": "npm:^0.15.2"
+    "@hzblj/kara-components": "npm:^0.15.3"
+    "@hzblj/kara-native": "npm:^0.15.3"
+    "@hzblj/kara-theme": "npm:^0.15.3"
   peerDependencies:
     expo-router: "*"
     react: "*"
     react-native: "*"
     react-native-screens: "*"
-  checksum: 10c0/994b05fbc582f748c94020493389146b2f1f40bf73da650fd3e1fc9fe2886372eb63cab87772b5aa0bceba4b1f34a306709d18403330e7c6622460732e0f830d
+  checksum: 10c0/0911d81c820084c74b7ebb17f3befee577e97f9e800770088acf4632cb135a1fd2d744f662bad7cec9f4b6898b0cb35d2a1031f6790439d174b9957379620f11
   languageName: node
   linkType: hard
 
-"@hzblj/kara-sx@npm:^0.15.2":
-  version: 0.15.2
-  resolution: "@hzblj/kara-sx@npm:0.15.2"
+"@hzblj/kara-sx@npm:^0.15.3":
+  version: 0.15.3
+  resolution: "@hzblj/kara-sx@npm:0.15.3"
   dependencies:
-    "@hzblj/kara-native": "npm:^0.15.2"
-    "@hzblj/kara-theme": "npm:^0.15.2"
+    "@hzblj/kara-native": "npm:^0.15.3"
+    "@hzblj/kara-theme": "npm:^0.15.3"
   peerDependencies:
     "@expo/ui": ~57.0.0
     react: "*"
     react-native: "*"
     react-native-reanimated: ">=4.0.0"
-  checksum: 10c0/9efca05962af19aa29e5a0d23a87ce2d311319340ba38de6a06209b5c6342c76a9dda826d87a69da7ff5232db31d84624e5c4cf8ab1253ae89362e06fe3628ed
+  checksum: 10c0/f01c8817063ee5a41bade6ccc1877992432a43c0b6ef599a8b0b031e3715474500048af3f4871364d0fa5fda265503b1edb82fac6d38cd51f71abe6ad45b263f
   languageName: node
   linkType: hard
 
-"@hzblj/kara-theme@npm:^0.15.2":
-  version: 0.15.2
-  resolution: "@hzblj/kara-theme@npm:0.15.2"
+"@hzblj/kara-theme@npm:^0.15.3":
+  version: 0.15.3
+  resolution: "@hzblj/kara-theme@npm:0.15.3"
   peerDependencies:
     "@expo/ui": ~57.0.0
     react: "*"
     react-native: "*"
-  checksum: 10c0/1433b32ccc6f331dc947323ca474b95073f7e0e6b7700534190756c69e9ad745378d5461c5a7e22bd5e1a232e4967e43c743e0010a2a96a0a65ae45a93a22f71
+  checksum: 10c0/84b7a28f9abb79a1d28f02e913f89997eed02d4c183f9073a5648c70eb028e259b52d39b2e6e35a1a8c3def67a9f4a121c67e872f00a1a45fbd63938ab5ec41a
   languageName: node
   linkType: hard
 
-"@hzblj/kara-ui@npm:^0.15.2":
-  version: 0.15.2
-  resolution: "@hzblj/kara-ui@npm:0.15.2"
+"@hzblj/kara-ui@npm:^0.15.3":
+  version: 0.15.3
+  resolution: "@hzblj/kara-ui@npm:0.15.3"
   dependencies:
     "@hzblj/expo-native-icons": "npm:^0.1.0"
-    "@hzblj/kara-components": "npm:^0.15.2"
-    "@hzblj/kara-expo-plugin": "npm:^0.15.2"
-    "@hzblj/kara-native": "npm:^0.15.2"
-    "@hzblj/kara-router": "npm:^0.15.2"
-    "@hzblj/kara-sx": "npm:^0.15.2"
-    "@hzblj/kara-theme": "npm:^0.15.2"
+    "@hzblj/kara-components": "npm:^0.15.3"
+    "@hzblj/kara-expo-plugin": "npm:^0.15.3"
+    "@hzblj/kara-native": "npm:^0.15.3"
+    "@hzblj/kara-router": "npm:^0.15.3"
+    "@hzblj/kara-sx": "npm:^0.15.3"
+    "@hzblj/kara-theme": "npm:^0.15.3"
   peerDependencies:
     "@expo/ui": ~57.0.0
     "@lodev09/react-native-true-sheet": ">=3.11.0"
@@ -2129,7 +2129,7 @@ __metadata:
       optional: true
   bin:
     kara-icons: ./bin/kara-icons.js
-  checksum: 10c0/8a08307bfb5a9e351f77560a5dd3c66703048b12dccd1f4596ea0a482b0aaecfc17e98a726f5c5eb9979cd03e39de30149d7b2b146056eb308a955d86662d8d6
+  checksum: 10c0/2dd6e3451965af15f83e4535763f4cbd31acd9cc5c1cf27b49cc5534d37b950be3ea991af81b4d62fd7a7dd6173a2416adac7fac1e68e2ed33ad453fbe583eb9
   languageName: node
   linkType: hard
 
@@ -2268,6 +2268,22 @@ __metadata:
     "@jridgewell/resolve-uri": "npm:^3.1.0"
     "@jridgewell/sourcemap-codec": "npm:^1.4.14"
   checksum: 10c0/4b30ec8cd56c5fd9a661f088230af01e0c1a3888d11ffb6b47639700f71225be21d1f7e168048d6d4f9449207b978a235c07c8f15c07705685d16dc06280e9d9
+  languageName: node
+  linkType: hard
+
+"@legendapp/list@npm:3.6.0":
+  version: 3.6.0
+  resolution: "@legendapp/list@npm:3.6.0"
+  dependencies:
+    use-sync-external-store: "npm:^1.5.0"
+  peerDependencies:
+    react: "*"
+  peerDependenciesMeta:
+    react-dom:
+      optional: true
+    react-native:
+      optional: true
+  checksum: 10c0/6ac6dba160a08eba13e9096a8dbcf2a749c43f7da2ea67206a9f265e4d870b6000645233623f2f24466e37e146ae5fe729672ae97125e74dee3ebdbe841beb10
   languageName: node
   linkType: hard
 
@@ -4303,6 +4319,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"auto-zustand-selectors-hook@npm:3.0.1":
+  version: 3.0.1
+  resolution: "auto-zustand-selectors-hook@npm:3.0.1"
+  peerDependencies:
+    zustand: ">=5.0.0"
+  checksum: 10c0/ca3d1b13d3a96f03c395cdec523352a6075b82aeb72ab922240c4a6ba9e0e0a6730775bb4e3265fa375afb20fd2e7f45fd265f34d42750a78fb706ed2d816b4a
+  languageName: node
+  linkType: hard
+
 "babel-plugin-polyfill-corejs2@npm:^0.4.14":
   version: 0.4.17
   resolution: "babel-plugin-polyfill-corejs2@npm:0.4.17"
@@ -5430,6 +5455,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-local-authentication@npm:~57.0.3":
+  version: 57.0.3
+  resolution: "expo-local-authentication@npm:57.0.3"
+  dependencies:
+    invariant: "npm:^2.2.4"
+  peerDependencies:
+    expo: "*"
+  checksum: 10c0/c6e32ce2f1579b947960760e796554ba63d00deeb53a81109bae41e82e9650f491f1f30ce35aac1e1f84a28549ba4ee44caa8147bdc1cd005371e9bc8d3f3df3
+  languageName: node
+  linkType: hard
+
 "expo-manifests@npm:~57.0.2":
   version: 57.0.2
   resolution: "expo-manifests@npm:57.0.2"
@@ -5543,6 +5579,15 @@ __metadata:
     react-server-dom-webpack:
       optional: true
   checksum: 10c0/7349c81ed38f42406a70f365b2a70eded5fe5ff6de495e14031fcb369dec7e292cb724b86a10eac57b5f171bc695aabdd8355025a920f2081c1a0abed3a16b25
+  languageName: node
+  linkType: hard
+
+"expo-secure-store@npm:~57.0.4":
+  version: 57.0.4
+  resolution: "expo-secure-store@npm:57.0.4"
+  peerDependencies:
+    expo: "*"
+  checksum: 10c0/8f94ff747808d6a270536171bf14eaa3e75aeae31c7a20615a76d101e167d2cf7a09db6c7f9b770a587a8852362bb69ecb15b4208db0789fcd24a61a50941c0f
   languageName: node
   linkType: hard
 
@@ -6076,6 +6121,13 @@ __metadata:
   version: 5.3.2
   resolution: "ignore@npm:5.3.2"
   checksum: 10c0/f9f652c957983634ded1e7f02da3b559a0d4cc210fca3792cb67f1b153623c9c42efdc1c4121af171e295444459fc4a9201101fb041b1104a3c000bccb188337
+  languageName: node
+  linkType: hard
+
+"immer@npm:11.1.21":
+  version: 11.1.21
+  resolution: "immer@npm:11.1.21"
+  checksum: 10c0/0c29182c98d0cea079fc679a198a9bccc4d7d70b528d85f52707e606fbe6fc8fea0a3d583e86ff2d3eb75cd42e25aa359466e8e8edde316db436bb92a917fe84
   languageName: node
   linkType: hard
 
@@ -7198,8 +7250,9 @@ __metadata:
     "@hzblj/crypto-bitcoin": "workspace:*"
     "@hzblj/crypto-ethereum": "workspace:*"
     "@hzblj/crypto-solana": "workspace:*"
-    "@hzblj/kara-ui": "npm:^0.15.2"
+    "@hzblj/kara-ui": "npm:^0.15.3"
     "@hzblj/nitro-crypto": "workspace:*"
+    "@legendapp/list": "npm:3.6.0"
     "@lodev09/react-native-true-sheet": "npm:3.11.18"
     "@noble/curves": "npm:2.4.0"
     "@noble/hashes": "npm:2.4.0"
@@ -7208,6 +7261,7 @@ __metadata:
     "@scure/bip39": "npm:2.4.0"
     "@types/node": "npm:^22.19.0"
     "@types/react": "npm:~19.2.14"
+    auto-zustand-selectors-hook: "npm:3.0.1"
     expo: "npm:~57.0.31"
     expo-build-properties: "npm:~57.0.22"
     expo-clipboard: "npm:~57.0.2"
@@ -7216,13 +7270,18 @@ __metadata:
     expo-device: "npm:~57.0.2"
     expo-image: "npm:~57.0.5"
     expo-linking: "npm:~57.0.13"
+    expo-local-authentication: "npm:~57.0.3"
     expo-router: "npm:~57.0.29"
+    expo-secure-store: "npm:~57.0.4"
     expo-status-bar: "npm:~57.0.1"
     expo-system-ui: "npm:~57.0.4"
     expo-web-browser: "npm:~57.0.3"
+    immer: "npm:11.1.21"
+    qrcode-generator: "npm:2.0.4"
     react: "npm:19.2.3"
     react-native: "npm:0.86.3"
     react-native-gesture-handler: "npm:~2.32.0"
+    react-native-mmkv: "npm:4.3.2"
     react-native-nitro-modules: "npm:0.37.1"
     react-native-reanimated: "npm:4.5.1"
     react-native-safe-area-context: "npm:~5.7.0"
@@ -7230,6 +7289,7 @@ __metadata:
     react-native-worklets: "npm:0.10.1"
     tsx: "npm:^4.23.15"
     typescript: "npm:~7.0.2"
+    zustand: "npm:5.0.15"
   languageName: unknown
   linkType: soft
 
@@ -7679,6 +7739,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"qrcode-generator@npm:2.0.4":
+  version: 2.0.4
+  resolution: "qrcode-generator@npm:2.0.4"
+  checksum: 10c0/52dc3894bda6afecf09cb36aba9c181f3c4641fcbeac40c2af05d68da1383e3a1c7354bd3dc8c5e2a199d2e62314bbdec8cb4fbbd00bcfda40de56bb36bfdb17
+  languageName: node
+  linkType: hard
+
 "quansync@npm:^0.2.7":
   version: 0.2.11
   resolution: "quansync@npm:0.2.11"
@@ -7796,6 +7863,17 @@ __metadata:
     react: "*"
     react-native: "*"
   checksum: 10c0/28cebd5f1f3632864ff5e342278721d1e5e38627ae73859a8814012116ef15c629fee7137a6c9c97bb05d94bbe639b0b47e69b36fc2735ab53ed31570140663f
+  languageName: node
+  linkType: hard
+
+"react-native-mmkv@npm:4.3.2":
+  version: 4.3.2
+  resolution: "react-native-mmkv@npm:4.3.2"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+    react-native-nitro-modules: "*"
+  checksum: 10c0/47c86114ee0ddbc8245dda174f419df9390a8ce0a6bcee0ded5eabd0b257e2b49257ddaf3b39eb5ab95ad7eed0ffa6d6b1e7c6bf8a3e56e6508408e49b98ed07
   languageName: node
   linkType: hard
 
@@ -9042,6 +9120,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"use-sync-external-store@npm:^1.5.0":
+  version: 1.7.0
+  resolution: "use-sync-external-store@npm:1.7.0"
+  peerDependencies:
+    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+  checksum: 10c0/6bae7cb778ce611131ec830c4e469fbc2872acefc25d2e4cf1c28b8628690689770742a9f2f0642c95134f9c77041fee60f0352f81ca43f96643b0ed01774726
+  languageName: node
+  linkType: hard
+
 "utils-merge@npm:1.0.1":
   version: 1.0.1
   resolution: "utils-merge@npm:1.0.1"
@@ -9379,5 +9466,26 @@ __metadata:
   version: 4.6.7
   resolution: "zod@npm:4.6.7"
   checksum: 10c0/4ce2eb14034317b7254e347ca37b5ad591cf8333147030cf05b9b5d31692d45073f7f2747aa50cf8c6b29012194d2b22978cecc89969cf34a0d18e89d0ee7d7b
+  languageName: node
+  linkType: hard
+
+"zustand@npm:5.0.15":
+  version: 5.0.15
+  resolution: "zustand@npm:5.0.15"
+  peerDependencies:
+    "@types/react": ">=18.0.0"
+    immer: ">=9.0.6"
+    react: ">=18.0.0"
+    use-sync-external-store: ">=1.2.0"
+  peerDependenciesMeta:
+    "@types/react":
+      optional: true
+    immer:
+      optional: true
+    react:
+      optional: true
+    use-sync-external-store:
+      optional: true
+  checksum: 10c0/ed3a883950a8c22d98e8c72cef103af18043ce66b45faf218ad20ccc8ee29716aacfc6b0a3e783b2152ea38b7663f3982bb6bf2b13ce3df692b05276446afa04
   languageName: node
   linkType: hard

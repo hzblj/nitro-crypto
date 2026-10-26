@@ -2,7 +2,7 @@
 
 A chain whose curves and hashes the engine already has is one TypeScript file: no change to the engine, to
 `@hzblj/nitro-crypto`, or to any other adapter. The example app proves it with TRON
-([`apps/example/src/chains/tron.ts`](../apps/example/src/chains/tron.ts)), registered beside the three published
+([`apps/example/src/features/debug/chains/tron.ts`](../apps/example/src/features/debug/chains/tron.ts)), registered beside the three published
 adapters and tested against independent libraries in [`apps/example/test/chains.test.ts`](../apps/example/test/chains.test.ts).
 
 ## 1. Check the engine has what the chain needs
@@ -17,6 +17,7 @@ adapters and tested against independent libraries in [`apps/example/test/chains.
 | `bip39` | Mnemonics and seeds |
 | `bip32-secp256k1` | BIP-32 derivation, hardened and normal steps |
 | `slip10-ed25519` | SLIP-0010 derivation for Ed25519, hardened steps only |
+| `mnemonic-generate` | A fresh BIP-39 mnemonic handed out for backup (`crypto.mnemonic.generate`); no adapter needs it |
 
 TRON needs `bip32-secp256k1`, `keccak256` and `sha256` (for Base58Check): all there. If yours needs something that is
 not (Schnorr for Taproot, sr25519 for Polkadot, Blake2b for Cardano), see "When the engine lacks a primitive" below.

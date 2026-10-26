@@ -5,10 +5,9 @@ import {StatusBar} from 'expo-status-bar'
 import {type ReactNode, useMemo} from 'react'
 import {GestureHandlerRootView} from 'react-native-gesture-handler'
 import {SafeAreaProvider} from 'react-native-safe-area-context'
-
-import {CryptoProvider} from './crypto'
-import {theme} from './theme'
-import {CopyProvider} from './ui'
+import {CopyProvider} from './components'
+import {theme} from './config/theme'
+import {CryptoProvider} from './features/debug/crypto'
 
 const ROOT_STYLE = {flex: 1}
 

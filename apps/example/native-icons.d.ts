@@ -3,34 +3,62 @@
 declare global {
   interface NativeIcons {
     add: true
+    backup: true
     bolt: true
     'bolt-filled': true
+    'bug-report': true
+    'bug-report-filled': true
     'cancel-filled': true
+    check: true
     'check-circle-filled': true
+    'chevron-right': true
+    close: true
     code: true
     'content-copy': true
+    'content-paste': true
     'data-object': true
     delete: true
+    download: true
+    error: true
+    face: true
     fingerprint: true
     info: true
+    key: true
     layers: true
     'layers-filled': true
     lock: true
+    'lock-open': true
+    'north-east': true
     'open-in-new': true
+    pending: true
+    'qr-code': true
+    'qr-code-scanner': true
+    'receipt-long': true
+    'receipt-long-filled': true
+    refresh: true
     replay: true
     'rocket-launch': true
     schedule: true
     science: true
     'science-filled': true
+    settings: true
+    'settings-filled': true
+    share: true
     shield: true
     'shield-filled': true
+    signature: true
+    'south-west': true
+    toll: true
     tune: true
     verified: true
     'verified-filled': true
     'verified-user': true
+    visibility: true
+    'visibility-off': true
     wallet: true
     'wallet-filled': true
     'warning-filled': true
+    'water-drop': true
   }
 }
 

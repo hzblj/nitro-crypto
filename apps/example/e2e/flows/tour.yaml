@@ -4,8 +4,11 @@ appId: ${APP_ID}
 ---
 - runFlow: steps/open.yaml
 
-# Lab: hashes of the default input, a fresh secp256k1 key, then Ed25519.
-- tapOn: Lab
+# Primitives: hashes of the default input, a fresh secp256k1 key, then Ed25519.
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: primitives
 - extendedWaitUntil:
     visible:
       id: digest-sha256
@@ -79,12 +82,10 @@ appId: ${APP_ID}
 - takeScreenshot: ${OUT}-05-performance-more
 
 # About: the architecture, the security model, versions and licenses.
-- tapOn: Overview
-- scrollUntilVisible:
-    element: 'About and security'
-    direction: DOWN
-    centerElement: true
-- tapOn: 'About and security'
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: about
 - extendedWaitUntil:
     visible:
       id: architecture

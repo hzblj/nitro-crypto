@@ -1,0 +1,73 @@
+{
+  "fill" : {
+    "automatic-gradient" : "srgb:0.07059,0.63922,0.49804,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "bolt.svg",
+          "name" : "bolt",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -119,
+              52
+            ]
+          }
+        },
+        {
+          "glass" : true,
+          "image-name" : "clasp.svg",
+          "name" : "clasp",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              174,
+              36
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.3
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : true,
+          "image-name" : "body.svg",
+          "name" : "wallet",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              20
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.4
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

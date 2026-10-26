@@ -1,0 +1,26 @@
+# Opens one of the Debug tab's screens from its overview, `debug-${SCREEN}`. Selecting the tab again does not pop its
+# stack, so a screen left open is closed with its back button (a bare chevron, `BackButton` to the accessibility tree)
+# until the overview's page is back, and the overview is scrolled to its top before the row is looked for below.
+appId: ${APP_ID}
+---
+- tapOn: Debug
+- repeat:
+    times: 3
+    while:
+      notVisible:
+        id: overview
+    commands:
+      - tapOn:
+          id: BackButton
+      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element:
+      id: self-test-summary
+    direction: UP
+- scrollUntilVisible:
+    element:
+      id: debug-${SCREEN}
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: debug-${SCREEN}

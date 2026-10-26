@@ -12,8 +12,11 @@ appId: ${APP_ID}
     timeout: 60000
 - takeScreenshot: ${OUT}-01-overview
 
-# Wallet: the published test mnemonic has the published BIP-32 fingerprint.
-- tapOn: Wallet
+# Demo wallet: the published test mnemonic has the published BIP-32 fingerprint.
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: demo-wallet
 # Centred before every tap: iOS 26 and later float the tab bar over the content, and a control behind it takes the
 # tap meant for it.
 - scrollUntilVisible:
@@ -29,7 +32,10 @@ appId: ${APP_ID}
 - takeScreenshot: ${OUT}-02-wallet
 
 # Accounts: each adapter's address for it, as BIP-44, BIP-84 and SLIP-0010 publish them.
-- tapOn: Accounts
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: accounts
 - extendedWaitUntil:
     visible: '0x9858EfFD232B4033E47d90003D41EC34EcaEda94'
     timeout: 20000
@@ -49,7 +55,10 @@ appId: ${APP_ID}
     timeout: 10000
 
 # Sign: EIP-191 verifies, and a changed message does not.
-- tapOn: Sign
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: sign
 - tapOn:
     id: sign
 - scrollUntilVisible:
@@ -109,7 +118,10 @@ appId: ${APP_ID}
 - takeScreenshot: ${OUT}-08-bitcoin-unsupported
 
 # Deleting the wallet zeroizes every secret it held.
-- tapOn: Wallet
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: demo-wallet
 - scrollUntilVisible:
     element:
       id: delete-wallet

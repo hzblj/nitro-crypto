@@ -1,0 +1,78 @@
+# The wallet on the test networks, needing no funds: the published test phrase imported, the addresses MetaMask, a
+# BIP-84 wallet and Phantom show for it, live balances, the send form refusing another network's address, and a lock.
+# On a simulator without Face ID or a passcode the phrase is stored behind the Keychain alone, so nothing prompts.
+appId: ${APP_ID}
+---
+- runFlow: steps/open.yaml
+
+# Import: the engine checks the word list and the checksum as the phrase is typed.
+- tapOn: Wallet
+- tapOn:
+    id: import-wallet
+- tapOn:
+    id: import-phrase
+- inputText: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about
+- extendedWaitUntil:
+    visible: '12 words'
+    timeout: 5000
+- tapOn:
+    id: import-continue
+- tapOn:
+    id: protect-save
+- extendedWaitUntil:
+    visible:
+      id: portfolio-total
+    timeout: 60000
+- takeScreenshot: ${OUT}-01-home
+
+# Each network's account, at the path its own wallets use.
+- tapOn:
+    id: network-ethereum
+- extendedWaitUntil:
+    visible: '0x9858EfFD232B4033E47d90003D41EC34EcaEda94'
+    timeout: 20000
+- takeScreenshot: ${OUT}-02-ethereum
+- tapOn: Wallet
+- tapOn:
+    id: action-receive
+- tapOn: BTC
+- assertVisible: 'tb1q6rz28mcfaxtmd6v789l9rrlrusdprr9pqcpvkl'
+- tapOn: SOL
+- assertVisible: 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk'
+- takeScreenshot: ${OUT}-03-receive
+
+# Send: the adapter refuses a mainnet address on testnet4 before anything is built.
+- tapOn: Wallet
+- tapOn:
+    id: action-send
+- tapOn:
+    id: asset-bitcoin
+- tapOn:
+    id: recipient
+- inputText: bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu
+- extendedWaitUntil:
+    visible: 'Not a testnet address.*'
+    timeout: 5000
+- takeScreenshot: ${OUT}-04-send-wrong-network
+
+# History, then a lock that wipes the keys from the engine, and an unlock that derives them again.
+- tapOn: Activity
+- extendedWaitUntil:
+    visible:
+      id: activity-row
+    timeout: 60000
+- takeScreenshot: ${OUT}-05-activity
+- tapOn: Settings
+- tapOn:
+    id: lock-now
+- extendedWaitUntil:
+    visible:
+      id: unlock
+    timeout: 10000
+- tapOn:
+    id: unlock
+- extendedWaitUntil:
+    visible:
+      id: settings-fingerprint
+    timeout: 20000
+- assertVisible: '73c5da0a'

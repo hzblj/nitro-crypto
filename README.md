@@ -39,7 +39,7 @@ and what is not in this version.
 | `packages/nitro-crypto/` | `@hzblj/nitro-crypto`: the TypeScript facade and adapter registry, the Nitro specs and C++ bridge, the prebuilt engine |
 | `packages/crypto-ethereum/`, `crypto-bitcoin/`, `crypto-solana/` | The chain adapters, each published on its own |
 | `packages/zig-engine-crypto/` | The engine in Zig: its C ABI, tests, published vectors and benchmark (private; it ships inside `@hzblj/nitro-crypto`) |
-| `apps/example/` | The example app: engine self-test, wallet, accounts on four chains, signing, primitives, benchmarks, security |
+| `apps/example/` | The example app: a testnet wallet (Sepolia, Bitcoin testnet4, Solana devnet) that sends and receives on the engine, and a Debug tab with the self-test, accounts on four chains, signing, primitives, benchmarks, security |
 | `scripts/` | The engine's reproducible builds and their verification, the pack check, version sync |
 | `docs/` | [Architecture](./docs/architecture.md), [adding an adapter](./docs/adding-an-adapter.md), [compatibility](./docs/compatibility.md), [benchmarks](./docs/benchmarks.md), [decisions](./docs/adr) |
 

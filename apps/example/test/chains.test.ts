@@ -9,7 +9,7 @@ import {createBase58check} from '@scure/base'
 import {HDKey} from '@scure/bip32'
 import {mnemonicToSeedSync} from '@scure/bip39'
 
-import {createAdapters, type TronAccount} from '../src/chains'
+import {createAdapters, type TronAccount} from '../src/features/debug/chains'
 
 const ABANDON = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 

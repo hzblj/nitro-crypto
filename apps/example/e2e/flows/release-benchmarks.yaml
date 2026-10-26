@@ -4,7 +4,10 @@
 appId: ${APP_ID}
 ---
 - runFlow: steps/open.yaml
-- tapOn: Lab
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: primitives
 # The last row of the page: it cannot be scrolled to the centre.
 - scrollUntilVisible:
     element: 'Performance'
