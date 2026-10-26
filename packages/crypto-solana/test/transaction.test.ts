@@ -17,6 +17,7 @@ import {
   createTransactionMessage,
   getAddressComparator,
   getAddressEncoder,
+  getCompiledTransactionMessageDecoder,
   getProgramDerivedAddress,
   getTransactionEncoder,
   type Instruction,
@@ -454,5 +455,177 @@ describe('signed transactions', () => {
       error => isCryptoError(error, 'INVALID_ARGUMENT')
     )
     wallet.dispose()
+  })
+})
+
+describe('messages signed elsewhere', () => {
+  const COMPUTE_BUDGET = 'ComputeBudget111111111111111111111111111111'
+
+  test('decodeMessage reads what kit compiles: the same accounts, roles, blockhash and instructions', () => {
+    for (let round = 0; round < 80; round++) {
+      const payer = randomAddress()
+      const blockhash = randomBlockhash()
+      const instructions = Array.from(
+        {length: 1 + randomInt(4)},
+        (): SolanaInstruction => ({
+          accounts: Array.from({length: randomInt(5)}, () => ({
+            address: randomInt(4) === 0 ? payer : randomAddress(),
+            isSigner: randomInt(3) === 0,
+            isWritable: randomInt(2) === 0,
+          })),
+          data: random(randomInt(40)),
+          programId: randomAddress(),
+        })
+      )
+      const bytes = kitBytes(payer, blockhash, instructions.map(toKit))
+      const decoded = solana.decodeMessage(bytes)
+      const theirs = getCompiledTransactionMessageDecoder().decode(bytes)
+
+      if (theirs.version !== 'legacy') {
+        assert.fail('kit reads a legacy message')
+      }
+
+      assert.equal(decoded.feePayer, payer)
+      assert.equal(decoded.recentBlockhash, blockhash)
+      assert.deepEqual(
+        decoded.accounts.map(account => account.address),
+        theirs.staticAccounts
+      )
+      assert.equal(decoded.signers.length, theirs.header.numSignerAccounts)
+      assert.deepEqual(
+        decoded.instructions.map(instruction => [
+          instruction.programId,
+          instruction.accounts.map(account => account.address),
+          [...instruction.data],
+        ]),
+        (theirs.instructions ?? []).map(instruction => [
+          theirs.staticAccounts[instruction.programAddressIndex],
+          (instruction.accountIndices ?? []).map(index => theirs.staticAccounts[index]),
+          [...(instruction.data ?? [])],
+        ])
+      )
+      // Compiled again, the decoded message is the same bytes.
+      assert.deepEqual(
+        solana.compileMessage({feePayer: payer, instructions: decoded.instructions, recentBlockhash: blockhash}),
+        bytes
+      )
+    }
+  })
+
+  test('the instructions a wallet sends are summarized', () => {
+    const payer = randomAddress()
+    const recipient = randomAddress()
+    const instructions = [
+      {accounts: [], data: Uint8Array.of(2, 0x40, 0x42, 0x0f, 0), programId: COMPUTE_BUDGET},
+      {accounts: [], data: Uint8Array.of(3, 0xe8, 0x03, 0, 0, 0, 0, 0, 0), programId: COMPUTE_BUDGET},
+      solana.instructions.transfer({from: payer, lamports: 1_500_000_000n, to: recipient}),
+      ...solana.instructions.transferToken({
+        amount: 2_500_000n,
+        decimals: 6,
+        from: payer,
+        mint: USDC_DEVNET,
+        to: recipient,
+      }),
+      {
+        accounts: [{address: payer, isSigner: true, isWritable: true}],
+        data: Uint8Array.of(9, 9),
+        programId: randomAddress(),
+      },
+    ]
+    const decoded = solana.decodeMessage(
+      solana.compileMessage({feePayer: payer, instructions, recentBlockhash: randomBlockhash()})
+    )
+
+    assert.deepEqual(
+      decoded.instructions.map(instruction => instruction.summary.type),
+      ['compute-unit-limit', 'compute-unit-price', 'transfer', 'create-token-account', 'token-transfer', 'unknown']
+    )
+    assert.deepEqual(decoded.instructions[0]?.summary, {type: 'compute-unit-limit', units: 1_000_000})
+    assert.deepEqual(decoded.instructions[1]?.summary, {microLamports: 1000n, type: 'compute-unit-price'})
+    assert.deepEqual(decoded.instructions[2]?.summary, {
+      from: payer,
+      lamports: 1_500_000_000n,
+      to: recipient,
+      type: 'transfer',
+    })
+    const token = decoded.instructions[4]?.summary
+    assert.ok(token?.type === 'token-transfer')
+    assert.equal(token.amount, 2_500_000n)
+    assert.equal(token.decimals, 6)
+    assert.equal(token.owner, payer)
+    assert.equal(token.mint, USDC_DEVNET)
+  })
+
+  test('a message signed by signTransactionMessage assembles into what signTransaction makes', async () => {
+    const wallet = await crypto.createEphemeralWallet({mnemonic: ABANDON})
+    const account = await wallet.deriveAccount({chain: 'solana'})
+    const other = await wallet.deriveAccount({account: 1, chain: 'solana'})
+    const recentBlockhash = randomBlockhash()
+    const instructions = [solana.instructions.transfer({from: account.address, lamports: 42n, to: other.address})]
+    const message = solana.compileMessage({feePayer: account.address, instructions, recentBlockhash})
+    const signature = await account.signTransactionMessage(message)
+    const direct = await account.signTransaction({instructions, recentBlockhash})
+
+    assert.deepEqual(solana.assembleTransaction({message, signatures: [signature]}), direct)
+
+    // Another key's signature, a flipped bit, or a missing signature: nothing assembles.
+    const wrong = await other.signMessage({message})
+    assert.throws(
+      () => solana.assembleTransaction({message, signatures: [wrong]}),
+      error => isCryptoError(error, 'INVALID_SIGNATURE')
+    )
+    const flipped = signature.slice()
+    flipped[0] = (flipped[0] ?? 0) ^ 1
+    assert.throws(
+      () => solana.assembleTransaction({message, signatures: [flipped]}),
+      error => isCryptoError(error, 'INVALID_SIGNATURE')
+    )
+    assert.throws(
+      () => solana.assembleTransaction({message, signatures: []}),
+      error => isCryptoError(error, 'INVALID_ARGUMENT')
+    )
+
+    // An account that is not a signer of the message does not sign it.
+    await assert.rejects(other.signTransactionMessage(message), error => isCryptoError(error, 'INVALID_ARGUMENT'))
+    wallet.dispose()
+  })
+
+  test('malformed and versioned messages are refused', () => {
+    const payer = randomAddress()
+    const message = solana.compileMessage({
+      feePayer: payer,
+      instructions: [solana.instructions.transfer({from: payer, lamports: 1n, to: randomAddress()})],
+      recentBlockhash: randomBlockhash(),
+    })
+    const cases = [
+      new Uint8Array(0),
+      Uint8Array.of(0x80, ...message),
+      message.subarray(0, message.length - 1),
+      Uint8Array.of(...message, 0),
+      // No signer.
+      Uint8Array.of(0, ...message.subarray(1)),
+      // A compact-u16 with a needless continuation byte.
+      Uint8Array.of(...message.subarray(0, 3), 0x84, 0x00, ...message.subarray(4)),
+      // The second account replaced by the first: an account twice.
+      Uint8Array.of(...message.subarray(0, 36), ...message.subarray(4, 36), ...message.subarray(68)),
+    ]
+
+    for (const bytes of cases) {
+      assert.throws(
+        () => solana.decodeMessage(bytes),
+        error => isCryptoError(error, 'INVALID_ARGUMENT')
+      )
+    }
+
+    for (let run = 0; run < 2000; run++) {
+      const mutated = message.slice()
+      mutated[randomInt(mutated.length)] = randomInt(256)
+
+      try {
+        solana.decodeMessage(mutated)
+      } catch (error) {
+        assert.ok(isCryptoError(error), String(error))
+      }
+    }
   })
 })

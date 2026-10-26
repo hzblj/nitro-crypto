@@ -1,5 +1,6 @@
 import {
   type AdapterContext,
+  base58,
   type ChainAdapter,
   CryptoError,
   defineAdapter,
@@ -17,9 +18,15 @@ import {
 import {addressBytes, addressFromPublicKey, type SolanaAddress, validateAddress} from './address'
 import {isOnCurveBytes} from './curve'
 import {createInstructions, type SolanaInstructions} from './instructions'
+import {type DecodedSolanaMessage, decodeMessage} from './message'
 import {derivationPath, type SolanaAccountRequest} from './path'
 import {type AssociatedTokenRequest, associatedTokenAddress, findProgramAddress, type ProgramAddress} from './pda'
-import {type CompileMessageRequest, compileLegacyMessage} from './transaction'
+import {
+  type CompileMessageRequest,
+  compileLegacyMessage,
+  type SignedSolanaTransaction,
+  serializeTransaction,
+} from './transaction'
 import {VERSION} from './version'
 
 const CLUSTERS: readonly SolanaCluster[] = ['mainnet-beta', 'devnet', 'testnet']
@@ -53,6 +60,19 @@ export type SolanaChain<Id extends string = 'solana'> = {
   readonly isOnCurve: (address: string) => boolean
   /** The legacy message of a transaction: what each signer signs, and what `getFeeForMessage` prices. */
   readonly compileMessage: (request: CompileMessageRequest) => Uint8Array
+  /**
+   * A legacy message read back: the fee payer, the signers, every account and its role, the blockhash, and each
+   * instruction with a summary of what it does. Strict; versioned messages are refused (`INVALID_ARGUMENT`).
+   */
+  readonly decodeMessage: (message: Uint8Array) => DecodedSolanaMessage
+  /**
+   * The transaction to send, from a message and its signatures made elsewhere, one per signer in the message's
+   * order. Each signature is verified by the engine against its signer first: one that fails is `INVALID_SIGNATURE`.
+   */
+  readonly assembleTransaction: (request: {
+    readonly message: Uint8Array
+    readonly signatures: readonly Uint8Array[]
+  }) => SignedSolanaTransaction
 }
 
 const createChain = <Id extends string>(context: AdapterContext, id: Id, cluster: SolanaCluster): SolanaChain<Id> => {
@@ -60,9 +80,37 @@ const createChain = <Id extends string>(context: AdapterContext, id: Id, cluster
 
   return Object.freeze({
     addressFromPublicKey,
+    assembleTransaction: ({
+      message,
+      signatures,
+    }: {
+      readonly message: Uint8Array
+      readonly signatures: readonly Uint8Array[]
+    }) => {
+      const {signers} = decodeMessage(message)
+
+      if (signatures.length !== signers.length) {
+        throw new CryptoError(
+          'INVALID_ARGUMENT',
+          `The message needs ${signers.length} signatures, not ${signatures.length}.`
+        )
+      }
+
+      signers.forEach((signer, index) => {
+        if (!verifySigner(context, signer, message, signatures[index] ?? new Uint8Array(0))) {
+          throw new CryptoError('INVALID_SIGNATURE', `The signature of ${signer} does not verify for this message.`)
+        }
+      })
+
+      return Object.freeze({
+        serialized: serializeTransaction(message, signatures),
+        signature: base58.encode(signatures[0] ?? new Uint8Array(0)),
+      })
+    },
     associatedTokenAddress: (request: AssociatedTokenRequest) => associatedTokenAddress(request, sha256),
     cluster,
     compileMessage: (request: CompileMessageRequest) => compileLegacyMessage(request).bytes,
+    decodeMessage,
     deriveAccount: async (keys: KeySource, request: SolanaAccountRequest) =>
       createAccount(context, id, cluster, keys.deriveKey('slip10', derivationPath(request))),
     findProgramAddress: (seeds: readonly Uint8Array[], programId: string) =>

@@ -1,9 +1,9 @@
 import {bytes, CryptoError, hex, type RecoverableSignature, type Secp256k1Key} from '@hzblj/nitro-crypto/adapter'
 
-import {validateAddress} from './address'
+import {type Address, checksumAddress, validateAddress} from './address'
 import type {EthereumNetwork} from './config'
-import {checkUint, MAX_UINT64} from './integer'
-import {type RlpItem, rlpEncode, rlpInteger} from './rlp'
+import {bytesToUint, checkUint, MAX_UINT64} from './integer'
+import {type RlpItem, rlpDecode, rlpEncode, rlpInteger} from './rlp'
 import type {Hex, Keccak256} from './types'
 
 /** EIP-2718's type byte for an EIP-1559 transaction. */
@@ -41,6 +41,8 @@ export type SignedEthereumTransaction = {
   readonly serialized: Hex
   /** Keccak-256 of `serialized`: the transaction hash an explorer and `eth_getTransactionReceipt` know it by. */
   readonly hash: Hex
+  /** The signature in it: `r || s` and the y parity. What an air-gapped signer sends back (ERC-4527). */
+  readonly signature: RecoverableSignature
 }
 
 /** The nine fields of an unsigned EIP-1559 transaction, in RLP order, checked and encoded. */
@@ -128,11 +130,110 @@ export const signTransaction = (
   key: Secp256k1Key
 ): SignedEthereumTransaction => {
   const fields = transactionFields(request, network, keccak256)
-  const signature = key.sign(keccak256(envelope(fields)))
-  const signed = envelope([...fields, ...signatureFields(signature)])
 
-  return {
-    hash: hex.encode(keccak256(signed), {prefix: true}) as Hex,
-    serialized: hex.encode(signed, {prefix: true}) as Hex,
+  return signed(fields, key.sign(keccak256(envelope(fields))), keccak256)
+}
+
+const signed = (fields: readonly RlpItem[], signature: RecoverableSignature, keccak256: Keccak256) => {
+  const serialized = envelope([...fields, ...signatureFields(signature)])
+
+  return Object.freeze({
+    hash: hex.encode(keccak256(serialized), {prefix: true}) as Hex,
+    serialized: hex.encode(serialized, {prefix: true}) as Hex,
+    signature: Object.freeze({recovery: signature.recovery, signature: signature.signature.slice()}),
+  })
+}
+
+/** The Keccak-256 an EIP-1559 transaction's signature is over: of its unsigned envelope. */
+export const transactionDigest = (
+  request: EthereumTransactionRequest,
+  network: EthereumNetwork,
+  keccak256: Keccak256
+): Uint8Array => keccak256(envelope(transactionFields(request, network, keccak256)))
+
+/**
+ * The signed transaction of `request` and a signature made elsewhere (an air-gapped signer, a hardware wallet). The
+ * signature is not checked here: recover its signer with the chain's `recoverTransactionAddress` first.
+ */
+export const assembleTransaction = (
+  request: EthereumTransactionRequest,
+  signature: RecoverableSignature,
+  network: EthereumNetwork,
+  keccak256: Keccak256
+): SignedEthereumTransaction => signed(transactionFields(request, network, keccak256), signature, keccak256)
+
+const invalid = (message: string) => new CryptoError('INVALID_ARGUMENT', message)
+
+/** An RLP integer field: a byte string, canonical (no leading zero), of at most `maxBytes`. */
+const readInteger = (item: RlpItem | undefined, name: string, maxBytes = 32): bigint => {
+  if (!(item instanceof Uint8Array) || item.length > maxBytes || item[0] === 0) {
+    throw invalid(`The ${name} is not a canonical integer of at most ${maxBytes * 8} bits.`)
   }
+
+  return bytesToUint(item)
+}
+
+/**
+ * The request in an unsigned EIP-1559 envelope (`0x02 || rlp([chainId, nonce, maxPriorityFeePerGas, maxFeePerGas, gas,
+ * to, value, data, accessList])`), as `serializeTransaction` writes it: what an air-gapped signer reads before it
+ * shows and signs. Strict: canonical RLP and integers, a recipient (no contract creation), an empty access list,
+ * nothing after the nine fields, and this network's chain id. Serializing the result gives back the same bytes.
+ */
+export const parseTransaction = (
+  serialized: Hex | Uint8Array,
+  network: EthereumNetwork,
+  keccak256: Keccak256
+): EthereumTransactionRequest & {readonly chainId: number; readonly to: Address; readonly data: Hex} => {
+  const raw = typeof serialized === 'string' ? hex.decode(serialized) : serialized
+
+  if (raw[0] !== EIP1559) {
+    throw invalid('Only EIP-1559 (type 2) transactions are read here.')
+  }
+
+  const fields = rlpDecode(raw.subarray(1))
+
+  if (!Array.isArray(fields) || fields.length !== 9) {
+    throw invalid(
+      Array.isArray(fields) && fields.length === 12
+        ? 'The transaction is already signed.'
+        : 'An unsigned EIP-1559 transaction has nine fields.'
+    )
+  }
+
+  const [chainIdField, nonce, tip, maxFee, gas, to, value, data, accessList] = fields
+  const chainId = readInteger(chainIdField, 'chain id', 8)
+
+  if (chainId !== BigInt(network.chainId)) {
+    throw invalid(`The transaction is for chain id ${chainId}, not ${network.chainId} (${network.name}).`)
+  }
+
+  if (!(to instanceof Uint8Array) || to.length !== 20) {
+    throw invalid('The transaction has no 20-byte recipient: contract creation is not supported.')
+  }
+
+  if (!(data instanceof Uint8Array)) {
+    throw invalid('The transaction`s data is a byte string.')
+  }
+
+  if (!Array.isArray(accessList) || accessList.length !== 0) {
+    throw invalid('Transactions with an access list are not supported.')
+  }
+
+  const request = {
+    chainId: network.chainId,
+    data: hex.encode(data, {prefix: true}) as Hex,
+    gas: readInteger(gas, 'gas limit'),
+    maxFeePerGas: readInteger(maxFee, 'max fee per gas'),
+    maxPriorityFeePerGas: readInteger(tip, 'max priority fee per gas'),
+    nonce: readInteger(nonce, 'nonce', 8),
+    to: checksumAddress(to, keccak256),
+    value: readInteger(value, 'value'),
+  }
+
+  // What the request writes back must be these bytes: any field this package would write differently is refused.
+  if (!bytes.equal(envelope(transactionFields(request, network, keccak256)), raw)) {
+    throw invalid('The transaction does not serialize back to itself.')
+  }
+
+  return Object.freeze(request)
 }

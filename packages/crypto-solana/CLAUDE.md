@@ -10,7 +10,8 @@ TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, 
 | --- | --- |
 | `src/adapter.ts` | The factory: configuration, `defineAdapter`, the chain client. Returns `ChainAdapter<NoInfer<Id>, …>`, so a configured id keeps its literal type in the registry. |
 | `src/address.ts` | Base58 addresses; validation (canonical, 32 bytes, off-curve allowed). |
-| `src/account.ts` | `SolanaAccount`: verification by address, `signTransaction` (fee payer and only signer). |
+| `src/account.ts` | `SolanaAccount`: verification by address, `signTransaction` (fee payer and only signer), `signTransactionMessage` (a compiled message made elsewhere, read first). |
+| `src/message.ts` | Legacy messages read back, strictly, with a summary of each instruction a wallet sends; v0 refused. |
 | `src/instructions.ts` | System transfer, Token `TransferChecked`, ATA `CreateIdempotent`, and `transferToken` built from them. |
 | `src/transaction.ts` | Legacy messages: account merging and ordering (kit's collator, written without `Intl`), compact-u16, the wire format. |
 | `src/pda.ts`, `src/curve.ts` | Program-derived and associated token addresses; the Ed25519 on-curve check in BigInt, decided as kit decides. |

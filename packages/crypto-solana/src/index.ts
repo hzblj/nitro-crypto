@@ -16,6 +16,7 @@ export type {
   TransferRequest,
   TransferTokenRequest,
 } from './instructions'
+export {COMPUTE_BUDGET_PROGRAM, type DecodedSolanaMessage, type SolanaInstructionSummary} from './message'
 export type {SolanaAccountRequest} from './path'
 export type {AssociatedTokenRequest, ProgramAddress} from './pda'
 export {ASSOCIATED_TOKEN_PROGRAM, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM} from './programs'

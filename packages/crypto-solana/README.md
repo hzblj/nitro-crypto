@@ -75,6 +75,28 @@ merged and ordered as the runtime requires and in `@solana/kit`'s order within e
 signed transaction are byte for byte what kit produces for the same instructions and key. The account signs alone:
 an instruction that needs another signer is refused, and so is a transaction over 1232 bytes.
 
+## Signing elsewhere
+
+For a key the app does not hold (an air-gapped signer, a hardware wallet), the chain reads and assembles what
+travels between the two:
+
+```ts
+const message = solana.compileMessage({feePayer: address, instructions, recentBlockhash})
+
+// The signer, with the key: read it, show it, sign it.
+const decoded = solana.decodeMessage(message) // fee payer, signers, accounts and roles, blockhash, instructions
+decoded.instructions[0].summary // {type: 'transfer', from, to, lamports}, 'token-transfer', 'create-token-account', …
+const signature = await account.signTransactionMessage(message) // refused unless the account is a signer
+
+// Back online: each signature verified by the engine against its signer, then the wire bytes.
+const {serialized, signature: id} = solana.assembleTransaction({message, signatures: [signature]})
+```
+
+`decodeMessage` is strict (canonical compact-u16 lengths, indexes in range, no account twice, nothing after the last
+instruction) and reads what `@solana/kit` compiles, back to the same bytes. It summarizes System transfers, Token and
+Token-2022 `TransferChecked`, associated token account creation, and compute budget limits and prices; anything else
+is `unknown`, with its program. `@hzblj/crypto-airgap-solana` carries these over QR codes.
+
 **Not in this version:** versioned (v0) transactions and address lookup tables, durable nonces, compute budget
 instructions (add them yourself with any program's instruction), and off-chain message headers.
 

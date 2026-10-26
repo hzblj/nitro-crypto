@@ -76,17 +76,17 @@ export type RawTransaction = {
   readonly outputs: readonly {readonly scriptPubKey: Uint8Array; readonly value: bigint}[]
 }
 
-type TransactionContext = {readonly network: BitcoinNetwork; readonly sha256: Hash}
+export type TransactionContext = {readonly network: BitcoinNetwork; readonly sha256: Hash}
 
 /** Every satoshi there will ever be: no amount is larger. */
-const MAX_MONEY = 2_100_000_000_000_000n
+export const MAX_MONEY = 2_100_000_000_000_000n
 
 /** Replaceable by fee (BIP-125), and no relative or absolute lock. */
 export const SEQUENCE_RBF = 0xfffffffd
 
-const TRANSACTION_VERSION = 2
+export const TRANSACTION_VERSION = 2
 
-const SIGHASH_ALL = 1
+export const SIGHASH_ALL = 1
 
 /** Version, input and output counts, lock time, and the SegWit marker and flag at a quarter weight. */
 const OVERHEAD_VBYTES = 10.5
@@ -96,14 +96,14 @@ const P2WPKH_INPUT_VBYTES = 68
 
 const invalid = (message: string) => new CryptoError('INVALID_ARGUMENT', message)
 
-const u32 = (value: number) => {
+export const u32 = (value: number) => {
   const out = new Uint8Array(4)
   new DataView(out.buffer).setUint32(0, value, true)
 
   return out
 }
 
-const u64 = (value: bigint) => {
+export const u64 = (value: bigint) => {
   const out = new Uint8Array(8)
   new DataView(out.buffer).setBigUint64(0, value, true)
 
@@ -112,7 +112,7 @@ const u64 = (value: bigint) => {
 
 const varintLength = (value: number) => (value < 0xfd ? 1 : value <= 0xffff ? 3 : 5)
 
-const varint = (value: number) => {
+export const varint = (value: number) => {
   if (value < 0xfd) {
     return Uint8Array.of(value)
   }
@@ -158,7 +158,7 @@ const feeFor = (vsize: number, feeRate: number) => BigInt(Math.ceil(vsize * feeR
 
 const TXID = /^[0-9a-fA-F]{64}$/
 
-const checkUtxos = (utxos: readonly BitcoinUtxo[]): BitcoinUtxo[] => {
+export const checkUtxos = (utxos: readonly BitcoinUtxo[]): BitcoinUtxo[] => {
   if (!Array.isArray(utxos) || utxos.length === 0) {
     throw invalid('There are no coins to spend.')
   }
@@ -306,7 +306,7 @@ export const planTransaction = (
   )
 }
 
-const hash256 = (data: Uint8Array, sha256: Hash) => sha256(sha256(data))
+export const hash256 = (data: Uint8Array, sha256: Hash) => sha256(sha256(data))
 
 const outpoint = (input: RawInput) => bytes.concat(input.txid, u32(input.vout))
 
@@ -383,16 +383,14 @@ export type P2wpkhSigner = {
 }
 
 /**
- * Signs every input of `plan` as a P2WPKH input of `signer` (BIP-143, SIGHASH_ALL), in a version 2 transaction with
- * lock time 0 and replaceable inputs. The plan is checked first: its outputs must pay their addresses on the
- * network, and its fee must be its inputs less its outputs. An input that does not pay the signer gets a signature no
- * node accepts.
+ * The unsigned transaction a plan describes: version 2, lock time 0, every input replaceable (BIP-125). The plan is
+ * checked first: its coins must be well-formed, its outputs must pay their addresses on the network, and its fee
+ * must be its inputs less its outputs.
  */
-export const signTransaction = (
+export const unsignedTransaction = (
   plan: BitcoinTransactionPlan,
-  signer: P2wpkhSigner,
   context: TransactionContext
-): SignedBitcoinTransaction => {
+): {readonly tx: RawTransaction; readonly fee: bigint} => {
   const inputs = checkUtxos(plan.inputs)
   const outputs = checkOutputs(plan, context)
   const fee = sum(inputs.map(input => input.value)) - sum(outputs.map(output => output.value))
@@ -416,12 +414,17 @@ export const signTransaction = (
     outputs,
     version: TRANSACTION_VERSION,
   }
-  const scriptCode = p2wpkhScriptCode(signer.scriptPubKey.subarray(2))
-  const witnesses = tx.inputs.map((_, index) => {
-    const {signature} = signer.key.sign(bip143Digest(tx, index, scriptCode, context.sha256))
 
-    return [bytes.concat(encodeDerSignature(signature), Uint8Array.of(SIGHASH_ALL)), signer.publicKey]
-  })
+  return {fee, tx}
+}
+
+/** A transaction and its witnesses, serialized, with the id, size and fee a wallet shows and broadcasts. */
+export const signedTransaction = (
+  tx: RawTransaction,
+  witnesses: readonly (readonly Uint8Array[])[],
+  fee: bigint,
+  sha256: Hash
+): SignedBitcoinTransaction => {
   const signed = serializeTransaction(tx, witnesses)
   const stripped = serializeTransaction(tx)
   const weight = stripped.length * 3 + signed.length
@@ -429,8 +432,30 @@ export const signTransaction = (
   return Object.freeze({
     fee,
     hex: hex.encode(signed),
-    txid: hex.encode(hash256(stripped, context.sha256).reverse()),
+    txid: hex.encode(hash256(stripped, sha256).reverse()),
     vsize: Math.ceil(weight / 4),
     weight,
   })
+}
+
+/**
+ * Signs every input of `plan` as a P2WPKH input of `signer` (BIP-143, SIGHASH_ALL), in a version 2 transaction with
+ * lock time 0 and replaceable inputs. The plan is checked first: its outputs must pay their addresses on the
+ * network, and its fee must be its inputs less its outputs. An input that does not pay the signer gets a signature no
+ * node accepts.
+ */
+export const signTransaction = (
+  plan: BitcoinTransactionPlan,
+  signer: P2wpkhSigner,
+  context: TransactionContext
+): SignedBitcoinTransaction => {
+  const {fee, tx} = unsignedTransaction(plan, context)
+  const scriptCode = p2wpkhScriptCode(signer.scriptPubKey.subarray(2))
+  const witnesses = tx.inputs.map((_, index) => {
+    const {signature} = signer.key.sign(bip143Digest(tx, index, scriptCode, context.sha256))
+
+    return [bytes.concat(encodeDerSignature(signature), Uint8Array.of(SIGHASH_ALL)), signer.publicKey]
+  })
+
+  return signedTransaction(tx, witnesses, fee, context.sha256)
 }

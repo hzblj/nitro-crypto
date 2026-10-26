@@ -339,7 +339,7 @@ describe('coin selection', async () => {
 
   test('the adapter states what it signs', () => {
     assert.equal(bitcoinAdapter().features.transactionSigning, true)
-    assert.equal(bitcoinAdapter().features.psbt, false)
+    assert.equal(bitcoinAdapter().features.psbt, true)
     assert.deepEqual(bitcoinAdapter().formats.signature, ['p2wpkh-bip143'])
   })
 })

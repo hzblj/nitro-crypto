@@ -69,6 +69,43 @@ const bech32Prefix = (address: string): string | undefined => {
 }
 
 /**
+ * The address `scriptPubKey` pays on `network`, for the standard scripts that have one: SegWit of every version, P2PKH
+ * and P2SH. `undefined` for anything else (an `OP_RETURN`, a bare multisig): such an output has no address to show.
+ */
+export const addressFromScript = (
+  scriptPubKey: Uint8Array,
+  network: BitcoinNetwork,
+  sha256: Hash
+): string | undefined => {
+  const length = scriptPubKey.length
+  const [first = -1, second = -1] = scriptPubKey
+
+  try {
+    if (length >= 4 && length <= 42 && second === length - 2 && (first === 0 || (first >= 0x51 && first <= 0x60))) {
+      return encodeSegwit(network.bech32, {program: scriptPubKey.slice(2), version: first === 0 ? 0 : first - 0x50})
+    }
+
+    if (length === 25 && first === 0x76 && second === 0xa9 && scriptPubKey[2] === 20 && scriptPubKey[23] === 0x88) {
+      return scriptPubKey[24] === 0xac
+        ? base58check.encode(Uint8Array.of(network.pubKeyHash, ...scriptPubKey.subarray(3, 23)), sha256)
+        : undefined
+    }
+
+    if (length === 23 && first === 0xa9 && second === 20 && scriptPubKey[22] === 0x87) {
+      return base58check.encode(Uint8Array.of(network.scriptHash, ...scriptPubKey.subarray(2, 22)), sha256)
+    }
+  } catch (error) {
+    if (isCryptoError(error, 'INVALID_ADDRESS')) {
+      return undefined
+    }
+
+    throw error
+  }
+
+  return undefined
+}
+
+/**
  * Any address a wallet on `network` can pay: SegWit of every version (Bech32 or Bech32m, as BIP-350 requires) and
  * legacy Base58Check. A valid address of another network is invalid here, with a reason that says so.
  */

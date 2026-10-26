@@ -9,6 +9,7 @@ import {
 
 import {addressFromPublicKey, type SolanaAddress, validateAddress} from './address'
 import type {SolanaInstruction} from './instructions'
+import {decodeMessage} from './message'
 import {compileLegacyMessage, type SignedSolanaTransaction, serializeTransaction} from './transaction'
 
 /** Bytes, or text signed as its UTF-8 bytes. */
@@ -41,6 +42,12 @@ export type SolanaAccount<Id extends string = string> = {
    * payer, the message signed, the wire bytes returned. An instruction that needs another signer is refused.
    */
   readonly signTransaction: (request: SolanaTransactionRequest) => Promise<SignedSolanaTransaction>
+  /**
+   * Signs a compiled legacy message made elsewhere (a watch-only wallet's, received over a QR code, say): the
+   * transaction signature, 64 bytes. The message is read first and refused (`INVALID_ARGUMENT`) unless it is a legacy
+   * message this account must sign. Show what it does first (`crypto.chains.solana.decodeMessage`).
+   */
+  readonly signTransactionMessage: (message: Uint8Array) => Promise<Uint8Array>
 }
 
 export type SolanaTransactionRequest = {
@@ -126,6 +133,13 @@ export const createAccount = <Id extends string>(
       const signature = key.sign(message.bytes)
 
       return {serialized: serializeTransaction(message.bytes, [signature]), signature: base58.encode(signature)}
+    },
+    signTransactionMessage: async (message: Uint8Array) => {
+      if (!decodeMessage(message).signers.includes(address)) {
+        throw new CryptoError('INVALID_ARGUMENT', 'This account is not among the message`s signers.')
+      }
+
+      return key.sign(message)
     },
     verifyMessage: async ({message, signature}) => verifySigner(context, address, message, signature),
   })

@@ -319,3 +319,141 @@ describe('ERC-20', () => {
     throwsCode(() => sepolia.erc20.balanceOfData('nope'), 'INVALID_ADDRESS')
   })
 })
+
+describe('reading transactions to sign elsewhere', () => {
+  test('parseTransaction reads back every request serializeTransaction writes, and viem`s too', () => {
+    const rng = random(4527)
+
+    for (let run = 0; run < 300; run++) {
+      const request = randomRequest(rng)
+      const unsigned = sepolia.serializeTransaction(request)
+      const parsed = sepolia.parseTransaction(unsigned)
+
+      assert.equal(sepolia.serializeTransaction(parsed), unsigned)
+      assert.equal(parsed.chainId, SEPOLIA)
+      assert.equal(parsed.to, getAddress(request.to))
+      assert.equal(parsed.nonce, BigInt(request.nonce))
+      assert.equal(parsed.value, request.value ?? 0n)
+      assert.equal(parsed.data, request.data ?? '0x')
+      assert.equal(sepolia.parseTransaction(serializeTransaction(viemRequest(request))).value, request.value ?? 0n)
+    }
+  })
+
+  test('a signature made elsewhere: the signer recovers, and the envelope is viem`s', async () => {
+    const wallet = await crypto.createEphemeralWallet({mnemonic: HARDHAT})
+    const account = await wallet.deriveAccount({chain: 'sepolia', index: 3})
+    const theirs = mnemonicToAccount(HARDHAT, {addressIndex: 3})
+    const rng = random(65)
+
+    for (let run = 0; run < 20; run++) {
+      const request = randomRequest(rng)
+      const signed = await account.signTransaction(request)
+
+      assert.equal(
+        sepolia.recoverTransactionAddress({signature: signed.signature, transaction: request}),
+        account.address
+      )
+      assert.deepEqual(sepolia.assembleTransaction(request, signed.signature), signed)
+
+      // As 65 bytes, v as y parity or 27 + y parity, the way signers send it.
+      const raw = new Uint8Array(65)
+      raw.set(signed.signature.signature)
+      raw[64] = signed.signature.recovery
+      assert.equal(
+        sepolia.assembleTransaction(request, raw).serialized,
+        await theirs.signTransaction(viemRequest(request))
+      )
+      raw[64] = 27 + signed.signature.recovery
+      assert.equal(sepolia.recoverTransactionAddress({signature: toHex(raw), transaction: request}), account.address)
+
+      // A signature over another transaction recovers someone else.
+      const other = {...request, nonce: BigInt(request.nonce) + 1n}
+      assert.notEqual(
+        sepolia.recoverTransactionAddress({signature: signed.signature, transaction: other}),
+        account.address
+      )
+    }
+
+    assert.equal(
+      sepolia.recoverTransactionAddress({signature: new Uint8Array(65), transaction: randomRequest(rng)}),
+      undefined
+    )
+    wallet.dispose()
+  })
+
+  test('addresses below an account`s extended key, derived publicly by the engine, are its accounts', async () => {
+    const wallet = await crypto.createEphemeralWallet({mnemonic: HARDHAT})
+    const account = wallet.extendedPublicKey("m/44'/60'/0'")
+
+    for (const index of [0, 1, 7]) {
+      const derived = sepolia.derivePublic(account, `m/0/${index}`)
+      assert.equal(
+        sepolia.addressFromPublicKey(derived.publicKey),
+        (await wallet.deriveAccount({chain: 'sepolia', index})).address
+      )
+    }
+
+    throwsCode(() => sepolia.derivePublic(account, "m/0'"), 'INVALID_PATH')
+    wallet.dispose()
+  })
+
+  test('addresses from public keys, compressed or not', async () => {
+    const wallet = await crypto.createEphemeralWallet({mnemonic: HARDHAT})
+    const account = await wallet.deriveAccount({chain: 'sepolia'})
+    const key = Buffer.from(account.publicKey.slice(2), 'hex')
+    const compressed = crypto.secp256k1.convertPublicKey(key, 'compressed')
+    assert.equal(sepolia.addressFromPublicKey(key), account.address)
+    assert.equal(sepolia.addressFromPublicKey(compressed), account.address)
+    throwsCode(() => sepolia.addressFromPublicKey(new Uint8Array(33)), 'INVALID_PUBLIC_KEY')
+    wallet.dispose()
+  })
+
+  test('anything but an unsigned EIP-1559 transaction of this network is refused', async () => {
+    const request = {
+      gas: 21_000n,
+      maxFeePerGas: 30_000_000_000n,
+      maxPriorityFeePerGas: 1_000_000_000n,
+      nonce: 5,
+      to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+      value: 10n ** 16n,
+    } as const
+    const unsigned = sepolia.serializeTransaction(request)
+    const fields = (extra: Nested[] = [], overrides: Record<number, Nested> = {}) => {
+      const base: Nested[] = [
+        '0xaa36a7',
+        '0x05',
+        '0x3b9aca00',
+        '0x06fc23ac00',
+        '0x5208',
+        '0x70997970c51812dc3a010c7d01b50e0d17dc79c8',
+        '0x2386f26fc10000',
+        '0x',
+        [],
+        ...extra,
+      ]
+
+      return `0x02${toRlp(base.map((item, index) => overrides[index] ?? item)).slice(2)}` as Hex
+    }
+
+    assert.equal(fields(), unsigned)
+    throwsCode(() => crypto.chains.ethereum.parseTransaction(unsigned), 'INVALID_ARGUMENT')
+    // A legacy (EIP-155) transaction, as viem serializes one: an RLP list, no type byte.
+    throwsCode(
+      () => sepolia.parseTransaction('0xe205018252089470997970c51812dc3a010c7d01b50e0d17dc79c8018083aa36a78080'),
+      'INVALID_ARGUMENT'
+    )
+    throwsCode(() => sepolia.parseTransaction(fields(['0x01', '0x02', '0x03'])), 'INVALID_ARGUMENT')
+    throwsCode(
+      () => sepolia.parseTransaction(fields([], {8: [['0x70997970c51812dc3a010c7d01b50e0d17dc79c8', []]]})),
+      'INVALID_ARGUMENT'
+    )
+    throwsCode(() => sepolia.parseTransaction(fields([], {5: '0x'})), 'INVALID_ARGUMENT')
+    throwsCode(() => sepolia.parseTransaction(fields([], {1: '0x0005'})), 'INVALID_ARGUMENT')
+    throwsCode(() => sepolia.parseTransaction(fields([], {2: '0x06fc23ac01'})), 'INVALID_ARGUMENT')
+    // Non-canonical RLP: a single byte below 0x80 wrapped in a string header.
+    throwsCode(() => sepolia.parseTransaction(`0x02${toRlp(['0x', '0x05']).slice(2)}` as Hex), 'INVALID_ARGUMENT')
+    throwsCode(() => sepolia.parseTransaction('0x02c3810501' as Hex), 'INVALID_ENCODING')
+    throwsCode(() => sepolia.parseTransaction(`${unsigned}00` as Hex), 'INVALID_ENCODING')
+    throwsCode(() => sepolia.parseTransaction('0x02' as Hex), 'INVALID_ENCODING')
+  })
+})

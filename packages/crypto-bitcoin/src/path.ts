@@ -36,3 +36,21 @@ export const derivationPath = (request: BitcoinAccountRequest, network: BitcoinN
 
   return `m/84'/${network.coinType}'/${index(request.account, 'account')}'/${change}/${index(request.index, 'address')}`
 }
+
+const PATH = /^m(\/\d+'?)*$/
+
+/** A BIP-32 path as this package writes them (`m/84'/1'/0'/0/0`), each index below 2^31. Throws `INVALID_PATH`. */
+export const checkPath = (path: string): string => {
+  if (
+    typeof path !== 'string' ||
+    !PATH.test(path) ||
+    path
+      .split('/')
+      .slice(1)
+      .some(step => Number.parseInt(step, 10) > MAX_INDEX)
+  ) {
+    throw new CryptoError('INVALID_PATH', "A path is `m` and indexes below 2^31, each with `'` when hardened.")
+  }
+
+  return path
+}

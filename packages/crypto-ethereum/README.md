@@ -57,7 +57,25 @@ const balance = erc20.decodeUint256(await ethCall({data: erc20.balanceOfData(add
 
 A transaction carries the adapter's chain id; a request naming another is refused, so an adapter configured for a
 test network never signs for mainnet. `serializeTransaction(request)` returns the unsigned envelope (its Keccak-256 is
-what is signed), and with a signature, the signed one.
+what is signed), and with a signature, the signed one. A signed transaction also carries its `signature` (`r || s`
+and the y parity), as an air-gapped signer sends it back.
+
+### Signing elsewhere
+
+For a key the app does not hold (an air-gapped signer, a hardware wallet), the chain reads and assembles what
+travels between the two:
+
+```ts
+const {sepolia} = crypto.chains
+sepolia.parseTransaction(unsigned) // the request in an unsigned envelope: what a signer shows before it signs
+sepolia.recoverTransactionAddress({transaction: request, signature}) // who signed it, or undefined
+sepolia.assembleTransaction(request, signature) // {serialized, hash, signature}: check the signer first
+sepolia.addressFromPublicKey(publicKey) // compressed or uncompressed SEC1
+```
+
+`parseTransaction` is strict: canonical RLP and integers, a recipient, an empty access list, nothing after the nine
+fields, and the adapter's chain id; serializing what it returns gives back the same bytes.
+`@hzblj/crypto-airgap-ethereum` carries these over QR codes (ERC-4527).
 
 | Request | Path |
 | --- | --- |

@@ -4,9 +4,9 @@
 [![license](https://img.shields.io/npm/l/@hzblj/crypto-bitcoin.svg)](https://github.com/hzblj/nitro-crypto/blob/main/LICENSE)
 
 Bitcoin for [`@hzblj/nitro-crypto`](https://www.npmjs.com/package/@hzblj/nitro-crypto): native SegWit (P2WPKH)
-accounts at BIP-84 paths on mainnet, testnet, signet or regtest, validation of every address type, and payments from
-an account: coin selection, fees and BIP-143 signatures. The keys stay in the native engine; this package is
-TypeScript over it.
+accounts at BIP-84 paths on mainnet, testnet, signet or regtest, validation of every address type, payments from an
+account (coin selection, fees and BIP-143 signatures), and PSBTs (BIP-174) for keys held elsewhere. The keys stay in
+the native engine; this package is TypeScript over it.
 
 ```sh
 npx expo install @hzblj/nitro-crypto @hzblj/crypto-bitcoin react-native-nitro-modules
@@ -70,8 +70,38 @@ await fetch(`${esplora}/tx`, {body: hex, method: 'POST'})
 `crypto.chains.bitcoin.dustThreshold(address)` says the smallest amount an address can be paid. Transactions match
 BIP-143's published example and `@scure/btc-signer`, byte for byte.
 
+## PSBTs
+
+A key held elsewhere (an air-gapped signer, a hardware wallet) is a watch-only account: its address, payments planned
+from it, and PSBTs (BIP-174, version 0) for its signer. Every account is one too, and signs them.
+
+```ts
+const watch = crypto.chains.bitcoin.watchAccount({publicKey, path: "m/84'/1'/0'/0/0", fingerprint})
+const plan = watch.createTransaction({amount: 25_000n, feeRate: 2, to, utxos})
+const psbt = watch.createPsbt(plan, {previousTransactions}) // by txid, hex or bytes: optional, lets a signer check values
+
+// The signer, with the key:
+crypto.chains.bitcoin.decodePsbt(psbt) // inputs (with addresses and values), outputs, fee: what to show first
+const {psbt: signed} = await account.signPsbt(psbt)
+
+// Back online:
+const {hex, txid} = crypto.chains.bitcoin.finalizePsbt(signed)
+```
+
+| | |
+| --- | --- |
+| `createPsbt` | The unsigned transaction (as `signTransaction` would make it), each input's witness UTXO and BIP-32 derivation, the derivation on change back to the account, and each coin's previous transaction when given (checked against the coin). |
+| `decodePsbt` | Strict BIP-174 version 0: the magic, canonical sizes, no repeated keys, a map per input and output, an unsigned transaction with empty scripts. Each input's coin, from its previous transaction when there is one (`verifiedValue`), its address, derivations, partial signatures. |
+| `signPsbt` | Signs the inputs that spend this account's coins, SIGHASH_ALL only, and leaves the rest. A PSBT with nothing for the account is refused. |
+| `finalizePsbt` | Every input a P2WPKH coin with a signature by the key it pays: each signature verified by the engine (strict DER, lower S, over this transaction) before it becomes a witness. |
+
+PSBTs written here are read by `@scure/btc-signer`; what this package signs, btc-signer finalizes to the same
+transaction as `signTransaction`, and what btc-signer signs, `finalizePsbt` finalizes. `@hzblj/crypto-airgap-bitcoin`
+carries them over QR codes.
+
 **Not in this version:** message signing. Bitcoin's (BIP-137, BIP-322) differs from Ethereum's and is not
-implemented, nor are PSBT, Taproot (BIP-86, Schnorr), spending from several addresses at once, or inputs of any type
-but P2WPKH; accounts have no `signMessage`, and the adapter's `features` say so.
+implemented, nor are PSBT version 2, Taproot (BIP-86, Schnorr), spending from several addresses at once, inputs of
+any type but P2WPKH, or watching an extended public key (its addresses need public derivation); accounts have no
+`signMessage`, and the adapter's `features` say so.
 
 [Documentation](https://github.com/hzblj/nitro-crypto#readme) · [Security](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md)
