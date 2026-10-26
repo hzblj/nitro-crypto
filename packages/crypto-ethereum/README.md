@@ -7,9 +7,6 @@ Ethereum and every EVM chain for [`@hzblj/nitro-crypto`](https://www.npmjs.com/p
 secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 message signatures and signer recovery, EIP-1559
 transactions and ERC-20 call data. The keys stay in the native engine; this package is TypeScript over it.
 
-> [!WARNING]
-> **Not security audited. Never use with real funds.**
-
 ```sh
 npx expo install @hzblj/nitro-crypto @hzblj/crypto-ethereum react-native-nitro-modules
 ```

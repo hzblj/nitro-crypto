@@ -7,9 +7,6 @@ Solana for [`@hzblj/nitro-crypto`](https://www.npmjs.com/package/@hzblj/nitro-cr
 SLIP-0010, Base58 addresses, signatures of message bytes, and legacy transactions for SOL and SPL token transfers.
 The keys stay in the native engine; this package is TypeScript over it.
 
-> [!WARNING]
-> **Not security audited. Never use with real funds.**
-
 ```sh
 npx expo install @hzblj/nitro-crypto @hzblj/crypto-solana react-native-nitro-modules
 ```

@@ -8,9 +8,6 @@ accounts at BIP-84 paths on mainnet, testnet, signet or regtest, validation of e
 an account: coin selection, fees and BIP-143 signatures. The keys stay in the native engine; this package is
 TypeScript over it.
 
-> [!WARNING]
-> **Not security audited. Never use with real funds.**
-
 ```sh
 npx expo install @hzblj/nitro-crypto @hzblj/crypto-bitcoin react-native-nitro-modules
 ```

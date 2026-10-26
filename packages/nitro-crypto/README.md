@@ -7,10 +7,6 @@ Native cryptography for React Native and Expo. A Zig engine, behind Nitro Module
 the key derivation, and holds every seed and private key in native memory: JavaScript gets objects, public keys and
 signatures, never key bytes. Chains are separate packages that plug into a typed registry.
 
-> [!WARNING]
-> **Not security audited. Never use with real funds.** Keys are ephemeral and live in memory only. See
-> [SECURITY.md](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md).
-
 <p>
   <img alt="The example wallet on iOS: Sepolia, Bitcoin testnet4 and Solana devnet from one phrase, its keys and signatures in the native engine" height="560" src="https://raw.githubusercontent.com/hzblj/nitro-crypto/main/media/ios-wallet.png" />
   <img alt="The same on Android" height="560" src="https://raw.githubusercontent.com/hzblj/nitro-crypto/main/media/android-wallet.png" />
