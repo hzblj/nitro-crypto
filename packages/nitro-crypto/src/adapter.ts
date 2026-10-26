@@ -23,6 +23,7 @@ export {
 export {CryptoError, type CryptoErrorCode, isCryptoError} from './core/errors'
 export {bytes} from './core/public-bytes'
 export * from './encoding'
+export type {Bip32Primitives, ExtendedPublicKey} from './engine/extended-key'
 export type {Capability, EngineInfo} from './engine/info'
 export type {Ed25519Key, KeyOf, Secp256k1Key, SigningKey} from './engine/keys'
 export type {PublicKeyFormat, RecoverableSignature, RecoveryId} from './engine/primitives'

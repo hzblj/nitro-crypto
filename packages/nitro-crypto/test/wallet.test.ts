@@ -202,3 +202,78 @@ describe('mnemonic.generate', () => {
     assert.equal(crypto.liveHandles(), before)
   })
 })
+
+describe('extended public keys', () => {
+  /** BIP-32's serialization of an extended public key, as @scure/bip32 writes it: version, then the 74 bytes. */
+  const serialized = (key: {
+    depth: number
+    parentFingerprint: number
+    childNumber: number
+    chainCode: Uint8Array
+    publicKey: Uint8Array
+  }) => {
+    const out = new Uint8Array(74)
+    const view = new DataView(out.buffer)
+    out[0] = key.depth
+    view.setUint32(1, key.parentFingerprint, false)
+    view.setUint32(5, key.childNumber, false)
+    out.set(key.chainCode, 9)
+    out.set(key.publicKey, 41)
+    return out
+  }
+
+  const fromScure = (key: HDKey) =>
+    serialized({
+      chainCode: key.chainCode ?? new Uint8Array(),
+      childNumber: key.index,
+      depth: key.depth,
+      parentFingerprint: key.parentFingerprint,
+      publicKey: key.publicKey ?? new Uint8Array(),
+    })
+
+  test('the wallet`s extended public keys are @scure/bip32`s at every path but the master', async () => {
+    for (const passphrase of ['', 'TREZOR']) {
+      const wallet = await crypto.createEphemeralWallet({mnemonic: ABANDON, passphrase})
+      const reference = HDKey.fromMasterSeed(mnemonicToSeedSync(ABANDON, passphrase))
+
+      for (const path of BIP32_PATHS.filter(path => path !== 'm')) {
+        assert.deepEqual(serialized(wallet.extendedPublicKey(path)), fromScure(reference.derive(path)), path)
+      }
+
+      throwsCode(() => wallet.extendedPublicKey('m'), 'INVALID_PATH')
+      throwsCode(() => wallet.extendedPublicKey("m/44'/x"), 'INVALID_PATH')
+      wallet.dispose()
+      throwsCode(() => wallet.extendedPublicKey("m/84'/0'/0'"), 'DISPOSED')
+    }
+  })
+
+  test('public derivation from an account`s extended key gives the keys private derivation gives', async () => {
+    const wallet = await crypto.createEphemeralWallet({mnemonic: ABANDON})
+    const account = wallet.extendedPublicKey("m/84'/0'/0'")
+    const reference = HDKey.fromMasterSeed(mnemonicToSeedSync(ABANDON)).derive("m/84'/0'/0'")
+
+    for (const path of ['m/0/0', 'm/0/1', 'm/1/0', 'm/7/2147483647', 'm/0/1/2/3']) {
+      const derived = crypto.bip32.derivePublic(account, path)
+      assert.deepEqual(serialized(derived), fromScure(reference.derive(path)), path)
+    }
+
+    // BIP-84's published first receiving key, from the extended key alone.
+    assert.equal(
+      Buffer.from(crypto.bip32.derivePublic(account, 'm/0/0').publicKey).toString('hex'),
+      '0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c'
+    )
+    assert.deepEqual(crypto.bip32.derivePublic(account, 'm'), account)
+    throwsCode(() => crypto.bip32.derivePublic(account, "m/0'"), 'INVALID_PATH')
+    throwsCode(
+      () => crypto.bip32.derivePublic({...account, publicKey: Uint8Array.of(5, ...new Uint8Array(32))}, 'm/0'),
+      'INVALID_PUBLIC_KEY'
+    )
+    throwsCode(() => crypto.bip32.derivePublic({...account, chainCode: new Uint8Array(31)}, 'm/0'), 'INVALID_ARGUMENT')
+    wallet.dispose()
+  })
+
+  test('the engine reports both capabilities', () => {
+    assert.ok(crypto.info.has('bip32-extended-public'))
+    assert.ok(crypto.info.has('bip32-public-derivation'))
+  })
+})

@@ -29,6 +29,8 @@ public:
 
   std::shared_ptr<ArrayBuffer> secp256k1ConvertPublicKey(const std::shared_ptr<ArrayBuffer>& publicKey,
                                                          bool compressed) override;
+  std::shared_ptr<ArrayBuffer> bip32DerivePublic(const std::shared_ptr<ArrayBuffer>& extendedPublicKey,
+                                                const std::string& path) override;
   bool secp256k1Verify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& digest,
                        const std::shared_ptr<ArrayBuffer>& signature) override;
   std::shared_ptr<ArrayBuffer> secp256k1Recover(const std::shared_ptr<ArrayBuffer>& digest,

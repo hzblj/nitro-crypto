@@ -65,6 +65,8 @@ static void test_version_and_capabilities(void) {
     CHECK(strcmp(nc_capability_name(3), "keccak256") == 0);
     CHECK(strcmp(nc_capability_name(12), "slip10-ed25519") == 0);
     CHECK((caps & NC_CAP_MNEMONIC_GENERATE) && strcmp(nc_capability_name(13), "mnemonic-generate") == 0);
+    CHECK((caps & NC_CAP_BIP32_EXTENDED_PUBLIC) && strcmp(nc_capability_name(14), "bip32-extended-public") == 0);
+    CHECK((caps & NC_CAP_BIP32_PUBLIC_DERIVATION) && strcmp(nc_capability_name(15), "bip32-public-derivation") == 0);
 }
 
 static void test_status_names(void) {
@@ -253,6 +255,55 @@ static void test_seed_and_ethereum_key(void) {
     CHECK(nc_handle_count() == baseline);
 }
 
+/* BIP-84's account 0 of "abandon ... about": its extended public key, and the published keys below it. */
+static void test_extended_public_key(void) {
+    uint32_t baseline = nc_handle_count();
+    nc_handle seed = 0;
+    CHECK_STATUS(NC_OK, nc_seed_from_mnemonic(ABANDON, strlen(ABANDON), NULL, 0, &seed));
+
+    uint8_t account[NC_EXTENDED_PUBLIC_KEY_LENGTH], child[NC_EXTENDED_PUBLIC_KEY_LENGTH];
+    size_t written = 0;
+    const char *path = "m/84'/0'/0'";
+    CHECK_STATUS(NC_OK, nc_seed_extended_public(seed, path, strlen(path), account, sizeof account, &written));
+    CHECK(written == NC_EXTENDED_PUBLIC_KEY_LENGTH);
+    CHECK(account[0] == 3 && account[5] == 0x80 && account[8] == 0x00);
+
+    /* Receiving 0 and 1, change 0: BIP-84's published public keys, from the account's extended key alone. */
+    const char *steps[] = {"m/0/0", "m/0/1", "m/1/0"};
+    const char *expected[] = {
+        "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c",
+        "03e775fd51f0dfb8cd865d9ff1cca2a158cf651fe997fdc9fee9c1d3b5e995ea77",
+        "03025324888e429ab8e3dbaf1f7802648b9cd01e9b418485c5fa4c1b9b5700e1a6",
+    };
+    for (size_t index = 0; index < 3; index++) {
+        CHECK_STATUS(NC_OK, nc_bip32_public_derive(account, sizeof account, steps[index], strlen(steps[index]), child,
+                                                  sizeof child, &written));
+        CHECK(written == NC_EXTENDED_PUBLIC_KEY_LENGTH && child[0] == 5);
+        CHECK(equals_hex(child + 41, expected[index]));
+    }
+
+    /* The same key the private derivation gives, by the other road. */
+    nc_handle key = 0;
+    uint8_t public_key[33];
+    const char *full = "m/84'/0'/0'/1/0";
+    CHECK_STATUS(NC_OK, nc_key_derive(seed, NC_SCHEME_BIP32_SECP256K1, full, strlen(full), &key));
+    CHECK_STATUS(NC_OK, nc_key_public(key, 1, public_key, sizeof public_key, &written));
+    CHECK(memcmp(public_key, child + 41, 33) == 0);
+    CHECK_STATUS(NC_OK, nc_handle_destroy(key));
+
+    /* Refused: the master's, a hardened public step, short buffers, a wrong length, a key that is not a point. */
+    CHECK_STATUS(NC_ERR_INVALID_PATH, nc_seed_extended_public(seed, "m", 1, account, sizeof account, &written));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_seed_extended_public(seed, path, strlen(path), account, 73, &written));
+    CHECK_STATUS(NC_ERR_INVALID_PATH, nc_bip32_public_derive(account, sizeof account, "m/0'", 4, child, sizeof child, &written));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_bip32_public_derive(account, sizeof account, "m/0", 3, child, 10, &written));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_bip32_public_derive(account, 73, "m/0", 3, child, sizeof child, &written));
+    account[41] = 0x07;
+    CHECK_STATUS(NC_ERR_INVALID_PUBLIC_KEY, nc_bip32_public_derive(account, sizeof account, "m/0", 3, child, sizeof child, &written));
+
+    CHECK_STATUS(NC_OK, nc_handle_destroy(seed));
+    CHECK(nc_handle_count() == baseline);
+}
+
 static void test_solana_key(void) {
     nc_handle seed = 0, key = 0;
     CHECK_STATUS(NC_OK, nc_seed_from_mnemonic(ABANDON, strlen(ABANDON), NULL, 0, &seed));
@@ -396,6 +447,7 @@ int main(void) {
     test_mnemonic();
     test_mnemonic_generate();
     test_seed_and_ethereum_key();
+    test_extended_public_key();
     test_solana_key();
     test_handle_lifecycle();
     test_handle_limit();

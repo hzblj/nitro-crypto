@@ -1,6 +1,7 @@
 import {fromArrayBuffer, toArrayBuffer} from '../core/bytes'
 import {CryptoError, isCryptoError, native, nativeAsync} from '../core/errors'
 import type {HashAlgorithm, NitroCrypto} from '../specs/nitro-crypto.nitro'
+import {type Bip32Primitives, createBip32Primitives} from './extended-key'
 
 export type PublicKeyFormat = 'compressed' | 'uncompressed'
 
@@ -46,6 +47,8 @@ export type Ed25519Primitives = {
 
 /** The stateless operations: everything that needs no secret held by the engine. */
 export type Primitives = {
+  /** BIP-32 public derivation, from an extended public key (`wallet.extendedPublicKey`, or one a signer shared). */
+  readonly bip32: Bip32Primitives
   readonly ed25519: Ed25519Primitives
   readonly hash: Hashes
   readonly hmac: Hmacs
@@ -102,6 +105,7 @@ export const createPrimitives = (host: NitroCrypto): Primitives => {
     fromArrayBuffer(native(() => host.hash(algorithm, toArrayBuffer(data))))
 
   return Object.freeze({
+    bip32: createBip32Primitives(host),
     ed25519: Object.freeze({
       verify: (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) =>
         verdict(() => host.ed25519Verify(toArrayBuffer(publicKey), toArrayBuffer(message), toArrayBuffer(signature))),

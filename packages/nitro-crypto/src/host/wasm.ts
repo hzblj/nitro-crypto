@@ -49,6 +49,8 @@ type Exports = {
   readonly nc_seed_generate: (words: number, passphrase: Pointer, length: number, out: Pointer) => Status
   readonly nc_seed_from_mnemonic: (...args: [Pointer, number, Pointer, number, Pointer]) => Status
   readonly nc_seed_fingerprint: (seed: Handle, out: Pointer) => Status
+  readonly nc_seed_extended_public: (...args: [Handle, Pointer, number, Pointer, number, Pointer]) => Status
+  readonly nc_bip32_public_derive: (...args: [Pointer, number, Pointer, number, Pointer, number, Pointer]) => Status
   readonly nc_handle_kind: (handle: Handle, out: Pointer) => Status
   readonly nc_key_derive: (seed: Handle, scheme: number, path: Pointer, length: number, out: Pointer) => Status
   readonly nc_key_generate: (curve: number, out: Pointer) => Status
@@ -64,8 +66,11 @@ const HASHES: Record<HashAlgorithm, number> = {keccak256: 3, ripemd160: 4, sha25
 const CURVES: Record<Curve, number> = {ed25519: 2, secp256k1: 1}
 const SCHEMES: Record<DerivationScheme, number> = {bip32: 1, slip10: 2}
 const KEY_KINDS: Record<number, Curve> = {2: 'secp256k1', 3: 'ed25519'}
-/** The largest output any call writes: an uncompressed public key, a recoverable signature, a SHA-512 digest. */
-const MAX_OUTPUT = 65
+/**
+ * The largest output any call writes: an extended public key (`NC_EXTENDED_PUBLIC_KEY_LENGTH`, 74 bytes), beyond an
+ * uncompressed public key, a recoverable signature and a SHA-512 digest (65 and 64).
+ */
+const MAX_OUTPUT = 74
 /** `NC_MNEMONIC_MAX_LENGTH`: 24 words of eight letters and 23 spaces. */
 const MNEMONIC_MAX_LENGTH = 215
 /** WASI's EIO: `random_get` returns it when the host has no CSPRNG, and the engine then fails closed. */
@@ -289,6 +294,12 @@ export const createWasmHost = (): NitroCrypto => {
               return engine.nc_key_derive(live(owner), SCHEMES[scheme], pointer, length, out)
             })
           ),
+        extendedPublicKey: (path: string) =>
+          withOutput((frame, out, written) => {
+            const [pointer, length] = frame.input(utf8.encode(path))
+
+            return engine.nc_seed_extended_public(live(owner), pointer, length, out, MAX_OUTPUT, written)
+          }),
         fingerprint,
       },
       owner
@@ -331,6 +342,13 @@ export const createWasmHost = (): NitroCrypto => {
 
   const host: NitroCrypto = {
     abiVersion: engine.nc_abi_version(),
+    bip32DerivePublic: (extendedPublicKey, path) =>
+      withOutput((frame, out, written) => {
+        const [key, keyLength] = frame.input(extendedPublicKey)
+        const [pointer, length] = frame.input(utf8.encode(path))
+
+        return engine.nc_bip32_public_derive(key, keyLength, pointer, length, out, MAX_OUTPUT, written)
+      }),
     buildInfo: readCString(engine, engine.nc_build_info()),
     capabilities,
     dispose: () => undefined,

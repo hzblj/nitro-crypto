@@ -89,6 +89,8 @@ around them.
 | `createEphemeralWallet({mnemonic, passphrase?})` | A wallet from a known mnemonic: one `generate` returned, one being restored, or a test vector |
 | `wallet.deriveAccount({chain, …})` | An account by a registered adapter |
 | `wallet.deriveKey('bip32' \| 'slip10', path)` | A key at any path |
+| `wallet.extendedPublicKey(path)` | An account's BIP-32 extended public key (`m/84'/0'/0'`), for a watch-only wallet; never the master's |
+| `crypto.bip32.derivePublic(key, path)` | Public derivation from an extended public key, non-hardened steps only (`m/0/5`) |
 | `wallet.fingerprint` | The BIP-32 fingerprint: a public name for the seed |
 | `wallet.dispose()` | Zeroizes the seed and every key derived from it |
 
@@ -145,7 +147,7 @@ A chain whose curves and hashes the engine has is one adapter, written against `
 | secp256k1 ECDSA, recovery | SEC 2, RFC 6979 | libsecp256k1 0.8.0 |
 | Ed25519 | RFC 8032 | Zig standard library |
 | Mnemonics, seeds | BIP-39 (English) | This package |
-| HD keys | BIP-32 (secp256k1), SLIP-0010 (Ed25519) | This package |
+| HD keys | BIP-32 (secp256k1, and public derivation), SLIP-0010 (Ed25519) | This package |
 
 | Chain | Package | Accounts | Signing |
 | --- | --- | --- | --- |

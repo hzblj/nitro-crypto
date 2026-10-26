@@ -23,6 +23,8 @@ export const CAPABILITIES = [
   'bip32-secp256k1',
   'slip10-ed25519',
   'mnemonic-generate',
+  'bip32-extended-public',
+  'bip32-public-derivation',
 ] as const
 
 export type Capability = (typeof CAPABILITIES)[number]

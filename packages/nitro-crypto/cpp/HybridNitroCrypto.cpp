@@ -119,6 +119,15 @@ std::shared_ptr<ArrayBuffer> HybridNitroCrypto::secp256k1ConvertPublicKey(const 
   return truncated(out, written);
 }
 
+std::shared_ptr<ArrayBuffer> HybridNitroCrypto::bip32DerivePublic(const std::shared_ptr<ArrayBuffer>& extendedPublicKey,
+                                                                  const std::string& path) {
+  const ByteView input = view(extendedPublicKey);
+  auto out = allocate(NC_EXTENDED_PUBLIC_KEY_LENGTH);
+  size_t written = 0;
+  check(nc_bip32_public_derive(input.data, input.size, path.data(), path.size(), out->data(), out->size(), &written));
+  return truncated(out, written);
+}
+
 bool HybridNitroCrypto::secp256k1Verify(const std::shared_ptr<ArrayBuffer>& publicKey,
                                         const std::shared_ptr<ArrayBuffer>& digest,
                                         const std::shared_ptr<ArrayBuffer>& signature) {

@@ -14,7 +14,7 @@ Android packaging, and the prebuilt engine. Three entry points:
 | `src/specs/nitro-crypto.nitro.ts` | The Nitro spec: `NitroCrypto`, `NitroSeed`, `NitroKey`. `yarn codegen` regenerates `nitrogen/generated`, which is checked in. |
 | `cpp/` | The bridge: `HybridNitroCrypto`, `HybridNitroSeed`, `HybridNitroKey`; `EngineBridge.hpp` (views, `check`, `SecretBytes`, enum mappings); `EngineHandle.hpp` (owns one handle). No cryptography. |
 | `src/host/nitro.ts`, `src/host/wasm.ts` | The two hosts: the native module, and the engine compiled to WebAssembly (`wasm-binary.generated.ts`, written by `yarn engine:wasm`). |
-| `src/engine/` | The facade over a host: `info` (ABI check, capabilities), `primitives` (and the verify policy), `keys`, `mnemonic`, `wallet`, `create-engine`. |
+| `src/engine/` | The facade over a host: `info` (ABI check, capabilities), `primitives` (and the verify policy), `keys`, `mnemonic`, `wallet`, `extended-key` (extended public keys and public derivation, ADR 0007), `create-engine`. |
 | `src/adapters/` | `contract.ts` (the types and `defineAdapter`), `registry.ts` (validation, binding, `chains`). |
 | `src/core/` | `errors.ts` (codes, native status mapping), `bytes.ts`. |
 | `src/encoding/` | hex, UTF-8, Base58, Base58Check, Bech32/Bech32m. Pure. |

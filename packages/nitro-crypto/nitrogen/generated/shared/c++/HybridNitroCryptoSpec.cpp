@@ -27,6 +27,7 @@ namespace margelo::nitro::nitrocrypto {
       prototype.registerHybridMethod("secp256k1Verify", &HybridNitroCryptoSpec::secp256k1Verify);
       prototype.registerHybridMethod("secp256k1Recover", &HybridNitroCryptoSpec::secp256k1Recover);
       prototype.registerHybridMethod("ed25519Verify", &HybridNitroCryptoSpec::ed25519Verify);
+      prototype.registerHybridMethod("bip32DerivePublic", &HybridNitroCryptoSpec::bip32DerivePublic);
       prototype.registerHybridMethod("validateMnemonic", &HybridNitroCryptoSpec::validateMnemonic);
       prototype.registerHybridMethod("generateMnemonic", &HybridNitroCryptoSpec::generateMnemonic);
       prototype.registerHybridMethod("generateSeed", &HybridNitroCryptoSpec::generateSeed);

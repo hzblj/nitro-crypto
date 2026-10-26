@@ -24,6 +24,13 @@ std::shared_ptr<HybridNitroKeySpec> HybridNitroSeed::deriveKey(DerivationScheme 
   return std::make_shared<HybridNitroKey>(key);
 }
 
+std::shared_ptr<ArrayBuffer> HybridNitroSeed::extendedPublicKey(const std::string& path) {
+  auto out = allocate(NC_EXTENDED_PUBLIC_KEY_LENGTH);
+  size_t written = 0;
+  check(nc_seed_extended_public(_handle.get(), path.data(), path.size(), out->data(), out->size(), &written));
+  return truncated(out, written);
+}
+
 void HybridNitroSeed::dispose() {
   _handle.release();
 }

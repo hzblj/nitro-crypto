@@ -42,7 +42,8 @@ threading, the compatibility policy.
 - **No secret leaves.** No function returns a seed or a private key. A secret is copied out of the vault onto the
   stack for one operation and zeroed before it returns (`defer secure.zero(...)`), on every path, errors included.
   The one exception is `nc_mnemonic_generate`: a fresh mnemonic, handed out once for backup and never kept
-  (docs/adr/0005). Nothing else joins it without an ADR of its own.
+  (docs/adr/0005). Nothing else joins it without an ADR of its own. Chain codes are not secrets but are not free
+  either: `nc_seed_extended_public` hands out an account's, never the master's (docs/adr/0007).
 - **No allocator for secrets.** The vault is a fixed table; buffers are stack arrays.
 - **No secret-dependent branches in code of ours** (word lookups, comparisons). libsecp256k1 and Zig's Ed25519 make
   their own claims.

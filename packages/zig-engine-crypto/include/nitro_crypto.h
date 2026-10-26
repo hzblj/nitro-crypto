@@ -91,6 +91,8 @@ const char *nc_build_info(void);
 #define NC_CAP_BIP32_SECP256K1 (1ull << 11)
 #define NC_CAP_SLIP10_ED25519 (1ull << 12)
 #define NC_CAP_MNEMONIC_GENERATE (1ull << 13)
+#define NC_CAP_BIP32_EXTENDED_PUBLIC (1ull << 14)
+#define NC_CAP_BIP32_PUBLIC_DERIVATION (1ull << 15)
 
 /** Every capability this build provides, as NC_CAP_* bits. */
 uint64_t nc_capabilities(void);
@@ -214,6 +216,22 @@ nc_status nc_seed_from_mnemonic(const char *mnemonic, size_t mnemonic_len, const
 /** The BIP-32 fingerprint of the seed's secp256k1 master key (HASH160 of its public key, first 4 bytes, big-endian). */
 nc_status nc_seed_fingerprint(nc_handle seed, uint32_t *out);
 
+/**
+ * An extended public key as BIP-32 serializes one, without the 4-byte version that names a network and script
+ * (xpub, tpub, zpub: the chain's choice): depth (1 byte), parent fingerprint (4, big-endian), child number (4,
+ * big-endian), chain code (32), compressed public key (33).
+ */
+#define NC_EXTENDED_PUBLIC_KEY_LENGTH 74
+
+/**
+ * The BIP-32 extended public key at `path` below a seed: what a watch-only wallet derives an account's addresses
+ * from, and what a signer shares to pair with one. `path` has at least one step (the master's is refused,
+ * NC_ERR_INVALID_PATH); writes NC_EXTENDED_PUBLIC_KEY_LENGTH bytes. No private key leaves: a chain code with a
+ * non-hardened child's private key would give the parent's away, and the engine exports no private key (ADR 0007).
+ */
+nc_status nc_seed_extended_public(nc_handle seed, const char *path, size_t path_len, uint8_t *out, size_t out_len,
+                                  size_t *written);
+
 /* --------------------------------------------------------------------------------------------- derivation */
 
 #define NC_SCHEME_BIP32_SECP256K1 1 /* BIP-32: hardened and normal steps */
@@ -226,6 +244,17 @@ nc_status nc_seed_fingerprint(nc_handle seed, uint32_t *out);
  * as a key handle of the scheme's curve.
  */
 nc_status nc_key_derive(nc_handle seed, uint32_t scheme, const char *path, size_t path_len, nc_handle *out);
+
+/* ------------------------------------------------------------------------------------- public derivation */
+
+/**
+ * BIP-32 public child derivation (CKDpub) from an extended public key of NC_EXTENDED_PUBLIC_KEY_LENGTH bytes, down
+ * `path` relative to it ("m/0/5": its sixth receiving key; "m": itself). Every step must be non-hardened
+ * (NC_ERR_INVALID_PATH otherwise); a key that is not a point is NC_ERR_INVALID_PUBLIC_KEY, and BIP-32's invalid
+ * child NC_ERR_DERIVATION_FAILED. Writes NC_EXTENDED_PUBLIC_KEY_LENGTH bytes. Public data only: no handle, no secret.
+ */
+nc_status nc_bip32_public_derive(const uint8_t *extended, size_t extended_len, const char *path, size_t path_len,
+                                 uint8_t *out, size_t out_len, size_t *written);
 
 /* ------------------------------------------------------------------------------------------------- keys */
 

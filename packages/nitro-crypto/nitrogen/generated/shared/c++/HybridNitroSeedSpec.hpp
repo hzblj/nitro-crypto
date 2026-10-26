@@ -22,6 +22,7 @@ namespace margelo::nitro::nitrocrypto { enum class DerivationScheme; }
 #include "HybridNitroKeySpec.hpp"
 #include "DerivationScheme.hpp"
 #include <string>
+#include <NitroModules/ArrayBuffer.hpp>
 
 namespace margelo::nitro::nitrocrypto {
 
@@ -55,6 +56,7 @@ namespace margelo::nitro::nitrocrypto {
     public:
       // Methods
       virtual std::shared_ptr<HybridNitroKeySpec> deriveKey(DerivationScheme scheme, const std::string& path) = 0;
+      virtual std::shared_ptr<ArrayBuffer> extendedPublicKey(const std::string& path) = 0;
 
     protected:
       // Hybrid Setup

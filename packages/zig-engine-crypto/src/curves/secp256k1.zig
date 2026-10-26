@@ -141,6 +141,13 @@ pub fn addTweak(key: *PrivateKey, tweak: *const [32]u8) Error!void {
     }
 }
 
+/// `public_key = public_key + tweak·G`: the step of BIP-32 public child derivation. Public data only, so no
+/// blinding. Fails when the tweak is not below n or the sum is the point at infinity: BIP-32's two invalid-child
+/// cases.
+pub fn addTweakToPublicKey(public_key: *PublicKey, tweak: *const [32]u8) Error!void {
+    if (c.nc_secp256k1_ec_pubkey_tweak_add(publicContext(), public_key, tweak) != 1) return error.DerivationFailed;
+}
+
 // --- signatures ------------------------------------------------------------------------------------------
 
 /// ECDSA over a 32-byte digest with an RFC 6979 nonce: 64 bytes `r || s` (lower S) and the recovery id.

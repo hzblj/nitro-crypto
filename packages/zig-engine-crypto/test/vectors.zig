@@ -117,9 +117,52 @@ test "BIP-39: every single-word change of a vector mnemonic breaks its checksum 
 const Bip32 = struct {
     vectors: []const struct {
         seed: []const u8,
-        chains: []const struct { path: []const u8, chainCode: []const u8, private: []const u8 },
+        chains: []const struct { path: []const u8, chainCode: []const u8, private: []const u8, xpub: []const u8 },
     },
 };
+
+/// The 74 bytes after an xpub's 4-byte version: what `extendedPublic` and `publicDerive` produce.
+fn decodeXpub(xpub: []const u8) ![74]u8 {
+    var raw: [78]u8 = undefined;
+    try base58CheckDecode(xpub, &raw);
+    try testing.expectEqualSlices(u8, &.{ 0x04, 0x88, 0xB2, 0x1E }, raw[0..4]);
+    return raw[4..78].*;
+}
+
+test "BIP-32: the published xpub of every chain but the master, and every non-hardened step derived publicly" {
+    const parsed = try load(Bip32, "bip32.json");
+    defer parsed.deinit();
+    var public_steps: usize = 0;
+
+    for (parsed.value.vectors) |vector| {
+        const seed = try hexAlloc(vector.seed);
+        defer testing.allocator.free(seed);
+        for (vector.chains, 0..) |chain, position| {
+            const path = try engine.path.parse(chain.path);
+            if (path.steps().len == 0) {
+                try testing.expectError(error.InvalidPath, engine.bip32.extendedPublic(seed, &path));
+                continue;
+            }
+
+            const expected = try decodeXpub(chain.xpub);
+            try testing.expectEqualSlices(u8, &expected, &try engine.bip32.extendedPublic(seed, &path));
+
+            // A chain one non-hardened step below the one before it: the same key from the parent's xpub alone.
+            if (position == 0) continue;
+            const step = path.steps()[path.steps().len - 1];
+            const parent = try decodeXpub(vector.chains[position - 1].xpub);
+            if (step >= engine.path.hardened) {
+                try testing.expectError(error.InvalidPath, engine.bip32.publicChild(&parent, step));
+            } else {
+                try testing.expectEqualSlices(u8, &expected, &try engine.bip32.publicChild(&parent, step));
+                public_steps += 1;
+            }
+        }
+    }
+
+    // Vectors 1 and 2 have three non-hardened steps between them (m/0'/1, m/0'/1/2'/2, m/0).
+    try testing.expect(public_steps >= 3);
+}
 
 test "BIP-32: test vectors 1 to 4, every chain" {
     const parsed = try load(Bip32, "bip32.json");

@@ -41,6 +41,11 @@ export interface NitroSeed extends HybridObject<Native> {
   readonly fingerprint: number
   /** The key at `path` ("m/44'/60'/0'/0/0"). */
   deriveKey(scheme: DerivationScheme, path: string): NitroKey
+  /**
+   * The BIP-32 extended public key at `path` (at least one step), 74 bytes: depth, parent fingerprint, child number,
+   * chain code, compressed public key. Public: no private key leaves (docs/adr/0007).
+   */
+  extendedPublicKey(path: string): ArrayBuffer
 }
 
 /** The engine. One per runtime, created by name through `NitroModules`. */
@@ -68,6 +73,8 @@ export interface NitroCrypto extends HybridObject<Native> {
   secp256k1Recover(digest: ArrayBuffer, signature: ArrayBuffer, compressed: boolean): ArrayBuffer
   /** `false` when the signature does not verify; throws when an input is malformed. */
   ed25519Verify(publicKey: ArrayBuffer, message: ArrayBuffer, signature: ArrayBuffer): boolean
+  /** BIP-32 public derivation (non-hardened steps) of a 74-byte extended public key down `path` ("m/0/5"). */
+  bip32DerivePublic(extendedPublicKey: ArrayBuffer, path: string): ArrayBuffer
 
   /** Throws `NC_ERR_INVALID_MNEMONIC` or `NC_ERR_MNEMONIC_CHECKSUM`. Takes NFKD-normalized UTF-8. */
   validateMnemonic(mnemonic: ArrayBuffer): void

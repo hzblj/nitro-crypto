@@ -1,3 +1,4 @@
+import type {ExtendedPublicKey} from '../engine/extended-key'
 import type {Capability, EngineInfo} from '../engine/info'
 import type {KeyOf, SchemeCurve} from '../engine/keys'
 import type {Primitives} from '../engine/primitives'
@@ -20,6 +21,11 @@ export type KeySource = {
   /** The wallet's BIP-32 fingerprint. */
   readonly fingerprint: number
   readonly deriveKey: <S extends DerivationScheme>(scheme: S, path: string) => KeyOf<SchemeCurve[S]>
+  /**
+   * The BIP-32 extended public key at `path` (secp256k1, at least one step): what an account shares for a watch-only
+   * wallet to follow it. Public; no private key leaves the engine (docs/adr/0007).
+   */
+  readonly extendedPublicKey: (path: string) => ExtendedPublicKey
 }
 
 /** The result of checking an address. Chains extend the valid branch with what they know (network, type). */

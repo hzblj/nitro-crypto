@@ -17,6 +17,7 @@ public:
 
   double getFingerprint() override;
   std::shared_ptr<HybridNitroKeySpec> deriveKey(DerivationScheme scheme, const std::string& path) override;
+  std::shared_ptr<ArrayBuffer> extendedPublicKey(const std::string& path) override;
 
   void dispose() override;
 

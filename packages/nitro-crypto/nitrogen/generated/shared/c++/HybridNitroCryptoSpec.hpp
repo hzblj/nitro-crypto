@@ -78,6 +78,7 @@ namespace margelo::nitro::nitrocrypto {
       virtual bool secp256k1Verify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& digest, const std::shared_ptr<ArrayBuffer>& signature) = 0;
       virtual std::shared_ptr<ArrayBuffer> secp256k1Recover(const std::shared_ptr<ArrayBuffer>& digest, const std::shared_ptr<ArrayBuffer>& signature, bool compressed) = 0;
       virtual bool ed25519Verify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& message, const std::shared_ptr<ArrayBuffer>& signature) = 0;
+      virtual std::shared_ptr<ArrayBuffer> bip32DerivePublic(const std::shared_ptr<ArrayBuffer>& extendedPublicKey, const std::string& path) = 0;
       virtual void validateMnemonic(const std::shared_ptr<ArrayBuffer>& mnemonic) = 0;
       virtual std::shared_ptr<ArrayBuffer> generateMnemonic(double wordCount) = 0;
       virtual std::shared_ptr<Promise<std::shared_ptr<HybridNitroSeedSpec>>> generateSeed(double wordCount, const std::shared_ptr<ArrayBuffer>& passphrase) = 0;

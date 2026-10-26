@@ -16,6 +16,7 @@ namespace margelo::nitro::nitrocrypto {
     registerHybrids(this, [](Prototype& prototype) {
       prototype.registerHybridGetter("fingerprint", &HybridNitroSeedSpec::getFingerprint);
       prototype.registerHybridMethod("deriveKey", &HybridNitroSeedSpec::deriveKey);
+      prototype.registerHybridMethod("extendedPublicKey", &HybridNitroSeedSpec::extendedPublicKey);
     });
   }
 

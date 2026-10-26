@@ -10,6 +10,8 @@ const ed25519 = @import("../curves/ed25519.zig");
 const entropy = @import("../os/entropy.zig");
 const hash = @import("../hash.zig");
 const keys = @import("../vault/keys.zig");
+const bip32 = @import("../derivation/bip32.zig");
+const path_mod = @import("../derivation/path.zig");
 const secp256k1 = @import("../curves/secp256k1.zig");
 const status = @import("../core/status.zig");
 const version = @import("version.zig");
@@ -271,6 +273,54 @@ fn seedFingerprint(seed: Handle, out: ?*u32) Error!void {
     try store(u32, out, try keys.seedFingerprint(&vault, seed));
 }
 
+export fn nc_seed_extended_public(
+    seed: Handle,
+    path: ?[*]const u8,
+    path_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(seedExtendedPublic(seed, path, path_len, out, out_len, written));
+}
+
+fn seedExtendedPublic(seed: Handle, path: ?[*]const u8, path_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    try store(usize, written, try keys.seedExtendedPublic(&vault, seed, try input(path, path_len), try output(out, out_len)));
+}
+
+// --- public derivation -----------------------------------------------------------------------------------
+
+export fn nc_bip32_public_derive(
+    extended: ?[*]const u8,
+    extended_len: usize,
+    path: ?[*]const u8,
+    path_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(bip32PublicDerive(extended, extended_len, path, path_len, out, out_len, written));
+}
+
+fn bip32PublicDerive(
+    extended: ?[*]const u8,
+    extended_len: usize,
+    path: ?[*]const u8,
+    path_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const parent = try exact(bip32.extended_public_length, try input(extended, extended_len));
+    const steps = try path_mod.parse(try input(path, path_len));
+    const destination = try output(out, out_len);
+    if (destination.len < bip32.extended_public_length) return error.BufferTooSmall;
+    destination[0..bip32.extended_public_length].* = try bip32.publicDerive(parent, &steps);
+    try store(usize, written, bip32.extended_public_length);
+}
+
 // --- keys ------------------------------------------------------------------------------------------------
 
 export fn nc_key_derive(seed: Handle, scheme: u32, path: ?[*]const u8, path_len: usize, out: ?*Handle) i32 {
@@ -344,6 +394,10 @@ fn fuzzBoundary(_: void, smith: *testing.Smith) anyerror!void {
         nc_mnemonic_generate(selector % 32, out_ptr, out_len, if (smith.value(bool)) &written else null),
         nc_key_public(handle, 1, out_ptr, out_len, &written),
         nc_key_sign(handle, data_ptr, data_len, out_ptr, out_len, &written),
+        nc_seed_extended_public(handle, data_ptr, data_len % 40, out_ptr, out_len, &written),
+        // An extended key of the right length with a random path, and of a random length with a valid one.
+        nc_bip32_public_derive(data_ptr, @min(data_len, 74), data_ptr, data_len % 12, out_ptr, out_len, &written),
+        nc_bip32_public_derive(data_ptr, data_len, "m/0/1", 5, out_ptr, out_len, &written),
         nc_handle_destroy(handle),
     };
     for (codes) |value| {

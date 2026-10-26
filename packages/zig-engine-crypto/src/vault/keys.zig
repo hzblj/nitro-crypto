@@ -108,6 +108,17 @@ pub fn seedFingerprint(vault: *Vault, seed_handle: Handle) Error!u32 {
     return bip32.fingerprint(&master.key);
 }
 
+/// The BIP-32 extended public key at `path` below a seed (depth 1 and deeper): public key and chain code, with
+/// the depth, parent fingerprint and child number BIP-32 serializes beside them. Never a private key.
+pub fn seedExtendedPublic(vault: *Vault, seed_handle: Handle, path_text: []const u8, out: []u8) Error!usize {
+    if (out.len < bip32.extended_public_length) return error.BufferTooSmall;
+    const path = try path_mod.parse(path_text);
+    var seed = try Secret.loadKind(vault, seed_handle, .seed);
+    defer seed.zero();
+    out[0..bip32.extended_public_length].* = try bip32.extendedPublic(seed.slice(), &path);
+    return bip32.extended_public_length;
+}
+
 // --- keys ------------------------------------------------------------------------------------------------
 
 pub fn derive(vault: *Vault, seed_handle: Handle, scheme: Scheme, path_text: []const u8) Error!Handle {

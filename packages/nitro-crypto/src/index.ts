@@ -29,6 +29,7 @@ export {CRYPTO_ERROR_CODES, CryptoError, type CryptoErrorCode, isCryptoError} fr
 export {bytes} from './core/public-bytes'
 export * from './encoding'
 export type {CryptoEngine, CryptoEngineOptions} from './engine/create-engine'
+export {type Bip32Primitives, type ExtendedPublicKey} from './engine/extended-key'
 export {CAPABILITIES, type Capability, type EngineInfo, SUPPORTED_ABI_VERSION} from './engine/info'
 export type {Ed25519Key, KeyFactory, KeyOf, Secp256k1Key, SigningKey} from './engine/keys'
 export {MNEMONIC_LENGTHS, type MnemonicCheck, type MnemonicLength} from './engine/mnemonic'

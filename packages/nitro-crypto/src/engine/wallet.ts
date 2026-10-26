@@ -1,7 +1,9 @@
 import type {AccountOf, AccountRequest, KeySource} from '../adapters/contract'
 import type {Registry} from '../adapters/registry'
+import {fromArrayBuffer} from '../core/bytes'
 import {CryptoError, native, nativeAsync} from '../core/errors'
 import type {DerivationScheme, NitroCrypto, NitroSeed} from '../specs/nitro-crypto.nitro'
+import {type ExtendedPublicKey, parseExtendedPublicKey} from './extended-key'
 import {isScheme, type KeyOf, type SchemeCurve, type SigningKey, wrapKey} from './keys'
 import {countWords, type MnemonicLength, nfkd, normalizeMnemonic, withSecretBytes, wordCount} from './mnemonic'
 
@@ -34,6 +36,11 @@ export type EphemeralWallet<Chains> = {
   ) => Promise<AccountOf<Chains[Id]>>
   /** A key at any path, for what no adapter covers. It belongs to the wallet, like an account's key. */
   readonly deriveKey: KeySource['deriveKey']
+  /**
+   * The BIP-32 extended public key at `path` ("m/84'/0'/0'"): the public key and chain code a watch-only wallet
+   * derives the account's addresses from. The master's (`m`) is refused. Public; no private key leaves (ADR 0007).
+   */
+  readonly extendedPublicKey: (path: string) => ExtendedPublicKey
   /** Zeroizes the seed and every key derived from it. Idempotent. */
   readonly dispose: () => void
 }
@@ -80,6 +87,13 @@ const createKeySource = (state: WalletState, fingerprint: number): KeySource => 
     // The engine derives secp256k1 keys for bip32 and Ed25519 keys for slip10, which is what `SchemeCurve` states.
     return key as KeyOf<SchemeCurve[S]>
   },
+  extendedPublicKey: (path: string): ExtendedPublicKey => {
+    if (state.disposed) {
+      throw disposed()
+    }
+
+    return parseExtendedPublicKey(fromArrayBuffer(native(() => state.seed.extendedPublicKey(path))))
+  },
   fingerprint,
 })
 
@@ -122,6 +136,7 @@ export const createEphemeralWallet = async <Chains>(
     get disposed() {
       return state.disposed
     },
+    extendedPublicKey: source.extendedPublicKey,
     fingerprint,
     origin,
     words,

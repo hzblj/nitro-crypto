@@ -18,6 +18,8 @@ adapters and tested against independent libraries in [`apps/example/test/chains.
 | `bip32-secp256k1` | BIP-32 derivation, hardened and normal steps |
 | `slip10-ed25519` | SLIP-0010 derivation for Ed25519, hardened steps only |
 | `mnemonic-generate` | A fresh BIP-39 mnemonic handed out for backup (`crypto.mnemonic.generate`); no adapter needs it |
+| `bip32-extended-public` | An account's extended public key (`keys.extendedPublicKey`), never the master's (ADR 0007) |
+| `bip32-public-derivation` | Public derivation from an extended public key (`bip32.derivePublic`), non-hardened steps only |
 
 TRON needs `bip32-secp256k1`, `keccak256` and `sha256` (for Base58Check): all there. If yours needs something that is
 not (Schnorr for Taproot, sr25519 for Polkadot, Blake2b for Cardano), see "When the engine lacks a primitive" below.
