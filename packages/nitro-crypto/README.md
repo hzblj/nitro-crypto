@@ -12,8 +12,8 @@ signatures, never key bytes. Chains are separate packages that plug into a typed
 > [SECURITY.md](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md).
 
 <p>
-  <img alt="An Ethereum account derived from one seed by the native engine, in the example on iOS" height="560" src="https://raw.githubusercontent.com/hzblj/nitro-crypto/main/media/ios-accounts.png" />
-  <img alt="The same on Android" height="560" src="https://raw.githubusercontent.com/hzblj/nitro-crypto/main/media/android-accounts.png" />
+  <img alt="The example wallet on iOS: Sepolia, Bitcoin testnet4 and Solana devnet from one phrase, its keys and signatures in the native engine" height="560" src="https://raw.githubusercontent.com/hzblj/nitro-crypto/main/media/ios-wallet.png" />
+  <img alt="The same on Android" height="560" src="https://raw.githubusercontent.com/hzblj/nitro-crypto/main/media/android-wallet.png" />
 </p>
 
 - SHA-256, SHA-512, Keccak-256, RIPEMD-160, HMAC, and OS randomness that fails closed

@@ -11,8 +11,8 @@ Ethereum, Bitcoin and Solana here, any other chain whose primitives the engine h
 > **Not security audited. Never use with real funds.** See [SECURITY.md](./SECURITY.md).
 
 <p>
-  <img alt="An Ethereum account derived from one seed by the native engine, in the example on iOS" height="560" src="media/ios-accounts.png" />
-  <img alt="The same on Android" height="560" src="media/android-accounts.png" />
+  <img alt="The example wallet on iOS: Sepolia, Bitcoin testnet4 and Solana devnet from one phrase, its keys and signatures in the native engine" height="560" src="media/ios-wallet.png" />
+  <img alt="The same on Android" height="560" src="media/android-wallet.png" />
 </p>
 
 ```sh
