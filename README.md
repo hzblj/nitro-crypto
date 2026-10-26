@@ -29,36 +29,6 @@ const signature = await account.signMessage({message: 'Hello from Expo'})
 **[Documentation](./packages/nitro-crypto/README.md)**: install, the API, supported algorithms, chains and platforms,
 and what is not in this version.
 
-### Air-gapped signing
-
-A watch-only wallet and an offline signer (a hardware wallet, or a second phone that never goes online) exchange
-requests and signatures as QR codes. [`@hzblj/crypto-airgap`](https://github.com/hzblj/crypto-airgap) is that protocol
-(BC-UR v2, multipart fountain codes, typed and bounded decoding) without any UI, and a package per chain checks every
-answer against its question through the adapters above:
-
-```ts
-import {createMultipartDecoder, createMultipartEncoder, createRequestId} from '@hzblj/crypto-airgap'
-import {ethereumAirgap} from '@hzblj/crypto-airgap-ethereum'
-
-const airgap = ethereumAirgap(crypto.chains.ethereum)
-const request = {account, requestId: createRequestId(crypto.random), transaction}
-const {sha256} = crypto.hash // the engine's: the protocol package has no hash of its own
-const sender = createMultipartEncoder(airgap.encodeSignRequest(request), {sha256}) // the app shows sender.nextPart()
-
-const receiver = createMultipartDecoder({allowedTypes: airgap.responseTypes, sha256}) // the app feeds it what it scans
-const answer = airgap.decodeSignResponse(receiver.result(), {request}) // its signer recovered and checked
-if (answer.kind === 'transaction') await rpc('eth_sendRawTransaction', [answer.transaction.serialized])
-```
-
-The example wallet as the offline signer: its account key for MetaMask, a request for another address of the account
-as MetaMask sends one, and the signature.
-
-<p>
-  <img alt="Pairing: the wallet's Ethereum account key as MetaMask reads it, an animated QR code" height="480" src="media/ios-airgap-pair.png" />
-  <img alt="A request for the account's fourth address as MetaMask sends one, read from the bytes to be signed: amount, recipient, fee, chain id, nonce and the key that signs" height="480" src="media/ios-airgap-review.png" />
-  <img alt="The signature, as a QR code for the watch-only wallet to scan back" height="480" src="media/ios-airgap-signed.png" />
-</p>
-
 ## This repository
 
 | Path | What lives there |
@@ -68,7 +38,7 @@ as MetaMask sends one, and the signature.
 | `packages/zig-engine-crypto/` | The engine in Zig: its C ABI, tests, published vectors and benchmark (private; it ships inside `@hzblj/nitro-crypto`) |
 | `apps/example/` | The example app: a testnet wallet (Sepolia, Bitcoin testnet4, Solana devnet) that sends and receives on the engine, signs offline over QR codes for a watch-only wallet, and a Debug tab with the self-test, accounts on four chains, signing, an air-gap loopback, primitives, benchmarks, security |
 | `scripts/` | The engine's reproducible builds and their verification, the pack check, version sync |
-| `docs/` | [Architecture](./docs/architecture.md), [adding an adapter](./docs/adding-an-adapter.md), [compatibility](./docs/compatibility.md) (air-gap interoperability included), [benchmarks](./docs/benchmarks.md), [decisions](./docs/adr) |
+| `docs/` | [Architecture](./docs/architecture.md), [adding an adapter](./docs/adding-an-adapter.md), [compatibility](./docs/compatibility.md), [benchmarks](./docs/benchmarks.md), [decisions](./docs/adr) |
 
 ```sh
 yarn                 # install
