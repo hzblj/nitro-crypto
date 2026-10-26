@@ -32,7 +32,7 @@ and what is not in this version.
 ### Air-gapped signing
 
 A watch-only wallet and an offline signer (a hardware wallet, or a second phone that never goes online) exchange
-requests and signatures as QR codes. [`@hzblj/crypto-airgap`](./packages/crypto-airgap/README.md) is that protocol
+requests and signatures as QR codes. [`@hzblj/crypto-airgap`](https://github.com/hzblj/crypto-airgap) is that protocol
 (BC-UR v2, multipart fountain codes, typed and bounded decoding) without any UI, and a package per chain checks every
 answer against its question through the adapters above:
 
@@ -65,7 +65,6 @@ as MetaMask sends one, and the signature.
 | --- | --- |
 | `packages/nitro-crypto/` | `@hzblj/nitro-crypto`: the TypeScript facade and adapter registry, the Nitro specs and C++ bridge, the prebuilt engine |
 | `packages/crypto-ethereum/`, `crypto-bitcoin/`, `crypto-solana/` | The chain adapters, each published on its own |
-| `packages/crypto-airgap/`, `crypto-airgap-bitcoin/`, `-ethereum/`, `-solana/` | Air-gapped signing: the UR protocol and its types, and each chain's requests and answers |
 | `packages/zig-engine-crypto/` | The engine in Zig: its C ABI, tests, published vectors and benchmark (private; it ships inside `@hzblj/nitro-crypto`) |
 | `apps/example/` | The example app: a testnet wallet (Sepolia, Bitcoin testnet4, Solana devnet) that sends and receives on the engine, signs offline over QR codes for a watch-only wallet, and a Debug tab with the self-test, accounts on four chains, signing, an air-gap loopback, primitives, benchmarks, security |
 | `scripts/` | The engine's reproducible builds and their verification, the pack check, version sync |

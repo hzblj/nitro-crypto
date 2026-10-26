@@ -1,7 +1,9 @@
 # example
 
 The example app for `@hzblj/nitro-crypto` and its adapters: a testnet wallet whose keys, addresses, transactions and
-signatures all come from the engine, and a Debug tab with the library on its own. Built from `@hzblj/kara-ui` like
+signatures all come from the engine, and a Debug tab with the library on its own. Its air-gapped signing runs on
+`@hzblj/crypto-airgap` and its chain packages from npm ([hzblj/crypto-airgap](https://github.com/hzblj/crypto-airgap),
+whose own example is an air-gap-only app). Built from `@hzblj/kara-ui` like
 every hzblj example. Private; never published.
 
 | Path | What it is |

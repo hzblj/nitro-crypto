@@ -88,33 +88,12 @@ changelog and a GitHub advisory once a fixed version is published.
 
 ## Air-gapped signing
 
-`@hzblj/crypto-airgap` and its chain packages move signing requests, public accounts and signatures between a
-watch-only wallet and an offline signer as QR codes ([ADR 0006](docs/adr/0006-air-gap-as-data.md)). They hold no
-key and sign nothing; what they add is a channel, and these are its rules:
-
-- **Everything scanned is hostile.** Decoders take an allowlist of types and bounds on message size, fragments, parts
-  per message, pending parts, CBOR depth and items; lengths are checked against the bytes present before anything is
-  allocated, and CBOR is read strictly. Parsers of what is to be signed (PSBTs, RLP, Solana messages) are strict too,
-  and fuzzed with random mutations.
-- **No secrets travel.** Seed and private key UR types are refused whatever an allowlist says, as are master and
-  private `crypto-hdkey`s, private `crypto-eckey`s, and key data that is a private key's. What a wallet shares to
-  pair is public keys with their paths, or an account's extended public key (never the master's, never a private
-  one): enough to watch every address of that account, which is why the example says so where it shows one.
-- **A checksum is not a signature.** Bytewords' CRC-32 and the fountain code's checksum catch misreads; they say
-  nothing about who made a payload. Authenticity comes from the chain: a response is accepted only when it answers
-  its request (the same request id, the same unsigned transaction and coins) and its signature, verified by the
-  engine, is by the account asked.
-- **Decoding is not consent.** A signer checks a request against its own account (path, master fingerprint,
-  address, chain id) and shows what it does (recipients and amounts, change, the fee, ERC-20 transfers, Solana
-  instruction summaries) before the app asks the user. Warnings say what a signer cannot check: Bitcoin coin values
-  without their previous transactions (the fee a coordinator could misstate), inputs or instructions it does not
-  recognize, other signers. A "message" that is a Solana transaction is refused.
-- **Nothing is logged.** Errors carry codes and messages that never quote a payload.
-
-Not covered: what the camera, the screen and the person do. A QR code can be photographed, a screen recorded, and a
-request shown on a compromised watch-only device can lie about where its funds go; the signer's own review is the
-only one that counts. No hardware wallet was available to test against: interoperability claims are limited to the
-independent implementations listed in [compatibility](docs/compatibility.md).
+The air-gap packages (`@hzblj/crypto-airgap` and its chain packages) live in
+[hzblj/crypto-airgap](https://github.com/hzblj/crypto-airgap), with their own
+[security policy](https://github.com/hzblj/crypto-airgap/blob/main/SECURITY.md): what they treat as hostile, what they
+check before a signer signs and before a watch-only wallet broadcasts, and what they leave to the app. What they share
+to pair comes from here: public keys with their paths, or an account's extended public key, never the master's and
+never a private one (docs/adr/0007).
 
 ## Primitives and dependencies
 
@@ -140,8 +119,6 @@ artifact's SHA-256 and `yarn engine:verify` checks them, and that nothing but `n
 dependency means: read its changelog and security advisories, update the pin, rerun the published vectors, the
 Wycheproof suites and the parity tests against independent libraries, and record the change in the changelog.
 JavaScript dependencies of the published packages: none at runtime besides the `react-native-nitro-modules` peer.
-`@hzblj/crypto-airgap` has none at all: the SHA-256 its fountain code seeds its generator with (over public data
-only) is the caller's, the engine's `crypto.hash.sha256`.
 
 ## Verification
 

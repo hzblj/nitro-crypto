@@ -1,6 +1,7 @@
 # 6. Air-gapped signing is data, in packages of its own
 
-Accepted.
+Accepted. The packages have since moved to their own repository,
+[hzblj/crypto-airgap](https://github.com/hzblj/crypto-airgap), where this decision continues as its ADR 0001.
 
 ## Context
 

@@ -6,9 +6,9 @@ Dependencies point one way, down; nothing below the adapters knows a chain exist
 ```text
 apps/example                      Expo Router + Kara UI: every screen runs on the real engine
         │
-        ├──────────────▶ @hzblj/crypto-airgap-{bitcoin,ethereum,solana}    air-gapped signing: requests and
-        │                        │  answers as URs, checked through the     answers over QR codes, no UI
-        │                        ▼  chain clients they are bound to
+        ├──────────────▶ @hzblj/crypto-airgap-{bitcoin,ethereum,solana}    air-gapped signing (hzblj/crypto-airgap,
+        │                        │  bound to the chain clients below         from npm): requests and answers as URs
+        │                        ▼
         │                @hzblj/crypto-airgap      UR codec, multipart, registry, public key types (no native code)
         ▼
 @hzblj/crypto-ethereum   @hzblj/crypto-bitcoin   @hzblj/crypto-solana      (and any chain written elsewhere)
@@ -67,11 +67,11 @@ same engine compiled to WebAssembly. Everything above the host, adapters include
 Each declares the engine capabilities it needs, binds to an engine once (`create`), and returns a client with
 `deriveAccount` and `validateAddress` plus whatever its chain offers. See [adding-an-adapter.md](adding-an-adapter.md).
 
-**Air-gap packages** sit beside the app, not under the engine. `@hzblj/crypto-airgap` is the payload protocol
-(BC-UR v2: Bytewords, CBOR, fountain-coded multipart, a typed registry) and depends on nothing in this repository;
-each chain's air-gap package binds to that chain's client (`bitcoinAirgap(crypto.chains.bitcoin)`) and uses it to
-read, sign and verify what travels. They draw no QR code and open no camera: strings in, strings out
-([ADR 0006](adr/0006-air-gap-as-data.md)).
+**Air-gap packages** sit beside the app, not under the engine, in their own repository:
+[hzblj/crypto-airgap](https://github.com/hzblj/crypto-airgap). `@hzblj/crypto-airgap` is the payload protocol (BC-UR
+v2: Bytewords, CBOR, fountain-coded multipart, a typed registry) and depends on nothing; each chain's air-gap package
+binds to that chain's client (`bitcoinAirgap(crypto.chains.bitcoin)`) and uses it to read, sign and verify what
+travels. They draw no QR code and open no camera: strings in, strings out ([ADR 0006](adr/0006-air-gap-as-data.md)).
 
 ## The adapter registry
 

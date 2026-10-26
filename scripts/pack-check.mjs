@@ -36,10 +36,6 @@ const ENGINE = [
 const ADAPTER = ['package.json', 'README.md', 'LICENSE', 'build/index.js', 'build/index.d.ts']
 
 const REQUIRED = {
-  '@hzblj/crypto-airgap': ADAPTER,
-  '@hzblj/crypto-airgap-bitcoin': ADAPTER,
-  '@hzblj/crypto-airgap-ethereum': ADAPTER,
-  '@hzblj/crypto-airgap-solana': ADAPTER,
   '@hzblj/crypto-bitcoin': ADAPTER,
   '@hzblj/crypto-ethereum': ADAPTER,
   '@hzblj/crypto-solana': ADAPTER,
@@ -143,19 +139,7 @@ for (const {directory, name} of packages) {
   fileCount += files.length
 }
 
-const consumer = `import {
-  CRYPTO_MULTI_ACCOUNTS,
-  createMultipartDecoder,
-  createMultipartEncoder,
-  createRequestId,
-  fromUR,
-  isAirgapError,
-  type UR,
-} from '@hzblj/crypto-airgap'
-import {bitcoinAirgap} from '@hzblj/crypto-airgap-bitcoin'
-import {ethereumAirgap} from '@hzblj/crypto-airgap-ethereum'
-import {solanaAirgap} from '@hzblj/crypto-airgap-solana'
-import {bitcoinAdapter} from '@hzblj/crypto-bitcoin'
+const consumer = `import {bitcoinAdapter} from '@hzblj/crypto-bitcoin'
 import {ethereumAdapter, type Hex} from '@hzblj/crypto-ethereum'
 import {solanaAdapter} from '@hzblj/crypto-solana'
 import {
@@ -195,48 +179,24 @@ export const app = async () => {
   return [verified, solSignature, script, recovered, hex.encode(digest), base58.encode(digest), isCryptoError(null)]
 }
 
-export const airgap = async (scanned: UR) => {
+// Signing elsewhere: what an air-gapped signer's watch-only side and the signer itself use (@hzblj/crypto-airgap-*
+// builds on these), extended public keys and public derivation.
+export const elsewhere = async (psbt: Uint8Array, unsigned: Uint8Array, signature: RecoverableSignature) => {
   const crypto = createCryptoEngine({adapters: [ethereumAdapter(), bitcoinAdapter({network: 'testnet'}), solanaAdapter()]})
-  const btc = bitcoinAirgap(crypto.chains.bitcoin)
-  const eth = ethereumAirgap(crypto.chains.ethereum)
-  const sol = solanaAirgap(crypto.chains.solana)
-  const {sha256} = crypto.hash
-  const sender = createMultipartEncoder(btc.encodeSignRequest({psbt: new Uint8Array()}), {maxFragmentLength: 180, sha256})
-  const part: string = sender.nextPart()
-  const receiver = createMultipartDecoder({allowedTypes: [...eth.responseTypes, ...sol.responseTypes], sha256})
-  receiver.receivePart(part)
-  const fraction: number = receiver.progress.fraction
-  const account = {address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', fingerprint: 1, path: "m/44'/60'/0'/0/0"} as const
-  const request = eth.decodeSignRequest(scanned, {account})
-  const to: string | undefined = request.kind === 'transaction' ? request.transaction.to : request.text
-  const answer = eth.decodeSignResponse(scanned, {request: {account, message: 'x', requestId: createRequestId(crypto.random)}})
-  const serialized: string | undefined = answer.kind === 'transaction' ? answer.transaction.serialized : undefined
-  const keys = fromUR(CRYPTO_MULTI_ACCOUNTS, scanned).keys.map(key => sol.watchAccount(key).address)
-  const review = btc.decodeSignRequest(scanned, {account: crypto.chains.bitcoin.watchAccount({fingerprint: 1, path: "m/84'/1'/0'/0/0", publicKey: new Uint8Array(33)})})
-  const fee: bigint | undefined = review.fee
-
-  // Account keys: Sparrow's crypto-account, MetaMask's crypto-hdkey, and requests for any address of the account.
   const wallet = await crypto.createEphemeralWallet()
   const extendedKey: ExtendedPublicKey = wallet.extendedPublicKey("m/84'/1'/0'")
   const child: ExtendedPublicKey = crypto.bip32.derivePublic(extendedKey, 'm/0/1')
-  const bitcoinKey = btc.accountKey({extendedKey, fingerprint: wallet.fingerprint, path: "m/84'/1'/0'"})
-  const sparrow: UR<'crypto-account'> = btc.encodeAccount({keys: [bitcoinKey], masterFingerprint: wallet.fingerprint})
-  const third: string = btc.watchAccount(bitcoinKey, wallet.fingerprint, 2).address
-  const metamask = eth.accountKey({extendedKey: wallet.extendedPublicKey("m/44'/60'/0'"), fingerprint: 1, name: 'Wallet', path: "m/44'/60'/0'"})
-  const anyAddress = eth.decodeSignRequest(scanned, {accountPath: "m/44'/60'/0'", fingerprint: wallet.fingerprint})
-  const signed = eth.encodeSignResponse(await eth.signRequest(anyAddress, path => wallet.deriveAccount({chain: 'ethereum', path})))
-  const psbt = btc.decodeSignRequest(scanned, {accountPath: "m/84'/1'/0'", fingerprint: wallet.fingerprint})
-  const answered: UR = btc.encodeSignResponse(await btc.signRequest(psbt, path => wallet.deriveAccount({chain: 'bitcoin', path})))
+  const watch = crypto.chains.bitcoin.watchAccount({extendedKey, fingerprint: wallet.fingerprint, index: 2, path: "m/84'/1'/0'"})
+  const fee: bigint | undefined = crypto.chains.bitcoin.decodePsbt(psbt).fee
+  const signed: Uint8Array = (await (await wallet.deriveAccount({chain: 'bitcoin'})).signPsbt(psbt)).psbt
+  const transaction = crypto.chains.ethereum.parseTransaction(unsigned)
+  const signer: string | undefined = crypto.chains.ethereum.recoverTransactionAddress({signature, transaction})
   wallet.dispose()
 
-  // @ts-expect-error: an Ethereum request carries no PSBT
-  request.psbt
-  // @ts-expect-error: decoders take an allowlist
-  createMultipartDecoder({sha256})
-  // @ts-expect-error: multipart takes SHA-256 from the caller (the engine), having none of its own
-  createMultipartEncoder(scanned, {maxFragmentLength: 180})
+  // @ts-expect-error: public derivation takes an extended public key, not a path alone
+  crypto.bip32.derivePublic("m/84'/1'/0'", 'm/0/1')
 
-  return [fraction, to, serialized, keys, fee, child, sparrow, third, metamask, signed, answered, isAirgapError(null, 'REQUEST_MISMATCH')]
+  return [child, watch.address, fee, signed, signer]
 }
 
 export const customChain = defineAdapter({
