@@ -98,6 +98,21 @@
   },
   "publishConfig": {
     "access": "public",
+    "exports": {
+      ".": {
+        "types": "./build/index.d.ts",
+        "default": "./build/index.js"
+      },
+      "./adapter": {
+        "types": "./build/adapter.d.ts",
+        "default": "./build/adapter.js"
+      },
+      "./testing": {
+        "types": "./build/testing.d.ts",
+        "default": "./build/testing.js"
+      },
+      "./package.json": "./package.json"
+    },
     "provenance": true
   }
 }

@@ -131,6 +131,11 @@ for (const {directory, name} of packages) {
       fail(`${name} still declares a workspace: range in ${field}: it would not install outside this repo`)
     }
   }
+  // `source` points at src/, which stays home: a consumer that sets the condition (a monorepo's own tests do) would
+  // resolve to a file that is not there. `publishConfig.exports` is the published map without it.
+  if (JSON.stringify(packed.exports ?? {}).includes('"source"')) {
+    fail(`${name} publishes a \`source\` condition in its exports, to a src/ it does not ship`)
+  }
 
   const installed = path.join(WORK, 'node_modules', name)
   await mkdir(installed, {recursive: true})
