@@ -94,6 +94,7 @@ const char *nc_build_info(void);
 #define NC_CAP_BIP32_EXTENDED_PUBLIC (1ull << 14)
 #define NC_CAP_BIP32_PUBLIC_DERIVATION (1ull << 15)
 #define NC_CAP_BIP39_ENTROPY (1ull << 16)
+#define NC_CAP_BACKUP_ARGON2ID (1ull << 17)
 
 /** Every capability this build provides, as NC_CAP_* bits. */
 uint64_t nc_capabilities(void);
@@ -241,6 +242,32 @@ nc_status nc_mnemonic_from_entropy(const uint8_t *entropy, size_t entropy_len, c
  */
 nc_status nc_mnemonic_to_entropy(const char *mnemonic, size_t mnemonic_len, uint8_t *out, size_t out_len,
                                  size_t *written);
+
+/* ------------------------------------------------------------------------------------------------- backup */
+
+/** A sealed backup's header: magic, version, key derivation, memory, passes, lanes, salt and nonce (ADR 0009). */
+#define NC_BACKUP_HEADER_LENGTH 55
+/** The longest sealed backup: the header, 32 bytes of entropy and the 16-byte tag. A buffer this size fits any. */
+#define NC_BACKUP_MAX_LENGTH (NC_BACKUP_HEADER_LENGTH + 32 + 16)
+
+/**
+ * Seals BIP-39 `entropy` (16 to 32 bytes) under `password` (UTF-8, at most 1024 bytes) for a backup that leaves the
+ * device: Argon2id over the password with a fresh salt (64 MiB, 3 passes, one lane), then XChaCha20-Poly1305 with a
+ * fresh nonce, the header as associated data. Writes the backup, NC_BACKUP_HEADER_LENGTH + entropy_len + 16 bytes,
+ * through `written`. The backup is safe to store anywhere: what keeps it is the password. For native callers that
+ * hold the entropy, such as a vault (ADR 0009); takes about half a second, so never on a UI thread.
+ */
+nc_status nc_backup_seal(const uint8_t *entropy, size_t entropy_len, const char *password, size_t password_len,
+                         uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * The entropy a backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes), its length through `written`.
+ * NC_ERR_VERIFICATION_FAILED for a wrong password and for any change to the backup alike; NC_ERR_INVALID_ARGUMENT for
+ * a header this engine does not read (or parameters out of the bounds it accepts: 19 to 256 MiB, 1 to 10 passes).
+ * The caller should zero `out` when done.
+ */
+nc_status nc_backup_open(const uint8_t *backup, size_t backup_len, const char *password, size_t password_len,
+                         uint8_t *out, size_t out_len, size_t *written);
 
 /** The BIP-32 fingerprint of the seed's secp256k1 master key (HASH160 of its public key, first 4 bytes, big-endian). */
 nc_status nc_seed_fingerprint(nc_handle seed, uint32_t *out);

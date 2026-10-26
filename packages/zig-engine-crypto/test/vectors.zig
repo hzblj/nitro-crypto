@@ -376,3 +376,39 @@ test "Wycheproof: Ed25519" {
     }
     try testing.expectEqual(@as(usize, 210), total);
 }
+
+const Backup = struct {
+    vectors: []const struct {
+        backup: []const u8,
+        entropy: []const u8,
+        memory: u32,
+        nonce: []const u8,
+        passes: u32,
+        password: []const u8,
+        salt: []const u8,
+    },
+};
+
+test "backups: the engine seals and opens what an independent implementation does, byte for byte" {
+    const parsed = try load(Backup, "backup.json");
+    defer parsed.deinit();
+    try testing.expectEqual(@as(usize, 3), parsed.value.vectors.len);
+
+    for (parsed.value.vectors) |vector| {
+        const entropy = try hexAlloc(vector.entropy);
+        defer testing.allocator.free(entropy);
+        const expected = try hexAlloc(vector.backup);
+        defer testing.allocator.free(expected);
+        const salt = try bytes(16, vector.salt);
+        const nonce = try bytes(24, vector.nonce);
+
+        var sealed: [engine.backup.max_length]u8 = undefined;
+        const params: engine.backup.Params = .{ .memory = vector.memory, .passes = vector.passes };
+        const written = try engine.backup.sealWith(entropy, vector.password, params, &salt, &nonce, &sealed);
+        try testing.expectEqualSlices(u8, expected, sealed[0..written]);
+
+        var opened: [engine.backup.max_entropy_length]u8 = undefined;
+        const length = try engine.backup.open(expected, vector.password, &opened);
+        try testing.expectEqualSlices(u8, entropy, opened[0..length]);
+    }
+}

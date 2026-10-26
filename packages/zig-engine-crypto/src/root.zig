@@ -35,6 +35,9 @@ pub const slip10 = @import("derivation/slip10.zig");
 pub const handles = @import("vault/handles.zig");
 pub const keys = @import("vault/keys.zig");
 
+// A wallet's entropy under a password, for a backup that leaves the device.
+pub const backup = @import("backup/backup.zig");
+
 // Seeded random input for the fuzz targets.
 pub const property = @import("testing/property.zig");
 
