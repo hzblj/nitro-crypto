@@ -5,6 +5,7 @@
 
 const std = @import("std");
 
+const backup = @import("../backup/backup.zig");
 const bip39 = @import("../derivation/bip39.zig");
 const ed25519 = @import("../curves/ed25519.zig");
 const entropy = @import("../os/entropy.zig");
@@ -317,6 +318,48 @@ fn mnemonicToEntropy(mnemonic: ?[*]const u8, mnemonic_len: usize, out: ?[*]u8, o
     defer secure.zero(&decoded);
     const length = try bip39.toEntropy(try input(mnemonic, mnemonic_len), &decoded);
     @memcpy(buffer[0..length], decoded[0..length]);
+    try store(usize, written, length);
+}
+
+export fn nc_backup_seal(
+    entropy_bytes: ?[*]const u8,
+    entropy_len: usize,
+    password: ?[*]const u8,
+    password_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(backupSeal(entropy_bytes, entropy_len, password, password_len, out, out_len, written));
+}
+
+fn backupSeal(entropy_bytes: ?[*]const u8, entropy_len: usize, password: ?[*]const u8, password_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const length = try backup.seal(try input(entropy_bytes, entropy_len), try input(password, password_len), try output(out, out_len));
+    try store(usize, written, length);
+}
+
+export fn nc_backup_open(
+    sealed: ?[*]const u8,
+    sealed_len: usize,
+    password: ?[*]const u8,
+    password_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(backupOpen(sealed, sealed_len, password, password_len, out, out_len, written));
+}
+
+fn backupOpen(sealed: ?[*]const u8, sealed_len: usize, password: ?[*]const u8, password_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const buffer = try output(out, out_len);
+    if (buffer.len < backup.max_entropy_length) return error.BufferTooSmall;
+
+    var entropy_bytes: [backup.max_entropy_length]u8 = undefined;
+    defer secure.zero(&entropy_bytes);
+    const length = try backup.open(try input(sealed, sealed_len), try input(password, password_len), &entropy_bytes);
+    @memcpy(buffer[0..length], entropy_bytes[0..length]);
     try store(usize, written, length);
 }
 

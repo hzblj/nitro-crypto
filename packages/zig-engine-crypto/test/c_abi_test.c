@@ -68,6 +68,7 @@ static void test_version_and_capabilities(void) {
     CHECK((caps & NC_CAP_BIP32_EXTENDED_PUBLIC) && strcmp(nc_capability_name(14), "bip32-extended-public") == 0);
     CHECK((caps & NC_CAP_BIP32_PUBLIC_DERIVATION) && strcmp(nc_capability_name(15), "bip32-public-derivation") == 0);
     CHECK((caps & NC_CAP_BIP39_ENTROPY) && strcmp(nc_capability_name(16), "bip39-entropy") == 0);
+    CHECK((caps & NC_CAP_BACKUP_ARGON2ID) && strcmp(nc_capability_name(17), "backup-argon2id") == 0);
 }
 
 static void test_status_names(void) {
@@ -244,6 +245,33 @@ static void test_entropy(void) {
     CHECK(nc_handle_count() == baseline);
     memset(words, 0, sizeof words);
     memset(entropy, 0, sizeof entropy);
+}
+
+/* A backup with the real parameters (64 MiB, 3 passes): sealed, opened, and refused with another password. */
+static void test_backup(void) {
+    static const uint8_t entropy[32] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                                        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32};
+    const char *password = "correct horse battery staple";
+    uint8_t sealed[NC_BACKUP_MAX_LENGTH], other[NC_BACKUP_MAX_LENGTH], opened[NC_ENTROPY_MAX_LENGTH];
+    size_t written = 0, other_written = 0, length = 0;
+
+    CHECK_STATUS(NC_OK, nc_backup_seal(entropy, 32, password, strlen(password), sealed, sizeof sealed, &written));
+    CHECK(written == NC_BACKUP_MAX_LENGTH);
+    CHECK_STATUS(NC_OK, nc_backup_open(sealed, written, password, strlen(password), opened, sizeof opened, &length));
+    CHECK(length == 32 && memcmp(opened, entropy, 32) == 0);
+
+    /* Fresh salt and nonce every time: the same entropy seals differently. */
+    CHECK_STATUS(NC_OK, nc_backup_seal(entropy, 32, password, strlen(password), other, sizeof other, &other_written));
+    CHECK(other_written == written && memcmp(other, sealed, written) != 0);
+
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_backup_open(sealed, written, "wrong", 5, opened, sizeof opened, &length));
+    sealed[NC_BACKUP_HEADER_LENGTH] ^= 1;
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED,
+                 nc_backup_open(sealed, written, password, strlen(password), opened, sizeof opened, &length));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_open(sealed, written, password, strlen(password), opened, 31, &length));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_seal(entropy, 32, password, 0, sealed, NC_BACKUP_MAX_LENGTH - 1, &written));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_seal(entropy, 15, password, 0, sealed, sizeof sealed, &written));
+    memset(opened, 0, sizeof opened);
 }
 
 /* The BIP-32 fingerprint of "abandon ... about" with no passphrase, as BIP-84's and BIP-86's examples show it. */
@@ -483,6 +511,7 @@ int main(void) {
     test_mnemonic();
     test_mnemonic_generate();
     test_entropy();
+    test_backup();
     test_seed_and_ethereum_key();
     test_extended_public_key();
     test_solana_key();

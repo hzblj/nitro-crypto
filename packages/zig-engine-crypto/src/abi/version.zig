@@ -37,6 +37,7 @@ pub const Capability = enum(u6) {
     @"bip32-extended-public",
     @"bip32-public-derivation",
     @"bip39-entropy",
+    @"backup-argon2id",
 
     pub fn bit(capability: Capability) u64 {
         return @as(u64, 1) << @intFromEnum(capability);
@@ -63,7 +64,8 @@ test "capability bits match the header" {
     try testing.expectEqual(@as(u64, 1 << 12), Capability.@"slip10-ed25519".bit());
     try testing.expectEqual(@as(u64, 1 << 13), Capability.@"mnemonic-generate".bit());
     try testing.expectEqual(@as(u64, 1 << 16), Capability.@"bip39-entropy".bit());
-    try testing.expectEqual(@as(u64, (1 << 17) - 1), capabilities());
+    try testing.expectEqual(@as(u64, 1 << 17), Capability.@"backup-argon2id".bit());
+    try testing.expectEqual(@as(u64, (1 << 18) - 1), capabilities());
 }
 
 test "capability names" {
@@ -73,7 +75,8 @@ test "capability names" {
     try testing.expectEqualStrings("bip32-extended-public", capabilityName(14).?);
     try testing.expectEqualStrings("bip32-public-derivation", capabilityName(15).?);
     try testing.expectEqualStrings("bip39-entropy", capabilityName(16).?);
-    try testing.expectEqual(@as(?[:0]const u8, null), capabilityName(17));
+    try testing.expectEqualStrings("backup-argon2id", capabilityName(17).?);
+    try testing.expectEqual(@as(?[:0]const u8, null), capabilityName(18));
     try testing.expectEqual(@as(?[:0]const u8, null), capabilityName(1000));
 }
 

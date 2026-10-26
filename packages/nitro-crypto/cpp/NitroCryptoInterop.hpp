@@ -28,6 +28,12 @@ inline bool supported() {
   return nc_abi_version() == NC_ABI_VERSION && (nc_capabilities() & NC_CAP_BIP39_ENTROPY) != 0;
 }
 
+/// Whether the linked engine seals backups (`backup-argon2id`, docs/adr/0009): a module that offers backups checks it
+/// as `supported()` above.
+inline bool backupSupported() {
+  return supported() && (nc_capabilities() & NC_CAP_BACKUP_ARGON2ID) != 0;
+}
+
 /// `length` bytes from the operating system's CSPRNG, through the engine, which fails closed: fresh entropy is
 /// 16 bytes for 12 words, 32 for 24.
 inline void randomBytes(uint8_t* out, size_t length) {
@@ -57,6 +63,25 @@ inline size_t entropyFromMnemonic(const char* mnemonic, size_t length, uint8_t* 
 inline size_t mnemonicFromEntropy(const uint8_t* entropy, size_t length, char* out, size_t capacity) {
   size_t written = 0;
   bridge::check(nc_mnemonic_from_entropy(entropy, length, out, capacity, &written));
+  return written;
+}
+
+/// Entropy sealed under a password into `out` (at least NC_BACKUP_MAX_LENGTH bytes): a backup that is safe to store
+/// anywhere, as the password keeps it; its length. Runs Argon2id over 64 MiB, about half a second: never on the JS or
+/// UI thread. The entropy and the password stay the caller's to zero.
+inline size_t backupSeal(const uint8_t* entropy, size_t length, const char* password, size_t passwordLength, uint8_t* out,
+                         size_t capacity) {
+  size_t written = 0;
+  bridge::check(nc_backup_seal(entropy, length, password, passwordLength, out, capacity, &written));
+  return written;
+}
+
+/// The entropy a backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes); its length. Throws
+/// NC_ERR_VERIFICATION_FAILED for a wrong password and for a changed backup alike. `out` is the caller's to zero.
+inline size_t backupOpen(const uint8_t* backup, size_t length, const char* password, size_t passwordLength, uint8_t* out,
+                         size_t capacity) {
+  size_t written = 0;
+  bridge::check(nc_backup_open(backup, length, password, passwordLength, out, capacity, &written));
   return written;
 }
 
