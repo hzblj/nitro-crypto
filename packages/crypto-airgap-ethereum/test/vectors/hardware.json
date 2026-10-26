@@ -1,0 +1,26 @@
+{
+ "source": {
+  "keystoneHub": "https://github.com/KeystoneHQ/Keystone-developer-hub/blob/main/integration/ethereum.md: the crypto-hdkey a Keystone shows to pair with MetaMask and other Ethereum wallets, the xpub it documents, and an eth-signature",
+  "onekey": "https://github.com/OneKeyHQ/app-monorepo (packages/kit/src/views/Developer/pages/Gallery/Components/stories/QRWalletGallery/QRWalletGalleryImportAccount.tsx): the EVM account a OneKey shares",
+  "keystoneFirmware": "https://github.com/KeystoneHQ/keystone-sdk-rust (libs/ur-registry: extend/crypto_multi_accounts.rs, ethereum/eth_sign_request.rs, ethereum/eth_signature.rs), the codec Keystone 3's firmware builds on"
+ },
+ "keystoneHub": {
+  "hdkey": "UR:CRYPTO-HDKEY/PTAOWKAXHDCLAXAMLSDSDSFSYLLTFLGAAYLDFTBNMWRDPAHLPTJSFDOSDPONAAEENYHKMOYLREJLGOAAHDCXSEJORFDRBNSKKBESEHPMLDMTCYPMRSBNDRKBIDKIFLSSWLTIESDRHKTSZTHGHHINAHTAADEHOEADCSFNAOAEAMTAADDYOTADLNCSDWYKCSFNYKAEYKAOCYZCTEHDWKAXAXATTAADDYOEADLRAEWKLAWKAXAEAYCYPFKPEOASASISGRIHKKJKJYJLJTIHBKJOHSIAIAJLKPJTJYDMJKJYHSJTIEHSJPIEKBJZJTYN",
+  "path": "m/44'/60'/0'",
+  "xpub": "xpub6CwzeNGArLq2XuEwGtycrise31bP3dZe1cim6urwWvyJ4D4EStJtp7ppZfHbi8pQTiEyapmGQS7NMrEarbDwPdjNMkGKSQEtpXytCWcQvH4",
+  "signature": "ur:eth-signature/oeadtpdagdndcawmgtfrkigrpmndutdnbtkgfssbjnaohdfptywtosrftahprdctrkbegylogdghjkbafhflamfwlohghtpsseaozorsimnybbtnnbiynlckenbtfmeeamsabnaeoxasjkwswfkekiieckhpecckssptndzelnwfecylbwdlsgvazt"
+ },
+ "onekey": {
+  "hdkey": "UR:CRYPTO-HDKEY/PTAOWKAXHDCLAXLECXLTSNHYJZJPBBFYRYIHKPQZVTNEBBEHJTKTWDMYHLPFHLZTWMDADSNDGMSWESAAHDCXDICEBETLROYKCABAAAFMSWJZEMCHTNPTKNYNVYHPHFETHDSTKORHYTTAGAATHSRHAHTAADEHOEADCSFNAOAEAMTAADDYOTADLNCSDWYKCSFNYKAEYKAOCYSGWSYLBSAXAXATTAADDYOEADLRAEWKLAWKAXAEAYCYDKURZERDASIYGWJTIHGRIHKKBKJOHSIAIAJLKPJTJYDMJKJYHSJTIEHSJPIEHFKIDSWZ"
+ },
+ "keystoneMultiAccounts": {
+  "ur": "UR:CRYPTO-MULTI-ACCOUNTS/OXADCYWMCMJKCTAOLFTAADDLOTAXHDCLAXRSJEQZPETEIMAXTOBSTIJNJKVSIMPRCWFHYTSTWDLYTDNBTDHHYNDMCYJPOEUECSAAHDCXEOTEWFLFMYPLAXWPDTHPFHWNATYAFHMUDPLUAHGSNLVONLBESRGLCHFYJOPDFMHGAMTAADDYOYADLNCSDWYKCSFNYKAEYKTAADDLOEAXHDCXTIDIFEHYSFWTETHESRMYCLKEHPZORHHEJSCYCMZOVDLFPEKGEOPTKICTCHWMSNKKAMTAADDYOYADLNCSDWYKCFADYKYKAEYKAXJTGRIHKKJKJYJLJTIHCXEOCXGDJPJLAHIHEHDMEHDMDYDLEYYLLD",
+  "key": "03bf6bb4afd36a03ce0fd06d73e86ab21b3ff9c7ea81d2a0d25cf62e1a72a2de18",
+  "chainCode": "33d3f3828fae03ec295b3ff107f83f932d8b054c99e29910c34e174470a83e57"
+ },
+ "keystoneFirmware": {
+  "legacyRequest": "a601d825509b1deb4d3b7d4bad9bdd2b0d7b3dcb6d02584bf849808609184e72a00082271094000000000000000000000000000000000000000080a47f74657374320000000000000000000000000000000000000000000000000000006000578080800301040105d90130a2018a182cf501f501f500f401f4021a1234567807686d6574616d61736b",
+  "fujiRequest": "ur:eth-sign-request/oladtpdagdndcawmgtfrkigrpmndutdnbtkgfssbjnaohdktaoyajylfpdinadlrcasnihaelrmdaoytaelfgmaymwfgpdenoltllabttepynyjemegsmhglyaadkgfdsplobtsgsrguwpcpknaelartadnbfnwmswgrgrtllpiorlcxhdmswnynldcpsrwnfwenjeeyenzooyinrnonpyltgmlrnbgmmetnwlcwbehtsartuoghkkwpwnweksmhtafndrpavydsmdwnvswprfmooxdmhtaxaaaacfpdinahtaaddyoeadlecsdwykcsfnykaeykaewkamwkaocyrywyvdlfatjeiajljpihcxkthsjzjzihjyfwkouyfp",
+  "signature": "a301d825509b1deb4d3b7d4bad9bdd2b0d7b3dcb6d025841d4f0a7bcd95bba1fbb1051885054730e3f47064288575aacc102fbbf6a9a14daa066991e360d3e3406c20c00a40973eff37c7d641e5b351ec4a99bfe86f335f71303686b657973746f6e65"
+ }
+}

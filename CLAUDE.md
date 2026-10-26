@@ -10,12 +10,16 @@ Every package has its own `CLAUDE.md`: read that one before touching it.
 | `packages/zig-engine-crypto/` | `@hzblj/zig-engine-crypto` (private) | The engine in Zig: `include/nitro_crypto.h` (the C ABI), `src/`, the published vectors and the C harness in `test/`, `bench/`. libsecp256k1 is a pinned dependency. |
 | `packages/nitro-crypto/` | `@hzblj/nitro-crypto` | The facade (`src/`), the Nitro specs and C++ bridge (`src/specs`, `cpp/`, `nitrogen/generated`), the iOS and Android packaging, and the prebuilt engine (`engine/`, build output). Subpaths `/adapter` (the contract, no native code) and `/testing` (the engine as WebAssembly). |
 | `packages/crypto-ethereum/`, `crypto-bitcoin/`, `crypto-solana/` | `@hzblj/crypto-*` | The adapters: TypeScript over `@hzblj/nitro-crypto/adapter` only. |
-| `apps/example/` | `nitro-crypto-example` (private) | Expo Router app built with `@hzblj/kara-ui`, running every package from **source**: a testnet wallet (onboarding, Keychain and Face ID, balances, send, receive, history) and a Debug tab with the self-test, demo wallet, accounts, signing, primitives, benchmarks, about. TRON lives here (`src/features/debug/chains/tron.ts`), the proof that a chain needs no package edits. Maestro flows in `e2e/`. See its `CLAUDE.md`. |
+| `packages/crypto-airgap/` | `@hzblj/crypto-airgap` | Air-gapped signing as data: BC-UR v2 (Bytewords, CBOR, fountain multipart), the typed registry, public key types. Headless, no native code, no dependency on nitro-crypto. ADR 0006. |
+| `packages/crypto-airgap-bitcoin/`, `-ethereum/`, `-solana/` | `@hzblj/crypto-airgap-*` | Each chain's UR types and air-gap adapter, bound to that chain's client: requests out, answers checked (request id, transaction, signer verified by the engine), signer-side review. |
+| `apps/example/` | `nitro-crypto-example` (private) | Expo Router app built with `@hzblj/kara-ui`, running every package from **source**: a testnet wallet (onboarding, Keychain and Face ID, balances, send, receive, history, and offline signing over QR codes: pair, scan, review, sign) and a Debug tab with the self-test, demo wallet, accounts, signing, the air-gap loopback and a watch-only wallet, primitives, benchmarks, about. TRON lives here (`src/features/debug/chains/tron.ts`), the proof that a chain needs no package edits. Maestro flows in `e2e/`. See its `CLAUDE.md`. |
 | `scripts/` | | `build-native/` (the engine for iOS, Android and WebAssembly, reproducibly), `verify-artifacts/`, `pack-check.mjs`, `sync-versions.mjs`. |
 | `docs/` | | Architecture, adding an adapter, compatibility, benchmarks, and the decisions (`adr/`). `SECURITY.md` is at the root. |
 
 Dependencies point down: example → adapters → `@hzblj/nitro-crypto` → Nitro → C++ bridge → C ABI → Zig. The engine
-knows no chain; the bridge holds no cryptography; adapters import no native code and no other adapter.
+knows no chain; the bridge holds no cryptography; adapters import no native code and no other adapter. Beside them:
+example → `@hzblj/crypto-airgap-<chain>` → (`@hzblj/crypto-airgap`, that chain's adapter). The air-gap core imports
+nothing of this repository; QR codes, the camera and animation timers are the app's, never the packages'.
 
 ## Commands
 

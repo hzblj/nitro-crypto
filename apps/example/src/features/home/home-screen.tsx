@@ -48,6 +48,7 @@ const Dashboard = () => {
           testID="action-receive"
         />
         <ActionButton icon="signature" label="Sign" onPress={() => router.push('/sign')} testID="action-sign" />
+        <ActionButton icon="qr-code-scanner" label="Scan" onPress={() => router.push('/scan')} testID="action-scan" />
       </ActionRow>
       <Section title="Networks">
         <Box bg="surface.primary" borderRadius="large" px="s16">

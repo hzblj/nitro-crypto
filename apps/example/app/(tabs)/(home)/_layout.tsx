@@ -16,6 +16,8 @@ export default function HomeLayout() {
         <Stack.Screen name="receive" />
         <Stack.Screen name="sign" />
         <Stack.Screen name="transaction" />
+        <Stack.Screen name="scan" />
+        <Stack.Screen name="airgap-review" />
       </Stack.Protected>
     </TabStack>
   )

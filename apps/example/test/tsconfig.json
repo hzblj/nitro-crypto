@@ -4,5 +4,7 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../native-icons.d.ts", "../expo-env.d.ts"]
+  "include": ["**/*.ts", "../native-icons.d.ts", "../expo-env.d.ts"],
+  // The app's config excludes `test`, and an inherited `exclude` would leave nothing here to check.
+  "exclude": []
 }

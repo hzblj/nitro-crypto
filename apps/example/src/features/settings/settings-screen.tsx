@@ -79,6 +79,28 @@ export const SettingsScreen = () => {
         </Island>
       </Section>
       <Section
+        caption="This phone as an offline signer: a watch-only wallet (another Nitro Wallet, Sparrow, MetaMask) builds transactions, this one reads and signs them over QR codes."
+        title="Air-gapped signing"
+      >
+        <Island>
+          <Rows>
+            <LabeledContent
+              icon="qr-code"
+              label="Pair with a wallet"
+              onPress={() => router.push('/settings/pair')}
+              testID="airgap-pair-row"
+            />
+            <RowDivider />
+            <LabeledContent
+              icon="qr-code-scanner"
+              label="Scan a request to sign"
+              onPress={() => router.push('/scan')}
+              testID="airgap-scan-row"
+            />
+          </Rows>
+        </Island>
+      </Section>
+      <Section
         caption="How long the app may sit in the background before the keys are wiped from the engine and it asks again."
         title="Auto-lock"
       >

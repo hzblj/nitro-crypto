@@ -7,6 +7,7 @@ const BUNDLE_ID = 'com.hzblj.nitrocrypto.example'
 const ICON_BACKGROUND = '#12a37f'
 // Face ID guards the stored recovery phrase: expo-secure-store and expo-local-authentication each write this text.
 const FACE_ID = 'Allow $(PRODUCT_NAME) to use Face ID to unlock your wallet and approve what it signs.'
+const CAMERA = 'Allow $(PRODUCT_NAME) to use the camera to scan the QR codes of air-gapped signing.'
 
 export default {
   android: {
@@ -39,6 +40,9 @@ export default {
     // The wallet's recovery phrase lives in the Keychain (Keystore on Android), readable only after Face ID.
     ['expo-secure-store', {configureAndroidBackup: true, faceIDPermission: FACE_ID}],
     ['expo-local-authentication', {faceIDPermission: FACE_ID}],
+    // The camera reads the QR codes of air-gapped signing: requests to sign, signatures, pairings. Nothing it sees
+    // leaves the device, and it records no audio.
+    ['expo-camera', {cameraPermission: CAMERA, microphonePermission: false, recordAudioAndroid: false}],
   ],
   scheme: 'nitro-crypto-example',
   slug: 'nitro-crypto-example',

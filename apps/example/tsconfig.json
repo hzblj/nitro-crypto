@@ -4,6 +4,10 @@
     // The packages' TypeScript source, as Metro runs it (metro.config.js maps their `source` exports), so the example
     // type-checks against them without a build.
     "paths": {
+      "@hzblj/crypto-airgap": ["../../packages/crypto-airgap/src/index.ts"],
+      "@hzblj/crypto-airgap-bitcoin": ["../../packages/crypto-airgap-bitcoin/src/index.ts"],
+      "@hzblj/crypto-airgap-ethereum": ["../../packages/crypto-airgap-ethereum/src/index.ts"],
+      "@hzblj/crypto-airgap-solana": ["../../packages/crypto-airgap-solana/src/index.ts"],
       "@hzblj/crypto-bitcoin": ["../../packages/crypto-bitcoin/src/index.ts"],
       "@hzblj/crypto-ethereum": ["../../packages/crypto-ethereum/src/index.ts"],
       "@hzblj/crypto-solana": ["../../packages/crypto-solana/src/index.ts"],

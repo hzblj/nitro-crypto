@@ -1,6 +1,7 @@
-import type {MnemonicCheck, MnemonicLength} from '@hzblj/nitro-crypto'
+import type {ExtendedPublicKey, MnemonicCheck, MnemonicLength} from '@hzblj/nitro-crypto'
 
 import {type LockReason, useCacheStore, useSessionStore, useWalletStore, type WalletRecord} from '../store'
+import type {AccountsAt} from './airgap'
 import {deriveAccounts, type WalletKeys} from './chains'
 import {walletCrypto, walletEngine} from './engine'
 import {
@@ -19,11 +20,23 @@ import {
  */
 let keys: WalletKeys | null = null
 
+/** Accounts derived for scanned requests, by chain and path: once each while the wallet is open. */
+const derived = new Map<string, Promise<unknown>>()
+
 const session = () => useSessionStore.getState()
 
 const dispose = () => {
   keys?.dispose()
   keys = null
+  derived.clear()
+}
+
+const openKeys = () => {
+  if (!keys) {
+    throw new Error('The wallet is locked.')
+  }
+
+  return keys
 }
 
 const fingerprintHex = (opened: WalletKeys) => opened.fingerprint.toString(16).padStart(8, '0')
@@ -196,6 +209,36 @@ export const confirmWithUser = async (reason: string): Promise<boolean> => {
   }
 
   return withPrompt(() => confirmPresence(record, reason))
+}
+
+/**
+ * The wallet's extended public key at an account path ("m/84'/1'/0'"), for pairing with a wallet that derives the
+ * account's addresses itself (Sparrow, MetaMask). Public: a public key and its chain code, no private key.
+ */
+export const extendedPublicKey = (path: string): ExtendedPublicKey => openKeys().extendedPublicKey(path)
+
+const remember = <T>(id: string, derive: () => Promise<T>): Promise<T> => {
+  const known = derived.get(id) as Promise<T> | undefined
+
+  if (known) {
+    return known
+  }
+
+  const account = derive()
+  derived.set(id, account)
+  account.catch(() => derived.delete(id))
+
+  return account
+}
+
+/**
+ * The accounts a scanned request may need, at the path it names, derived when it is signed (the air-gap adapter has
+ * checked the path is below the wallet's account, and checks the key against the request again) and kept until the
+ * wallet locks.
+ */
+export const accountsAt: AccountsAt = {
+  bitcoin: path => remember(`bitcoin ${path}`, () => openKeys().deriveAccount({chain: 'bitcoin', path})),
+  ethereum: path => remember(`ethereum ${path}`, () => openKeys().deriveAccount({chain: 'ethereum', path})),
 }
 
 /** A fresh recovery phrase from the engine's CSPRNG. Nothing is stored until `createWallet`. */

@@ -53,7 +53,10 @@ changelog and a GitHub advisory once a fixed version is published.
    a seed or a private key. The mnemonic behind `createEphemeralWallet()` exists only on the stack of the call that
    turns it into a seed; `crypto.mnemonic.generate()` is the one call that hands a mnemonic out, once, for the user to
    write down (docs/adr/0005). The engine keeps no copy of it, the bridge zeroes its stack buffer, and the facade
-   overwrites its bytes after decoding them; the string it returns is the app's.
+   overwrites its bytes after decoding them; the string it returns is the app's. `wallet.extendedPublicKey(path)`
+   hands out an account's public key and chain code, never the master's (docs/adr/0007): public, but with any one
+   private key below it in a non-hardened step, it would give the account's private key away, and it shows every
+   address of the account to whoever holds it.
 4. **Destroyed** by `dispose()` on a key or a wallet (a wallet disposes every key derived from it), or when the
    native object is garbage-collected: the slot is zeroized and freed. A reload, a restart or an uninstall ends the
    process and the memory with it. **Nothing is ever persisted.**
@@ -74,13 +77,44 @@ changelog and a GitHub advisory once a fixed version is published.
 - **Spin lock, not a mutex.** Handle-table operations are microseconds long; under heavy contention a thread spins,
   then yields.
 - **Chains: what is not implemented is refused, not imitated.** The adapters build and sign Ethereum EIP-1559
-  transactions (ether and ERC-20 transfers), Bitcoin P2WPKH payments and Solana legacy transactions (SOL and SPL
-  transfers). Bitcoin accounts have no `signMessage`; Ethereum's typed data (EIP-712), legacy and access-list
-  transactions, Bitcoin's PSBT, BIP-322 and Taproot, and Solana's versioned transactions are not implemented.
+  transactions (ether and ERC-20 transfers), Bitcoin P2WPKH payments and PSBTs, and Solana legacy transactions (SOL
+  and SPL transfers). Bitcoin accounts have no `signMessage`; Ethereum's typed data (EIP-712), legacy and access-list
+  transactions, Bitcoin's BIP-322, Taproot and PSBT version 2, and Solana's versioned transactions are not
+  implemented.
 - **The example wallet is a testnet demo.** `apps/example` keeps its recovery phrase in the platform keychain
   (`expo-secure-store`, this device only, behind Face ID or the passcode), reads it into JavaScript to unlock, and
   wipes the engine's seed and keys after a minute in the background. That is the least a wallet should do, not an
   audited design; it talks to Sepolia, Bitcoin testnet4 and Solana devnet only.
+
+## Air-gapped signing
+
+`@hzblj/crypto-airgap` and its chain packages move signing requests, public accounts and signatures between a
+watch-only wallet and an offline signer as QR codes ([ADR 0006](docs/adr/0006-air-gap-as-data.md)). They hold no
+key and sign nothing; what they add is a channel, and these are its rules:
+
+- **Everything scanned is hostile.** Decoders take an allowlist of types and bounds on message size, fragments, parts
+  per message, pending parts, CBOR depth and items; lengths are checked against the bytes present before anything is
+  allocated, and CBOR is read strictly. Parsers of what is to be signed (PSBTs, RLP, Solana messages) are strict too,
+  and fuzzed with random mutations.
+- **No secrets travel.** Seed and private key UR types are refused whatever an allowlist says, as are master and
+  private `crypto-hdkey`s, private `crypto-eckey`s, and key data that is a private key's. What a wallet shares to
+  pair is public keys with their paths, or an account's extended public key (never the master's, never a private
+  one): enough to watch every address of that account, which is why the example says so where it shows one.
+- **A checksum is not a signature.** Bytewords' CRC-32 and the fountain code's checksum catch misreads; they say
+  nothing about who made a payload. Authenticity comes from the chain: a response is accepted only when it answers
+  its request (the same request id, the same unsigned transaction and coins) and its signature, verified by the
+  engine, is by the account asked.
+- **Decoding is not consent.** A signer checks a request against its own account (path, master fingerprint,
+  address, chain id) and shows what it does (recipients and amounts, change, the fee, ERC-20 transfers, Solana
+  instruction summaries) before the app asks the user. Warnings say what a signer cannot check: Bitcoin coin values
+  without their previous transactions (the fee a coordinator could misstate), inputs or instructions it does not
+  recognize, other signers. A "message" that is a Solana transaction is refused.
+- **Nothing is logged.** Errors carry codes and messages that never quote a payload.
+
+Not covered: what the camera, the screen and the person do. A QR code can be photographed, a screen recorded, and a
+request shown on a compromised watch-only device can lie about where its funds go; the signer's own review is the
+only one that counts. No hardware wallet was available to test against: interoperability claims are limited to the
+independent implementations listed in [compatibility](docs/compatibility.md).
 
 ## Primitives and dependencies
 
@@ -106,6 +140,8 @@ artifact's SHA-256 and `yarn engine:verify` checks them, and that nothing but `n
 dependency means: read its changelog and security advisories, update the pin, rerun the published vectors, the
 Wycheproof suites and the parity tests against independent libraries, and record the change in the changelog.
 JavaScript dependencies of the published packages: none at runtime besides the `react-native-nitro-modules` peer.
+`@hzblj/crypto-airgap` has none at all: the SHA-256 its fountain code seeds its generator with (over public data
+only) is the caller's, the engine's `crypto.hash.sha256`.
 
 ## Verification
 
@@ -114,5 +150,7 @@ JavaScript dependencies of the published packages: none at runtime besides the `
 - Google's Wycheproof suites for secp256k1 ECDSA and Ed25519 (462 cases).
 - Parity on random inputs with `@noble/hashes`, `@noble/curves`, `@scure/bip32`, `@scure/bip39`, `@scure/btc-signer`,
   viem and `@solana/kit`, run against the engine itself (compiled to WebAssembly).
+- The air-gap packages: Blockchain Commons' bc-ur test vectors and BCR-2020-015's example, every multipart part
+  compared both ways with `@ngraveio/bc-ur`, and every UR type's CBOR compared with Keystone's registries.
 - A C program exercising the ABI: errors, ownership, 64 MiB inputs, handle exhaustion, 8 threads at once.
 - Fuzz targets for the path parser, the mnemonic parser and the whole ABI boundary, run over seeded random inputs.

@@ -1,3 +1,4 @@
+export {type AirgapStore, useAirgapStore} from './airgap'
 export {CACHE_STORE_NAME, CACHE_STORE_VERSION, type CacheEntry, type CacheRequest, useCacheStore} from './cache'
 export {type LockReason, useCovered, useSessionStore, type WalletStatus} from './session'
 export {storage} from './storage'

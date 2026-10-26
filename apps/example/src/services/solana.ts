@@ -1,9 +1,12 @@
+import {createRequestId} from '@hzblj/crypto-airgap'
+import {solanaAirgap} from '@hzblj/crypto-airgap-solana'
 import type {SolanaChain, SolanaInstruction} from '@hzblj/crypto-solana'
 
 import {NETWORKS} from '../config'
 import {formatUnits} from '../utils'
 import {NetworkError, rpc, rpcBatch, rpcBatchSettled} from './http'
-import type {ActivityItem, ChainService, TransactionStatus} from './types'
+import {AIRGAP_ORIGIN} from './origin'
+import type {ActivityItem, ChainService, SendRequest, TransactionStatus} from './types'
 
 const network = NETWORKS.solana
 const url = network.endpoint
@@ -130,131 +133,159 @@ const tokenBalance = async (owner: string, mint: string) => {
   return value.reduce((total, entry) => total + BigInt(entry.account.data.parsed.info.tokenAmount.amount), 0n)
 }
 
-export const solanaService = (chain: SolanaChain): ChainService<'solana'> => ({
-  activity: async address => {
-    const signatures = await rpc<SignatureInfo[]>(url, 'getSignaturesForAddress', [address, {...CONFIRMED, limit: 15}])
-    // Devnet limits getTransaction hard: ask only for what is not known yet, and keep whatever does come back.
-    const missing = signatures.filter(info => !transactions.has(info.signature))
+const prepare = async (chain: SolanaChain, address: string, {amount, asset, to}: SendRequest) => {
+  const recipient = chain.validateAddress(to)
 
-    if (missing.length > 0) {
-      const settled = await rpcBatchSettled(
-        url,
-        missing.map(info => ({
-          method: 'getTransaction',
-          params: [info.signature, {...CONFIRMED, encoding: 'jsonParsed', maxSupportedTransactionVersion: 0}],
-        }))
-      )
-      settled.forEach((entry, index) => {
-        const info = missing[index]
-        if (info && 'result' in entry && entry.result) {
-          transactions.set(info.signature, entry.result as NonNullable<ParsedTransaction>)
-        }
-      })
-    }
+  if (!recipient.valid) {
+    throw new NetworkError(recipient.reason)
+  }
 
-    return signatures.flatMap(info => toActivity(address, info, transactions.get(info.signature) ?? null))
-  },
-  holdings: async address => {
-    const [{value: lamports}, ...tokens] = await Promise.all([
-      rpc<Value<number>>(url, 'getBalance', [address, CONFIRMED]),
-      ...network.tokens.map(token => tokenBalance(address, token.contract ?? '')),
-    ])
+  const mint = asset.contract
+  const recipientTokenAccount = mint ? chain.associatedTokenAddress({mint, owner: to}) : undefined
+  const [blockhash, balance, recipientAccount, rentFloor, tokenRent] = (await rpcBatch(url, [
+    {method: 'getLatestBlockhash', params: [CONFIRMED]},
+    {method: 'getBalance', params: [address, CONFIRMED]},
+    {method: 'getAccountInfo', params: [recipientTokenAccount ?? to, {...CONFIRMED, encoding: 'base64'}]},
+    {method: 'getMinimumBalanceForRentExemption', params: [0]},
+    {method: 'getMinimumBalanceForRentExemption', params: [TOKEN_ACCOUNT_SIZE]},
+  ])) as [Value<{blockhash: string}>, Value<number>, Value<unknown>, number, number]
 
-    return [
-      {asset: network.native, balance: BigInt(lamports)},
-      ...network.tokens.map((asset, index) => ({asset, balance: tokens[index] ?? 0n})),
-    ]
-  },
-  quote: async (account, {amount, asset, to}) => {
-    const recipient = chain.validateAddress(to)
+  const lamports = BigInt(balance.value)
+  const recipientExists = recipientAccount.value !== null
+  const held = mint ? await tokenBalance(address, mint) : lamports
+  const build = (value: bigint): SolanaInstruction[] =>
+    mint
+      ? chain.instructions.transferToken({amount: value, decimals: asset.decimals, from: address, mint, to})
+      : [chain.instructions.transfer({from: address, lamports: value, to})]
+  const message = chain.compileMessage({
+    feePayer: address,
+    instructions: build(1n),
+    recentBlockhash: blockhash.value.blockhash,
+  })
+  const {value: networkFee} = await rpc<Value<number | null>>(url, 'getFeeForMessage', [toBase64(message), CONFIRMED])
+  // A new token account is paid for by the sender: its rent is part of what this costs.
+  const rent = mint && !recipientExists ? BigInt(tokenRent) : 0n
+  const fee = BigInt(networkFee ?? 5000) + rent
+  const value = amount === 'max' ? (mint ? held : lamports - fee) : amount
 
-    if (!recipient.valid) {
-      throw new NetworkError(recipient.reason)
-    }
+  if (value <= 0n || value > held || (mint ? fee > lamports : value + fee > lamports)) {
+    throw new NetworkError(
+      mint && value <= held
+        ? `The fee is paid in SOL: this needs ${formatUnits(fee, 9)} SOL, the wallet has ${formatUnits(lamports, 9)}.`
+        : `Not enough ${asset.symbol}: the wallet has ${formatUnits(held, asset.decimals)}.`
+    )
+  }
+  if (!mint && !recipientExists && value < BigInt(rentFloor)) {
+    throw new NetworkError(
+      `A new Solana account must start with at least ${formatUnits(BigInt(rentFloor), 9)} SOL (its rent exemption).`
+    )
+  }
+  const left = lamports - fee - (mint ? 0n : value)
+  if (left > 0n && left < BigInt(rentFloor)) {
+    throw new NetworkError(
+      `That would leave ${formatUnits(left, 9)} SOL, below the ${formatUnits(BigInt(rentFloor), 9)} SOL an account keeps for rent: send less, or everything.`
+    )
+  }
 
-    const mint = asset.contract
-    const recipientTokenAccount = mint ? chain.associatedTokenAddress({mint, owner: to}) : undefined
-    const [blockhash, balance, recipientAccount, rentFloor, tokenRent] = (await rpcBatch(url, [
-      {method: 'getLatestBlockhash', params: [CONFIRMED]},
-      {method: 'getBalance', params: [account.address, CONFIRMED]},
-      {method: 'getAccountInfo', params: [recipientTokenAccount ?? to, {...CONFIRMED, encoding: 'base64'}]},
-      {method: 'getMinimumBalanceForRentExemption', params: [0]},
-      {method: 'getMinimumBalanceForRentExemption', params: [TOKEN_ACCOUNT_SIZE]},
-    ])) as [Value<{blockhash: string}>, Value<number>, Value<unknown>, number, number]
+  return {
+    amount: value,
+    details: [
+      {label: 'Network', value: `Solana ${network.testnet}`},
+      {label: 'Recent blockhash', value: `${blockhash.value.blockhash.slice(0, 12)}…`},
+      {label: 'Instructions', value: mint ? 'Create token account (if new), transfer checked' : 'System transfer'},
+      ...(rent > 0n ? [{label: 'Token account rent', value: `${formatUnits(rent, 9)} SOL`}] : []),
+    ],
+    fee,
+    transaction: {instructions: build(value), recentBlockhash: blockhash.value.blockhash},
+  }
+}
 
-    const lamports = BigInt(balance.value)
-    const recipientExists = recipientAccount.value !== null
-    const held = mint ? await tokenBalance(account.address, mint) : lamports
-    const build = (value: bigint): SolanaInstruction[] =>
-      mint
-        ? chain.instructions.transferToken({amount: value, decimals: asset.decimals, from: account.address, mint, to})
-        : [chain.instructions.transfer({from: account.address, lamports: value, to})]
-    const message = chain.compileMessage({
-      feePayer: account.address,
-      instructions: build(1n),
-      recentBlockhash: blockhash.value.blockhash,
-    })
-    const {value: networkFee} = await rpc<Value<number | null>>(url, 'getFeeForMessage', [toBase64(message), CONFIRMED])
-    // A new token account is paid for by the sender: its rent is part of what this costs.
-    const rent = mint && !recipientExists ? BigInt(tokenRent) : 0n
-    const fee = BigInt(networkFee ?? 5000) + rent
-    const value = amount === 'max' ? (mint ? held : lamports - fee) : amount
+const broadcast = (serialized: Uint8Array) =>
+  rpc<string>(url, 'sendTransaction', [toBase64(serialized), {encoding: 'base64', preflightCommitment: 'confirmed'}])
 
-    if (value <= 0n || value > held || (mint ? fee > lamports : value + fee > lamports)) {
-      throw new NetworkError(
-        mint && value <= held
-          ? `The fee is paid in SOL: this needs ${formatUnits(fee, 9)} SOL, the wallet has ${formatUnits(lamports, 9)}.`
-          : `Not enough ${asset.symbol}: the wallet has ${formatUnits(held, asset.decimals)}.`
-      )
-    }
-    if (!mint && !recipientExists && value < BigInt(rentFloor)) {
-      throw new NetworkError(
-        `A new Solana account must start with at least ${formatUnits(BigInt(rentFloor), 9)} SOL (its rent exemption).`
-      )
-    }
-    const left = lamports - fee - (mint ? 0n : value)
-    if (left > 0n && left < BigInt(rentFloor)) {
-      throw new NetworkError(
-        `That would leave ${formatUnits(left, 9)} SOL, below the ${formatUnits(BigInt(rentFloor), 9)} SOL an account keeps for rent: send less, or everything.`
-      )
-    }
+export const solanaService = (chain: SolanaChain, random: (length: number) => Uint8Array): ChainService<'solana'> => {
+  const airgap = solanaAirgap(chain)
 
-    const instructions = build(value)
+  return {
+    activity: async address => {
+      const signatures = await rpc<SignatureInfo[]>(url, 'getSignaturesForAddress', [
+        address,
+        {...CONFIRMED, limit: 15},
+      ])
+      // Devnet limits getTransaction hard: ask only for what is not known yet, and keep whatever does come back.
+      const missing = signatures.filter(info => !transactions.has(info.signature))
 
-    return {
-      amount: value,
-      details: [
-        {label: 'Network', value: `Solana ${network.testnet}`},
-        {label: 'Recent blockhash', value: `${blockhash.value.blockhash.slice(0, 12)}…`},
-        {label: 'Instructions', value: mint ? 'Create token account (if new), transfer checked' : 'System transfer'},
-        ...(rent > 0n ? [{label: 'Token account rent', value: `${formatUnits(rent, 9)} SOL`}] : []),
-      ],
-      fee,
-      send: async () => {
-        const signed = await account.signTransaction({instructions, recentBlockhash: blockhash.value.blockhash})
+      if (missing.length > 0) {
+        const settled = await rpcBatchSettled(
+          url,
+          missing.map(info => ({
+            method: 'getTransaction',
+            params: [info.signature, {...CONFIRMED, encoding: 'jsonParsed', maxSupportedTransactionVersion: 0}],
+          }))
+        )
+        settled.forEach((entry, index) => {
+          const info = missing[index]
+          if (info && 'result' in entry && entry.result) {
+            transactions.set(info.signature, entry.result as NonNullable<ParsedTransaction>)
+          }
+        })
+      }
 
-        return rpc<string>(url, 'sendTransaction', [
-          toBase64(signed.serialized),
-          {encoding: 'base64', preflightCommitment: 'confirmed'},
-        ])
-      },
-    }
-  },
-  status: async signature => {
-    const {value} = await rpc<Value<SignatureStatus[]>>(url, 'getSignatureStatuses', [
-      [signature],
-      {searchTransactionHistory: true},
-    ])
-    const status = value[0]
+      return signatures.flatMap(info => toActivity(address, info, transactions.get(info.signature) ?? null))
+    },
+    airgapQuote: async (account, send) => {
+      const {transaction, ...quote} = await prepare(chain, account.address, send)
+      const request = {account, origin: AIRGAP_ORIGIN, requestId: createRequestId(random), transaction}
 
-    if (!status) {
-      return 'pending'
-    }
-    if (status.err) {
-      return 'failed'
-    }
-    return status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized'
-      ? 'confirmed'
-      : 'pending'
-  },
-})
+      return {
+        ...quote,
+        complete: async answer => {
+          const response = airgap.decodeSignResponse(answer, {request})
+
+          if (response.kind !== 'transaction') {
+            throw new NetworkError('The signer answered with a message signature, not a transaction.')
+          }
+
+          return broadcast(response.transaction.serialized)
+        },
+        request: airgap.encodeSignRequest(request),
+      }
+    },
+    holdings: async address => {
+      const [{value: lamports}, ...tokens] = await Promise.all([
+        rpc<Value<number>>(url, 'getBalance', [address, CONFIRMED]),
+        ...network.tokens.map(token => tokenBalance(address, token.contract ?? '')),
+      ])
+
+      return [
+        {asset: network.native, balance: BigInt(lamports)},
+        ...network.tokens.map((asset, index) => ({asset, balance: tokens[index] ?? 0n})),
+      ]
+    },
+    quote: async (account, send) => {
+      const {transaction, ...quote} = await prepare(chain, account.address, send)
+
+      return {
+        ...quote,
+        send: async () => broadcast((await account.signTransaction(transaction)).serialized),
+      }
+    },
+    status: async signature => {
+      const {value} = await rpc<Value<SignatureStatus[]>>(url, 'getSignatureStatuses', [
+        [signature],
+        {searchTransactionHistory: true},
+      ])
+      const status = value[0]
+
+      if (!status) {
+        return 'pending'
+      }
+      if (status.err) {
+        return 'failed'
+      }
+      return status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized'
+        ? 'confirmed'
+        : 'pending'
+    },
+  }
+}

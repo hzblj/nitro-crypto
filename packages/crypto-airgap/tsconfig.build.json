@@ -1,0 +1,15 @@
+{
+  // The published JavaScript and its declarations, from the source alone. `source` is not a condition here: the
+  // build resolves the way a consumer does.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "customConditions": ["react-native"],
+    "declaration": true,
+    "module": "esnext",
+    "noEmit": false,
+    "outDir": "./build",
+    "rootDir": "./src",
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

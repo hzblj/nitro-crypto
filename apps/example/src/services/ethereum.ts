@@ -1,9 +1,12 @@
+import {createRequestId} from '@hzblj/crypto-airgap'
+import {ethereumAirgap} from '@hzblj/crypto-airgap-ethereum'
 import type {EthereumChain, EthereumTransactionRequest, Hex} from '@hzblj/crypto-ethereum'
 
 import {NETWORKS} from '../config'
 import {formatUnits} from '../utils'
 import {getJson, NetworkError, rpc, rpcBatch} from './http'
-import type {ActivityItem, ChainService, TransactionStatus} from './types'
+import {AIRGAP_ORIGIN} from './origin'
+import type {ActivityItem, ChainService, SendRequest, TransactionStatus} from './types'
 
 const network = NETWORKS.ethereum
 const GWEI = 1_000_000_000n
@@ -111,107 +114,139 @@ const activity = async (address: string): Promise<ActivityItem[]> => {
   return [...coins, ...tokens]
 }
 
-export const ethereumService = (chain: EthereumChain): ChainService<'ethereum'> => ({
-  activity,
-  holdings: async address => {
-    const results = (await rpcBatch(network.endpoint, [
-      {method: 'eth_getBalance', params: [address, 'latest']},
-      ...network.tokens.map(token => ({
-        method: 'eth_call',
-        params: [{data: chain.erc20.balanceOfData(address), to: token.contract}, 'latest'],
-      })),
-    ])) as Hex[]
+const prepare = async (chain: EthereumChain, address: string, {amount, asset, to}: SendRequest) => {
+  const recipient = chain.validateAddress(to)
 
-    return [
-      {asset: network.native, balance: BigInt(results[0] ?? '0x0')},
-      ...network.tokens.map((asset, index) => ({
-        asset,
-        balance: chain.erc20.decodeUint256(results[index + 1] ?? '0x'),
-      })),
-    ]
-  },
-  quote: async (account, {amount, asset, to}) => {
-    const recipient = chain.validateAddress(to)
+  if (!recipient.valid) {
+    throw new NetworkError(recipient.reason)
+  }
 
-    if (!recipient.valid) {
-      throw new NetworkError(recipient.reason)
-    }
+  const token = asset.contract
+  const [nonce, block, tip, balance, tokenBalance] = (await rpcBatch(network.endpoint, [
+    {method: 'eth_getTransactionCount', params: [address, 'pending']},
+    {method: 'eth_getBlockByNumber', params: ['latest', false]},
+    {method: 'eth_maxPriorityFeePerGas', params: []},
+    {method: 'eth_getBalance', params: [address, 'latest']},
+    ...(token ? [{method: 'eth_call', params: [{data: chain.erc20.balanceOfData(address), to: token}, 'latest']}] : []),
+  ])) as [Hex, Block, Hex, Hex, Hex | undefined]
 
-    const token = asset.contract
-    const [nonce, block, tip, balance, tokenBalance] = (await rpcBatch(network.endpoint, [
-      {method: 'eth_getTransactionCount', params: [account.address, 'pending']},
-      {method: 'eth_getBlockByNumber', params: ['latest', false]},
-      {method: 'eth_maxPriorityFeePerGas', params: []},
-      {method: 'eth_getBalance', params: [account.address, 'latest']},
-      ...(token
-        ? [{method: 'eth_call', params: [{data: chain.erc20.balanceOfData(account.address), to: token}, 'latest']}]
-        : []),
-    ])) as [Hex, Block, Hex, Hex, Hex | undefined]
+  const ether = BigInt(balance)
+  const held = token ? chain.erc20.decodeUint256(tokenBalance ?? '0x') : ether
+  const baseFee = BigInt(block.baseFeePerGas ?? '0x0')
+  const maxPriorityFeePerGas = BigInt(tip) > MIN_TIP ? BigInt(tip) : MIN_TIP
+  // Twice the base fee rides out six full blocks of increases; the unused part is never charged.
+  const maxFeePerGas = baseFee * 2n + maxPriorityFeePerGas
+  const sending = amount === 'max' ? (token ? held : 0n) : amount
+  const data = token ? chain.erc20.transferData(recipient.normalized, sending) : undefined
+  const estimate = BigInt(
+    await rpc<Hex>(network.endpoint, 'eth_estimateGas', [
+      {data, from: address, to: token ?? recipient.normalized, value: token ? '0x0' : toQuantity(0n)},
+    ])
+  )
+  // A token transfer's cost depends on storage the estimate cannot see coming; a fifth more covers it.
+  const gas = token ? (estimate * 6n) / 5n : estimate
+  const fee = gas * maxFeePerGas
+  const value = token ? 0n : amount === 'max' ? ether - fee : sending
 
-    const ether = BigInt(balance)
-    const held = token ? chain.erc20.decodeUint256(tokenBalance ?? '0x') : ether
-    const baseFee = BigInt(block.baseFeePerGas ?? '0x0')
-    const maxPriorityFeePerGas = BigInt(tip) > MIN_TIP ? BigInt(tip) : MIN_TIP
-    // Twice the base fee rides out six full blocks of increases; the unused part is never charged.
-    const maxFeePerGas = baseFee * 2n + maxPriorityFeePerGas
-    const sending = amount === 'max' ? (token ? held : 0n) : amount
-    const data = token ? chain.erc20.transferData(recipient.normalized, sending) : undefined
-    const estimate = BigInt(
-      await rpc<Hex>(network.endpoint, 'eth_estimateGas', [
-        {data, from: account.address, to: token ?? recipient.normalized, value: token ? '0x0' : toQuantity(0n)},
-      ])
+  if (value < 0n || (!token && value + fee > ether)) {
+    throw new NetworkError(
+      `Not enough ETH: this needs ${formatUnits(value + fee, 18)} ETH with the fee, the wallet has ${formatUnits(ether, 18)}.`
     )
-    // A token transfer's cost depends on storage the estimate cannot see coming; a fifth more covers it.
-    const gas = token ? (estimate * 6n) / 5n : estimate
-    const fee = gas * maxFeePerGas
-    const value = token ? 0n : amount === 'max' ? ether - fee : sending
+  }
+  if (token && (sending > held || fee > ether)) {
+    throw new NetworkError(
+      sending > held
+        ? `Not enough ${asset.symbol}: the wallet has ${formatUnits(held, asset.decimals)}.`
+        : `The fee is paid in ETH: this needs ${formatUnits(fee, 18)} ETH, the wallet has ${formatUnits(ether, 18)}.`
+    )
+  }
 
-    if (value < 0n || (!token && value + fee > ether)) {
-      throw new NetworkError(
-        `Not enough ETH: this needs ${formatUnits(value + fee, 18)} ETH with the fee, the wallet has ${formatUnits(ether, 18)}.`
-      )
-    }
-    if (token && (sending > held || fee > ether)) {
-      throw new NetworkError(
-        sending > held
-          ? `Not enough ${asset.symbol}: the wallet has ${formatUnits(held, asset.decimals)}.`
-          : `The fee is paid in ETH: this needs ${formatUnits(fee, 18)} ETH, the wallet has ${formatUnits(ether, 18)}.`
-      )
-    }
+  const request: EthereumTransactionRequest = {
+    data,
+    gas,
+    maxFeePerGas,
+    maxPriorityFeePerGas,
+    nonce: BigInt(nonce),
+    to: token ?? recipient.normalized,
+    value,
+  }
 
-    const request: EthereumTransactionRequest = {
-      data,
-      gas,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
-      nonce: BigInt(nonce),
-      to: token ?? recipient.normalized,
-      value,
-    }
+  return {
+    amount: token ? sending : value,
+    details: [
+      {label: 'Network', value: `${network.testnet}, chain id ${chain.network.chainId}`},
+      {label: 'Nonce', value: BigInt(nonce).toString()},
+      {label: 'Gas limit', value: gas.toString()},
+      {label: 'Max fee per gas', value: `${formatUnits(maxFeePerGas, 9, 3)} gwei`},
+      {label: 'Transaction type', value: 'EIP-1559'},
+    ],
+    fee,
+    request,
+  }
+}
 
-    return {
-      amount: token ? sending : value,
-      details: [
-        {label: 'Network', value: `${network.testnet}, chain id ${chain.network.chainId}`},
-        {label: 'Nonce', value: BigInt(nonce).toString()},
-        {label: 'Gas limit', value: gas.toString()},
-        {label: 'Max fee per gas', value: `${formatUnits(maxFeePerGas, 9, 3)} gwei`},
-        {label: 'Transaction type', value: 'EIP-1559'},
-      ],
-      fee,
-      send: async () => {
-        const signed = await account.signTransaction(request)
+export const ethereumService = (
+  chain: EthereumChain,
+  random: (length: number) => Uint8Array
+): ChainService<'ethereum'> => {
+  const airgap = ethereumAirgap(chain)
 
-        return rpc<Hex>(network.endpoint, 'eth_sendRawTransaction', [signed.serialized])
-      },
-    }
-  },
-  status: async hash => {
-    const receipt = await rpc<Receipt>(network.endpoint, 'eth_getTransactionReceipt', [hash])
+  return {
+    activity,
+    airgapQuote: async (account, send) => {
+      const {request: transaction, ...quote} = await prepare(chain, account.address, send)
+      const request = {account, origin: AIRGAP_ORIGIN, requestId: createRequestId(random), transaction}
 
-    if (!receipt) {
-      return 'pending'
-    }
-    return receipt.status === '0x1' ? 'confirmed' : 'failed'
-  },
-})
+      return {
+        ...quote,
+        complete: async answer => {
+          const response = airgap.decodeSignResponse(answer, {request})
+
+          if (response.kind !== 'transaction') {
+            throw new NetworkError('The signer answered with a message signature, not a transaction.')
+          }
+
+          return rpc<Hex>(network.endpoint, 'eth_sendRawTransaction', [response.transaction.serialized])
+        },
+        request: airgap.encodeSignRequest(request),
+      }
+    },
+    holdings: async address => {
+      const results = (await rpcBatch(network.endpoint, [
+        {method: 'eth_getBalance', params: [address, 'latest']},
+        ...network.tokens.map(token => ({
+          method: 'eth_call',
+          params: [{data: chain.erc20.balanceOfData(address), to: token.contract}, 'latest'],
+        })),
+      ])) as Hex[]
+
+      return [
+        {asset: network.native, balance: BigInt(results[0] ?? '0x0')},
+        ...network.tokens.map((asset, index) => ({
+          asset,
+          balance: chain.erc20.decodeUint256(results[index + 1] ?? '0x'),
+        })),
+      ]
+    },
+    quote: async (account, send) => {
+      const {request, ...quote} = await prepare(chain, account.address, send)
+
+      return {
+        ...quote,
+        send: async () => {
+          const signed = await account.signTransaction(request)
+
+          return rpc<Hex>(network.endpoint, 'eth_sendRawTransaction', [signed.serialized])
+        },
+      }
+    },
+    status: async hash => {
+      const receipt = await rpc<Receipt>(network.endpoint, 'eth_getTransactionReceipt', [hash])
+
+      if (!receipt) {
+        return 'pending'
+      }
+      return receipt.status === '0x1' ? 'confirmed' : 'failed'
+    },
+  }
+}

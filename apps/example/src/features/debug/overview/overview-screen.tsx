@@ -11,6 +11,8 @@ const SCREENS = [
   {href: '/debug/demo-wallet', icon: 'wallet', label: 'Demo wallet'},
   {href: '/debug/accounts', icon: 'layers', label: 'Accounts'},
   {href: '/debug/sign', icon: 'verified', label: 'Sign and verify'},
+  {href: '/debug/airgap-loopback', icon: 'qr-code', label: 'Air-gap loopback'},
+  {href: '/debug/airgap-watch', icon: 'qr-code-scanner', label: 'Watch-only wallet'},
   {href: '/debug/primitives', icon: 'science', label: 'Primitives'},
   {href: '/debug/performance', icon: 'schedule', label: 'Performance'},
   {href: '/debug/about', icon: 'shield', label: 'About and security'},
@@ -166,7 +168,7 @@ export const OverviewScreen = () => {
         </Island>
       </Section>
       <Section
-        caption="The library on its own, before the wallet: a demo wallet that lives in memory, mainnet accounts, signatures, primitives and benchmarks."
+        caption="The library on its own, before the wallet: a demo wallet that lives in memory, mainnet accounts, signatures, air-gapped signing, primitives and benchmarks."
         title="Screens"
       >
         <Island>

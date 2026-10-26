@@ -1,0 +1,71 @@
+{
+  "name": "@hzblj/crypto-airgap-solana",
+  "version": "0.0.0",
+  "description": "Solana air-gapped signing for @hzblj/crypto-airgap: Keystone's sol-sign-request and sol-signature for legacy transactions and messages, every answer verified against its signer by @hzblj/crypto-solana. No UI, no camera.",
+  "author": "Jan Blazej",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hzblj/nitro-crypto.git",
+    "directory": "packages/crypto-airgap-solana"
+  },
+  "bugs": {
+    "url": "https://github.com/hzblj/nitro-crypto/issues"
+  },
+  "homepage": "https://github.com/hzblj/nitro-crypto/tree/main/packages/crypto-airgap-solana#readme",
+  "keywords": [
+    "air-gap",
+    "bc-ur",
+    "ed25519",
+    "hardware-wallet",
+    "keystone",
+    "qr",
+    "react-native",
+    "sol-sign-request",
+    "sol-signature",
+    "solana",
+    "wallet"
+  ],
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "rm -rf build && tsc -p ./tsconfig.build.json",
+    "clean": "rm -rf build",
+    "prepack": "yarn run -T turbo run build --filter=$npm_package_name...",
+    "lint": "yarn run -T concurrently \"yarn biome:check\" \"yarn tsc:check\"",
+    "lint:fix": "yarn run -T biome check --write .",
+    "biome:check": "yarn run -T biome check .",
+    "tsc:check": "tsc -p ./tsconfig.json",
+    "test": "node --conditions=source --import tsx --test 'test/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@hzblj/crypto-airgap": "workspace:^",
+    "@hzblj/crypto-solana": "workspace:^"
+  },
+  "peerDependencies": {
+    "@hzblj/nitro-crypto": "workspace:^"
+  },
+  "devDependencies": {
+    "@hzblj/nitro-crypto": "workspace:*",
+    "@keystonehq/bc-ur-registry-sol": "0.9.5",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

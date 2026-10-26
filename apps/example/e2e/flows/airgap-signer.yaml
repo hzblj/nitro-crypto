@@ -1,0 +1,121 @@
+# This phone as an air-gapped signer, with the published test phrase: the pairing code, then a watch-only wallet's
+# request read and signed. The simulator has no camera, so the request arrives the other way the scanner takes one:
+# pasted. It is an ERC-4527 personal message for m/44'/60'/0'/0/0 of fingerprint 73c5da0a, on Sepolia; then one for
+# m/44'/60'/0'/0/3, as MetaMask asks for an address below the account key it paired with, signed with the key the wallet
+# derives for it.
+#
+# Like wallet.yaml, it assumes a simulator without Face ID enrolled, where signing asks for nothing. With Face ID
+# enrolled, Sign waits for a face: Features, Face ID, Matching Face, or
+# `xcrun simctl spawn booted notifyutil -p com.apple.BiometricKit_Sim.pearl.match` while the prompt is up.
+appId: ${APP_ID}
+---
+- runFlow: steps/open.yaml
+
+- tapOn: Wallet
+- tapOn:
+    id: import-wallet
+- tapOn:
+    id: import-phrase
+- inputText: abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about
+- extendedWaitUntil:
+    visible: '12 words'
+    timeout: 5000
+- tapOn:
+    id: import-continue
+- tapOn:
+    id: protect-save
+- extendedWaitUntil:
+    visible:
+      id: portfolio-total
+    timeout: 60000
+
+# The pairing codes: the accounts' keys for a watch-only Nitro Wallet, then Sparrow's and MetaMask's.
+- tapOn: Settings
+- scrollUntilVisible:
+    element:
+      id: airgap-pair-row
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: airgap-pair-row
+- extendedWaitUntil:
+    visible:
+      id: airgap-pairing
+    timeout: 10000
+- takeScreenshot: ${OUT}-01-pairing
+- tapOn: Sparrow
+- assertVisible: "Bitcoin m/84'/1'/0'"
+- takeScreenshot: ${OUT}-01-pairing-sparrow
+- tapOn: MetaMask
+- assertVisible: "Ethereum m/44'/60'/0'"
+- takeScreenshot: ${OUT}-01-pairing-metamask
+
+# A request, typed into the paste field where the camera would read it, then what it asks, then the signature.
+- tapOn: Wallet
+- tapOn:
+    id: action-scan
+- extendedWaitUntil:
+    visible:
+      id: airgap-scanner
+    timeout: 10000
+- takeScreenshot: ${OUT}-02-scan
+- scrollUntilVisible:
+    element:
+      id: paste-ur
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: paste-ur
+- inputText: UR:ETH-SIGN-REQUEST/OSADTPDAGDNDCAWMGTFRKIGRPMNDUTDNBTKGFSSBJNAOHDCXFDIHJZJZJLCXIYJPJLJNCXJYISIHCXKTHSJYIAISDPJLJTJZKKCXKTHSJZJZIHJYAXAXAACYAEPKENOSAHTAADDYOEADLECSDWYKCSFNYKAEYKAEWKAEWKAOCYJKSKTNBKAMGHMKHDWSZCCNDNFZEOVEKIMHAEFSFPWPEEWPPLTNMWATIOGTHSIHJKJYJPJLSPAMCLGR
+- extendedWaitUntil:
+    visible:
+      id: airgap-review
+    timeout: 10000
+- assertVisible: 'Hello from the watch-only wallet'
+- assertVisible: 'From Maestro'
+- takeScreenshot: ${OUT}-03-review
+- tapOn:
+    id: airgap-sign
+- extendedWaitUntil:
+    visible:
+      id: airgap-answer
+    timeout: 20000
+- takeScreenshot: ${OUT}-04-signed
+- tapOn:
+    id: airgap-done
+- extendedWaitUntil:
+    visible:
+      id: portfolio-total
+    timeout: 10000
+
+# A request for the fourth address of the Ethereum account, which no screen shows: the key is derived when it signs.
+- tapOn:
+    id: action-scan
+- extendedWaitUntil:
+    visible:
+      id: airgap-scanner
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: paste-ur
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: paste-ur
+- inputText: UR:ETH-SIGN-REQUEST/OLADTPDAGDCWGLDERDDLOYFPTDLOFHAECMTESFOXDIAOHDDNFDIHJZJZJLCXIYJPJLJNCXGTIHJYHSGTHSJKJEDWCXIYJLJPCXJYISIHCXIYJLKPJPJYISCXHSIEIEJPIHJKJKAXAXAACYAEPKENOSAHTAADDYOEADLECSDWYKCSFNYKAEYKAEWKAXWKAOCYJKSKTNBKATISGTIHJYHSGTHSJKJEBAROTPZS
+- extendedWaitUntil:
+    visible:
+      id: airgap-review
+    timeout: 10000
+- assertVisible: 'Hello from MetaMask, for the fourth address'
+- assertVisible: 'From MetaMask'
+- takeScreenshot: ${OUT}-05-review-fourth
+- tapOn:
+    id: airgap-sign
+- extendedWaitUntil:
+    visible:
+      id: airgap-answer
+    timeout: 20000
+- takeScreenshot: ${OUT}-06-signed-fourth
+- tapOn:
+    id: airgap-done

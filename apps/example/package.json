@@ -18,6 +18,10 @@
   },
   "dependencies": {
     "@expo/ui": "~57.0.26",
+    "@hzblj/crypto-airgap": "workspace:*",
+    "@hzblj/crypto-airgap-bitcoin": "workspace:*",
+    "@hzblj/crypto-airgap-ethereum": "workspace:*",
+    "@hzblj/crypto-airgap-solana": "workspace:*",
     "@hzblj/crypto-bitcoin": "workspace:*",
     "@hzblj/crypto-ethereum": "workspace:*",
     "@hzblj/crypto-solana": "workspace:*",
@@ -30,6 +34,7 @@
     "auto-zustand-selectors-hook": "3.0.1",
     "expo": "~57.0.31",
     "expo-build-properties": "~57.0.22",
+    "expo-camera": "~57.0.6",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.22",
     "expo-dev-client": "~57.0.20",

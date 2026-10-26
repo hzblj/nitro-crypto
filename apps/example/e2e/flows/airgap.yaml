@@ -1,0 +1,48 @@
+# Air-gapped signing on one phone: the Debug tab's loopback sends each chain's request and answer through animated QR
+# codes and their decoders (a pretend camera that misses every third code), signs with the demo wallet and checks the
+# answer. Photographs each chain's result. The camera itself is not exercised: the simulator has none.
+appId: ${APP_ID}
+---
+- runFlow: steps/open.yaml
+- runFlow:
+    file: steps/debug.yaml
+    env:
+      SCREEN: airgap-loopback
+- extendedWaitUntil:
+    visible:
+      id: airgap-loopback
+    timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: loopback-create
+    commands:
+      - tapOn:
+          id: loopback-create
+- extendedWaitUntil:
+    visible:
+      id: loopback-run
+    timeout: 20000
+
+- tapOn:
+    id: loopback-run
+- extendedWaitUntil:
+    visible: 'Signed and verified'
+    timeout: 20000
+- takeScreenshot: ${OUT}-01-airgap-ethereum
+
+- tapOn: 'Bitcoin'
+- tapOn:
+    id: loopback-run
+- extendedWaitUntil:
+    visible: 'Signed and verified'
+    timeout: 20000
+- takeScreenshot: ${OUT}-02-airgap-bitcoin
+
+- tapOn: 'Solana'
+- tapOn:
+    id: loopback-run
+- extendedWaitUntil:
+    visible: 'Signed and verified'
+    timeout: 20000
+- takeScreenshot: ${OUT}-03-airgap-solana

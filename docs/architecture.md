@@ -6,6 +6,10 @@ Dependencies point one way, down; nothing below the adapters knows a chain exist
 ```text
 apps/example                      Expo Router + Kara UI: every screen runs on the real engine
         │
+        ├──────────────▶ @hzblj/crypto-airgap-{bitcoin,ethereum,solana}    air-gapped signing: requests and
+        │                        │  answers as URs, checked through the     answers over QR codes, no UI
+        │                        ▼  chain clients they are bound to
+        │                @hzblj/crypto-airgap      UR codec, multipart, registry, public key types (no native code)
         ▼
 @hzblj/crypto-ethereum   @hzblj/crypto-bitcoin   @hzblj/crypto-solana      (and any chain written elsewhere)
         │  plain TypeScript over @hzblj/nitro-crypto/adapter; no native code, no chain imports another
@@ -63,6 +67,12 @@ same engine compiled to WebAssembly. Everything above the host, adapters include
 Each declares the engine capabilities it needs, binds to an engine once (`create`), and returns a client with
 `deriveAccount` and `validateAddress` plus whatever its chain offers. See [adding-an-adapter.md](adding-an-adapter.md).
 
+**Air-gap packages** sit beside the app, not under the engine. `@hzblj/crypto-airgap` is the payload protocol
+(BC-UR v2: Bytewords, CBOR, fountain-coded multipart, a typed registry) and depends on nothing in this repository;
+each chain's air-gap package binds to that chain's client (`bitcoinAirgap(crypto.chains.bitcoin)`) and uses it to
+read, sign and verify what travels. They draw no QR code and open no camera: strings in, strings out
+([ADR 0006](adr/0006-air-gap-as-data.md)).
+
 ## The adapter registry
 
 ```ts
@@ -88,8 +98,9 @@ capabilities the engine has), so a bad list fails whole, naming the adapter and 
 | A mnemonic or passphrase the app passes in | The app's strings; the facade's UTF-8 bytes; the bridge's copy | The facade and the bridge overwrite theirs; the app's are the app's |
 
 JavaScript holds `NitroSeed` and `NitroKey` objects, never key bytes. The one secret that reaches it is a mnemonic the
-app asked for, to show the user once ([ADR 0005](adr/0005-mnemonic-generation-for-backup.md)). See
-[SECURITY.md](../SECURITY.md).
+app asked for, to show the user once ([ADR 0005](adr/0005-mnemonic-generation-for-backup.md)). Account-level extended
+public keys reach it too, for watch-only wallets to derive addresses from; the master's never does
+([ADR 0007](adr/0007-extended-public-keys.md)). See [SECURITY.md](../SECURITY.md).
 
 ## Packaging
 
