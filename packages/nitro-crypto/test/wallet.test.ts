@@ -11,6 +11,7 @@ import {wordlist} from '@scure/bip39/wordlists/english.js'
 import {isCryptoError} from '../src/core/errors'
 import {utf8} from '../src/encoding'
 import {MNEMONIC_LENGTHS} from '../src/engine/mnemonic'
+import {testHost} from '../src/testing'
 import {ABANDON, crypto} from './support'
 
 const rejectsCode = async (run: () => Promise<unknown>, code: string) =>
@@ -32,6 +33,34 @@ const slip10 = (seed: Uint8Array, path: number[]) => {
 }
 
 const BIP32_PATHS = ["m/44'/60'/0'/0/0", "m/44'/60'/0'/0/7", "m/84'/0'/0'/0/0", "m/84'/1'/3'/1/19", 'm/0/1/2', 'm']
+
+describe('wallets over a seed another module made', () => {
+  // What a vault hands over: a NitroSeed it made natively. Here the host makes one the way it would.
+  const nativeSeed = () => testHost().seedFromMnemonic(utf8.encode(ABANDON).buffer as ArrayBuffer, new ArrayBuffer(0))
+
+  test('take the seed over: the same keys as its mnemonic, disposed with the wallet', async () => {
+    const baseline = crypto.liveHandles()
+    const wallet = await crypto.createEphemeralWallet({seed: await nativeSeed(), words: 12})
+    const reference = await crypto.createEphemeralWallet({mnemonic: ABANDON})
+    assert.equal(wallet.origin, 'seed')
+    assert.equal(wallet.words, 12)
+    assert.equal(wallet.fingerprint, reference.fingerprint)
+    assert.deepEqual(
+      wallet.deriveKey('bip32', "m/44'/60'/0'/0/0").publicKey(),
+      reference.deriveKey('bip32', "m/44'/60'/0'/0/0").publicKey()
+    )
+    reference.dispose()
+    wallet.dispose()
+    assert.equal(crypto.liveHandles(), baseline)
+  })
+
+  test('refuse what is not a seed, and word counts no mnemonic has', async () => {
+    await rejectsCode(() => crypto.createEphemeralWallet({seed: {} as never, words: 12}), 'INVALID_ARGUMENT')
+    const seed = await nativeSeed()
+    await rejectsCode(() => crypto.createEphemeralWallet({seed, words: 13 as never}), 'INVALID_ARGUMENT')
+    seed.dispose()
+  })
+})
 
 describe('wallets from a known mnemonic', () => {
   test('match @scure/bip39 and @scure/bip32 at every path, with and without a passphrase', async () => {

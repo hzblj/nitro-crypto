@@ -18,7 +18,8 @@
 #include <string>
 #include <vector>
 
-#include <nitro_crypto.h>
+// Quoted, so a module that includes this from the exported headers finds the C header beside it.
+#include "nitro_crypto.h"
 
 namespace margelo::nitro::nitrocrypto::bridge {
 

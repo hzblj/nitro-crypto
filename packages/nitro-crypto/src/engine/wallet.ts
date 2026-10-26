@@ -18,6 +18,12 @@ export type WalletOptions =
    * It crosses into the engine as bytes this package overwrites afterwards; the string itself stays the app's.
    */
   | {readonly mnemonic: string; readonly passphrase?: string}
+  /**
+   * A seed another native module made in this engine, such as a vault that unsealed it with the device's hardware
+   * key (ADR 0008): no secret crosses into JavaScript. The wallet takes the seed over, and disposing the wallet
+   * disposes it. `words` is the length of the mnemonic behind it, which the seed itself does not know.
+   */
+  | {readonly seed: NitroSeed; readonly words: MnemonicLength}
 
 /**
  * A wallet that lives in memory only: a BIP-39 seed held by the engine and the keys derived from it. Nothing is
@@ -27,7 +33,7 @@ export type WalletOptions =
 export type EphemeralWallet<Chains> = {
   /** The BIP-32 fingerprint of the seed's master key: a public name for the wallet. */
   readonly fingerprint: number
-  readonly origin: 'generated' | 'mnemonic'
+  readonly origin: 'generated' | 'mnemonic' | 'seed'
   readonly words: number
   readonly disposed: boolean
   /** An account on a registered chain, by that chain's adapter. */
@@ -48,6 +54,14 @@ export type EphemeralWallet<Chains> = {
 const disposed = () => new CryptoError('DISPOSED', 'This wallet has been disposed.')
 
 const createSeed = async (host: NitroCrypto, options: WalletOptions) => {
+  if ('seed' in options) {
+    if (typeof options.seed?.deriveKey !== 'function') {
+      throw new CryptoError('INVALID_ARGUMENT', 'A seed is a NitroSeed this engine made.')
+    }
+
+    return {origin: 'seed' as const, seed: options.seed, words: wordCount(options.words)}
+  }
+
   const passphrase = nfkd(options.passphrase ?? '')
 
   if ('mnemonic' in options) {

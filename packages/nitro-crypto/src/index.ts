@@ -44,5 +44,5 @@ export type {
   Secp256k1Primitives,
 } from './engine/primitives'
 export type {EphemeralWallet, WalletOptions} from './engine/wallet'
-export type {Curve, DerivationScheme, HashAlgorithm, HmacAlgorithm} from './specs/nitro-crypto.nitro'
+export type {Curve, DerivationScheme, HashAlgorithm, HmacAlgorithm, NitroSeed} from './specs/nitro-crypto.nitro'
 export {VERSION} from './version'

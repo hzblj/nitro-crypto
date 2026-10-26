@@ -67,6 +67,7 @@ static void test_version_and_capabilities(void) {
     CHECK((caps & NC_CAP_MNEMONIC_GENERATE) && strcmp(nc_capability_name(13), "mnemonic-generate") == 0);
     CHECK((caps & NC_CAP_BIP32_EXTENDED_PUBLIC) && strcmp(nc_capability_name(14), "bip32-extended-public") == 0);
     CHECK((caps & NC_CAP_BIP32_PUBLIC_DERIVATION) && strcmp(nc_capability_name(15), "bip32-public-derivation") == 0);
+    CHECK((caps & NC_CAP_BIP39_ENTROPY) && strcmp(nc_capability_name(16), "bip39-entropy") == 0);
 }
 
 static void test_status_names(void) {
@@ -208,6 +209,41 @@ static void test_mnemonic_generate(void) {
     CHECK(nc_handle_count() == baseline);
     memset(out, 0, sizeof out);
     memset(other, 0, sizeof other);
+}
+
+/* Entropy to words and back, and to the seed those words make: what a vault that keeps entropy relies on. */
+static void test_entropy(void) {
+    uint32_t baseline = nc_handle_count();
+    static const uint8_t zero[16] = {0};
+    char words[NC_MNEMONIC_MAX_LENGTH];
+    uint8_t entropy[NC_ENTROPY_MAX_LENGTH];
+    size_t written = 0;
+
+    CHECK_STATUS(NC_OK, nc_mnemonic_from_entropy(zero, sizeof zero, words, 12 * 9 - 1, &written));
+    CHECK(written == strlen(ABANDON) && memcmp(words, ABANDON, written) == 0);
+    CHECK_STATUS(NC_OK, nc_mnemonic_to_entropy(ABANDON, strlen(ABANDON), entropy, sizeof entropy, &written));
+    CHECK(written == 16 && memcmp(entropy, zero, 16) == 0);
+
+    /* The same seed as the words make, under the same passphrase. */
+    nc_handle from_words = 0, from_entropy = 0;
+    uint32_t a = 0, b = 0;
+    CHECK_STATUS(NC_OK, nc_seed_from_mnemonic(ABANDON, strlen(ABANDON), "TREZOR", 6, &from_words));
+    CHECK_STATUS(NC_OK, nc_seed_from_entropy(zero, sizeof zero, "TREZOR", 6, &from_entropy));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_words, &a));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_entropy, &b));
+    CHECK(a == b);
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_words));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_entropy));
+
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_seed_from_entropy(zero, 15, NULL, 0, &from_entropy));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_mnemonic_from_entropy(zero, 15, words, sizeof words, &written));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_mnemonic_from_entropy(zero, 16, words, 12 * 9 - 2, &written));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_mnemonic_to_entropy(ABANDON, strlen(ABANDON), entropy, 31, &written));
+    const char *bad = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon";
+    CHECK_STATUS(NC_ERR_MNEMONIC_CHECKSUM, nc_mnemonic_to_entropy(bad, strlen(bad), entropy, sizeof entropy, &written));
+    CHECK(nc_handle_count() == baseline);
+    memset(words, 0, sizeof words);
+    memset(entropy, 0, sizeof entropy);
 }
 
 /* The BIP-32 fingerprint of "abandon ... about" with no passphrase, as BIP-84's and BIP-86's examples show it. */
@@ -446,6 +482,7 @@ int main(void) {
     test_ed25519_verify();
     test_mnemonic();
     test_mnemonic_generate();
+    test_entropy();
     test_seed_and_ethereum_key();
     test_extended_public_key();
     test_solana_key();
