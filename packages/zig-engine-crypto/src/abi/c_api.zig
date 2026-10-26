@@ -13,6 +13,7 @@ const keys = @import("../vault/keys.zig");
 const bip32 = @import("../derivation/bip32.zig");
 const path_mod = @import("../derivation/path.zig");
 const secp256k1 = @import("../curves/secp256k1.zig");
+const secure = @import("../core/secure.zig");
 const status = @import("../core/status.zig");
 const version = @import("version.zig");
 
@@ -262,6 +263,61 @@ fn seedFromMnemonic(mnemonic: ?[*]const u8, mnemonic_len: usize, passphrase: ?[*
     if (out == null) return error.InvalidArgument;
     const handle = try keys.seedFromMnemonic(&vault, try input(mnemonic, mnemonic_len), try input(passphrase, passphrase_len));
     try store(Handle, out, handle);
+}
+
+export fn nc_seed_from_entropy(
+    entropy_bytes: ?[*]const u8,
+    entropy_len: usize,
+    passphrase: ?[*]const u8,
+    passphrase_len: usize,
+    out: ?*Handle,
+) i32 {
+    return code(seedFromEntropy(entropy_bytes, entropy_len, passphrase, passphrase_len, out));
+}
+
+fn seedFromEntropy(entropy_bytes: ?[*]const u8, entropy_len: usize, passphrase: ?[*]const u8, passphrase_len: usize, out: ?*Handle) Error!void {
+    if (out == null) return error.InvalidArgument;
+    const handle = try keys.seedFromEntropy(&vault, try input(entropy_bytes, entropy_len), try input(passphrase, passphrase_len));
+    try store(Handle, out, handle);
+}
+
+export fn nc_mnemonic_from_entropy(entropy_bytes: ?[*]const u8, entropy_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) i32 {
+    return code(mnemonicFromEntropy(entropy_bytes, entropy_len, out, out_len, written));
+}
+
+/// As with `nc_mnemonic_generate`, the capacity is checked against the longest sentence of that many words, so
+/// whether a buffer is large enough never depends on the words.
+fn mnemonicFromEntropy(entropy_bytes: ?[*]const u8, entropy_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    switch (entropy_len) {
+        16, 20, 24, 28, 32 => {},
+        else => return error.InvalidLength,
+    }
+    if (written == null) return error.InvalidArgument;
+    const source = try input(entropy_bytes, entropy_len);
+    const buffer = try output(out, out_len);
+    if (buffer.len < bip39.maxSentenceLength(entropy_len * 3 / 4)) return error.BufferTooSmall;
+
+    var sentence: bip39.Sentence = .{};
+    defer sentence.zero();
+    try bip39.fromEntropy(source, &sentence);
+    @memcpy(buffer[0..sentence.len], sentence.slice());
+    try store(usize, written, sentence.len);
+}
+
+export fn nc_mnemonic_to_entropy(mnemonic: ?[*]const u8, mnemonic_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) i32 {
+    return code(mnemonicToEntropy(mnemonic, mnemonic_len, out, out_len, written));
+}
+
+fn mnemonicToEntropy(mnemonic: ?[*]const u8, mnemonic_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const buffer = try output(out, out_len);
+    if (buffer.len < 32) return error.BufferTooSmall;
+
+    var decoded: [32]u8 = undefined;
+    defer secure.zero(&decoded);
+    const length = try bip39.toEntropy(try input(mnemonic, mnemonic_len), &decoded);
+    @memcpy(buffer[0..length], decoded[0..length]);
+    try store(usize, written, length);
 }
 
 export fn nc_seed_fingerprint(seed: Handle, out: ?*u32) i32 {

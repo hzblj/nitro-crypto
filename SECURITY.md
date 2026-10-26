@@ -45,8 +45,10 @@ changelog and a GitHub advisory once a fixed version is published.
 
 1. **Created** inside the engine: from 16 to 32 bytes of OS entropy turned into a BIP-39 mnemonic and its seed
    (`createEphemeralWallet()`), from a mnemonic the user wrote down, one `crypto.mnemonic.generate()` returned or a
-   test vector (`createEphemeralWallet({mnemonic})`), from fresh entropy for a lone key (`keys.generate`), or from raw
-   bytes for interoperability (`keys.importRawSecret`, which is absent from every ordinary flow and named to say so).
+   test vector (`createEphemeralWallet({mnemonic})`), from BIP-39 entropy another native module in the app holds,
+   such as a vault that unsealed it (`nc_seed_from_entropy` through `cpp/NitroCryptoInterop.hpp`, never from
+   JavaScript, docs/adr/0008), from fresh entropy for a lone key (`keys.generate`), or from raw bytes for
+   interoperability (`keys.importRawSecret`, which is absent from every ordinary flow and named to say so).
 2. **Held** in a fixed table inside the engine (1024 slots, no allocator), addressed by a 64-bit handle that encodes a
    slot and a generation. Each operation copies the one secret it needs onto the stack, uses it and zeroes the copy.
 3. **Used**: derivation (BIP-32, SLIP-0010) creates new key handles; signing returns a signature. No operation returns
@@ -70,7 +72,9 @@ changelog and a GitHub advisory once a fixed version is published.
   operating system's.
 - **No secure storage.** Persistence, biometric authorization, passkeys and encrypted backup each need their own design
   and review, and are deliberately absent from the library. An app that keeps a mnemonic decides where: the platform's
-  keychain, behind its biometric prompt, is the least it should do.
+  keychain, behind its biometric prompt, is the least it should do. Better is a vault that keeps the entropy sealed by
+  the Secure Enclave or StrongBox and hands the engine a seed natively (docs/adr/0008), so no word or byte of it
+  reaches JavaScript.
 - **A generated or restored mnemonic is a JavaScript string.** `crypto.mnemonic.generate()` returns one, and
   `createEphemeralWallet({mnemonic})` takes one across the bridge as bytes it overwrites afterwards. Strings cannot be
   wiped: the one the app holds, and any copies the JS engine made, are outside the library's control.

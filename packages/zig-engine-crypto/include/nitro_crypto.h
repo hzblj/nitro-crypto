@@ -93,6 +93,7 @@ const char *nc_build_info(void);
 #define NC_CAP_MNEMONIC_GENERATE (1ull << 13)
 #define NC_CAP_BIP32_EXTENDED_PUBLIC (1ull << 14)
 #define NC_CAP_BIP32_PUBLIC_DERIVATION (1ull << 15)
+#define NC_CAP_BIP39_ENTROPY (1ull << 16)
 
 /** Every capability this build provides, as NC_CAP_* bits. */
 uint64_t nc_capabilities(void);
@@ -212,6 +213,34 @@ nc_status nc_seed_generate(uint32_t word_count, const char *passphrase, size_t p
 /** Validates `mnemonic` and stores its BIP-39 seed (PBKDF2-HMAC-SHA512, 2048 rounds) as a seed handle. */
 nc_status nc_seed_from_mnemonic(const char *mnemonic, size_t mnemonic_len, const char *passphrase,
                                 size_t passphrase_len, nc_handle *out);
+
+/** The longest BIP-39 entropy: 32 bytes, behind 24 words. A buffer this size fits any. */
+#define NC_ENTROPY_MAX_LENGTH 32
+
+/**
+ * Stores the BIP-39 seed of the mnemonic `entropy` encodes (16, 20, 24, 28 or 32 bytes), under `passphrase`, as a
+ * seed handle: the seed a wallet restored from those words would have. The mnemonic exists only on this call's
+ * stack. For a vault that keeps the entropy, sealed by hardware, rather than the words (ADR 0008); any other
+ * NC_ERR_INVALID_LENGTH.
+ */
+nc_status nc_seed_from_entropy(const uint8_t *entropy, size_t entropy_len, const char *passphrase,
+                               size_t passphrase_len, nc_handle *out);
+
+/**
+ * The mnemonic `entropy` encodes, into `out` as nc_mnemonic_generate writes one. Like it, a secret handed out, for
+ * the one moment a vault shows its words for backup (ADR 0008); the caller should zero `out` when done. `out_len`
+ * must fit the longest sentence of that many words, so NC_ERR_BUFFER_TOO_SMALL never depends on the words.
+ */
+nc_status nc_mnemonic_from_entropy(const uint8_t *entropy, size_t entropy_len, char *out, size_t out_len,
+                                   size_t *written);
+
+/**
+ * The entropy a mnemonic encodes, after its checksum: what a vault seals when the user restores from words.
+ * `out_len` must be at least NC_ENTROPY_MAX_LENGTH; the length is written through `written`. The caller should zero
+ * `out` when done. NC_ERR_INVALID_MNEMONIC or NC_ERR_MNEMONIC_CHECKSUM as nc_mnemonic_validate.
+ */
+nc_status nc_mnemonic_to_entropy(const char *mnemonic, size_t mnemonic_len, uint8_t *out, size_t out_len,
+                                 size_t *written);
 
 /** The BIP-32 fingerprint of the seed's secp256k1 master key (HASH160 of its public key, first 4 bytes, big-endian). */
 nc_status nc_seed_fingerprint(nc_handle seed, uint32_t *out);

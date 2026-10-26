@@ -96,6 +96,16 @@ android {
   buildFeatures {
     buildConfig true
     prefab true
+    prefabPublishing true
+  }
+
+  // For another module that makes seeds natively and hands them to JavaScript as NitroSeeds, such as a vault
+  // (cpp/NitroCryptoInterop.hpp, docs/adr/0008): the package is the autolinked project's name,
+  // `find_package(hzblj_nitro-crypto REQUIRED CONFIG)`, and this its module, `hzblj_nitro-crypto::NitroCrypto`.
+  prefab {
+    NitroCrypto {
+      headers "${project.buildDir}/headers/nitrocrypto/"
+    }
   }
 
   buildTypes {
@@ -140,3 +150,15 @@ dependencies {
   // Add a dependency on NitroModules
   implementation project(":react-native-nitro-modules")
 }
+
+// The headers the prefab package exports, flat under NitroCrypto/: the bridge, the generated specs it implements,
+// and the engine's C header, which the bridge includes by a quoted name so it is found beside them.
+tasks.register('prepareHeaders', Copy) {
+  from(fileTree('../cpp/')) { include '*.hpp' }
+  from(fileTree('../nitrogen/generated/shared/c++/')) { include '*.hpp' }
+  from(fileTree('../engine/include/')) { include '*.h' }
+  into "${project.buildDir}/headers/nitrocrypto/NitroCrypto/"
+  includeEmptyDirs = false
+}
+
+preBuild.dependsOn(prepareHeaders)

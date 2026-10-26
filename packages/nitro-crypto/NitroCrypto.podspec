@@ -13,7 +13,11 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/hzblj/nitro-crypto.git", :tag => "#{s.version}" }
 
   # The bridge: C++ Hybrid Objects over the engine's C ABI. No cryptography here.
-  s.source_files = ["cpp/**/*.{hpp,cpp}"]
+  s.source_files = ["cpp/**/*.{hpp,cpp}", "engine/include/*.h"]
+
+  # Public, for another module that makes seeds natively and hands them to JavaScript as NitroSeeds, such as a vault
+  # (cpp/NitroCryptoInterop.hpp, docs/adr/0008): `#include <NitroCrypto/NitroCryptoInterop.hpp>`.
+  s.public_header_files = ["cpp/**/*.hpp", "engine/include/*.h"]
 
   # The engine, prebuilt (`yarn engine`), so an app never needs Zig: static archives for the device and the
   # simulator, and the C header beside them.

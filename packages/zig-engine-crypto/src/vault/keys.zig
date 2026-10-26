@@ -93,6 +93,16 @@ pub fn seedGenerate(vault: *Vault, words: u32, passphrase: []const u8) Error!Han
     return storeSeed(vault, sentence.slice(), passphrase);
 }
 
+/// A seed from the BIP-39 entropy a vault keeps instead of the words (16 to 32 bytes). The mnemonic it encodes
+/// exists only on this stack frame, as in `seedGenerate`, so the seed is the one a wallet restored from those
+/// words would have.
+pub fn seedFromEntropy(vault: *Vault, entropy_bytes: []const u8, passphrase: []const u8) Error!Handle {
+    var sentence: bip39.Sentence = .{};
+    defer sentence.zero();
+    try bip39.fromEntropy(entropy_bytes, &sentence);
+    return storeSeed(vault, sentence.slice(), passphrase);
+}
+
 fn storeSeed(vault: *Vault, mnemonic: []const u8, passphrase: []const u8) Error!Handle {
     var seed: [bip39.seed_length]u8 = undefined;
     defer secure.zero(&seed);
@@ -240,6 +250,15 @@ test "a mnemonic with a bad checksum stores nothing" {
     const bad = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon";
     try testing.expectError(error.MnemonicChecksum, seedFromMnemonic(&vault, bad, ""));
     try testing.expectEqual(@as(u32, 0), vault.count());
+}
+
+test "a seed from entropy is the seed of the mnemonic that entropy encodes" {
+    var vault: Vault = .{};
+    const from_words = try seedFromMnemonic(&vault, abandon, "TREZOR");
+    const from_entropy = try seedFromEntropy(&vault, &([_]u8{0} ** 16), "TREZOR");
+    try testing.expectEqual(try seedFingerprint(&vault, from_words), try seedFingerprint(&vault, from_entropy));
+    try testing.expectError(error.InvalidLength, seedFromEntropy(&vault, &([_]u8{0} ** 17), ""));
+    try testing.expectEqual(@as(u32, 2), vault.count());
 }
 
 test "generated seeds differ, and odd word counts are refused" {

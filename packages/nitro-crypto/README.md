@@ -87,6 +87,7 @@ around them.
 | `crypto.mnemonic.generate(words?)` | A fresh 12 to 24 word mnemonic handed out once, for the user to write down |
 | `crypto.mnemonic.validate(mnemonic)` | Whether a mnemonic is BIP-39 English, and why not |
 | `createEphemeralWallet({mnemonic, passphrase?})` | A wallet from a known mnemonic: one `generate` returned, one being restored, or a test vector |
+| `createEphemeralWallet({seed, words})` | A wallet over a `NitroSeed` another native module made in this engine, such as a vault that unsealed it: no secret crosses into JavaScript |
 | `wallet.deriveAccount({chain, …})` | An account by a registered adapter |
 | `wallet.deriveKey('bip32' \| 'slip10', path)` | A key at any path |
 | `wallet.extendedPublicKey(path)` | An account's BIP-32 extended public key (`m/84'/0'/0'`), for a watch-only wallet; never the master's |
@@ -98,6 +99,11 @@ Nothing is persisted: a reload or a restart loses every wallet. A wallet the use
 `crypto.mnemonic.generate()`: show the words once, keep them only where the platform protects them (the keychain,
 behind biometrics), and restore with `createEphemeralWallet({mnemonic})`. The engine hands out no other secret, and
 cannot read a mnemonic back from a seed.
+
+A vault does better: it keeps the wallet's BIP-39 entropy sealed by the Secure Enclave or StrongBox and hands the
+engine a seed natively, through `cpp/NitroCryptoInterop.hpp` (`<NitroCrypto/NitroCryptoInterop.hpp>` on iOS, the
+prefab `hzblj_nitro-crypto::NitroCrypto` on Android), so neither the words nor the entropy pass through JavaScript;
+the facade takes the seed over with `createEphemeralWallet({seed, words})` (docs/adr/0008).
 
 ```ts
 const mnemonic = crypto.mnemonic.generate(12) // show once, for the user to write down
@@ -166,7 +172,8 @@ A chain whose curves and hashes the engine has is one adapter, written against `
 ## Not in this version
 
 EIP-712 typed data and transaction signing; Bitcoin message signing (BIP-322), PSBT and Taproot; Solana transactions;
-persistent or hardware-backed storage, backup and recovery. The adapters' `features` say so at runtime.
+persistent or hardware-backed storage, backup and recovery, which belong to a vault beside this package (above). The
+adapters' `features` say so at runtime.
 
 ## More
 

@@ -12,7 +12,7 @@ Android packaging, and the prebuilt engine. Three entry points:
 | Path | What it is |
 | --- | --- |
 | `src/specs/nitro-crypto.nitro.ts` | The Nitro spec: `NitroCrypto`, `NitroSeed`, `NitroKey`. `yarn codegen` regenerates `nitrogen/generated`, which is checked in. |
-| `cpp/` | The bridge: `HybridNitroCrypto`, `HybridNitroSeed`, `HybridNitroKey`; `EngineBridge.hpp` (views, `check`, `SecretBytes`, enum mappings); `EngineHandle.hpp` (owns one handle). No cryptography. |
+| `cpp/` | The bridge: `HybridNitroCrypto`, `HybridNitroSeed`, `HybridNitroKey`; `EngineBridge.hpp` (views, `check`, `SecretBytes`, enum mappings); `EngineHandle.hpp` (owns one handle); `NitroCryptoInterop.hpp` (header-only, for other native modules: seeds from entropy they hold, as `HybridNitroSeed`, ADR 0008). No cryptography. Exported: CocoaPods public headers, Android prefab `hzblj_nitro-crypto::NitroCrypto`. |
 | `src/host/nitro.ts`, `src/host/wasm.ts` | The two hosts: the native module, and the engine compiled to WebAssembly (`wasm-binary.generated.ts`, written by `yarn engine:wasm`). |
 | `src/engine/` | The facade over a host: `info` (ABI check, capabilities), `primitives` (and the verify policy), `keys`, `mnemonic`, `wallet`, `extended-key` (extended public keys and public derivation, ADR 0007), `create-engine`. |
 | `src/adapters/` | `contract.ts` (the types and `defineAdapter`), `registry.ts` (validation, binding, `chains`). |
@@ -35,6 +35,10 @@ Android packaging, and the prebuilt engine. Three entry points:
 - **Async only where it pays:** PBKDF2 (`generateSeed`, `seedFromMnemonic`) and `hashAsync`. The bridge copies a
   JS-owned buffer before leaving the JS thread.
 - **Adding to the ABI** means the spec, `yarn codegen`, `cpp/`, `src/host/wasm.ts`, and the facade, in one change.
+  The exception is what only native callers may use (`nc_seed_from_entropy`, `nc_mnemonic_to_entropy`,
+  `nc_mnemonic_from_entropy`, ADR 0008): `NitroCryptoInterop.hpp` and the C harness, and never JavaScript.
+- **The exported headers are an API.** Another module includes `cpp/*.hpp`, the generated specs and the C header
+  (`prepareHeaders` in `android/build.gradle`, `public_header_files` in the podspec); keep their includes quoted.
 
 ## Commands
 
