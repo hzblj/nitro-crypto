@@ -1,0 +1,696 @@
+const __root = @This();
+pub const __builtin = @import("std").zig.c_translation.builtins;
+pub const __helpers = @import("std").zig.c_translation.helpers;
+pub const ptrdiff_t = c_long;
+pub const wchar_t = c_uint;
+pub const max_align_t = extern struct {
+    __aro_max_align_ll: c_longlong = 0,
+    __aro_max_align_ld: c_longdouble = 0,
+};
+pub const int_least64_t = i64;
+pub const uint_least64_t = u64;
+pub const int_fast64_t = i64;
+pub const uint_fast64_t = u64;
+pub const int_least32_t = i32;
+pub const uint_least32_t = u32;
+pub const int_fast32_t = i32;
+pub const uint_fast32_t = u32;
+pub const int_least16_t = i16;
+pub const uint_least16_t = u16;
+pub const int_fast16_t = i16;
+pub const uint_fast16_t = u16;
+pub const int_least8_t = i8;
+pub const uint_least8_t = u8;
+pub const int_fast8_t = i8;
+pub const uint_fast8_t = u8;
+pub const intmax_t = c_long;
+pub const uintmax_t = c_ulong;
+pub const struct_secp256k1_context_struct = opaque {
+    pub const nc_secp256k1_context_clone = __root.nc_secp256k1_context_clone;
+    pub const nc_secp256k1_context_destroy = __root.nc_secp256k1_context_destroy;
+    pub const nc_secp256k1_context_set_illegal_callback = __root.nc_secp256k1_context_set_illegal_callback;
+    pub const nc_secp256k1_context_set_error_callback = __root.nc_secp256k1_context_set_error_callback;
+    pub const nc_secp256k1_context_set_sha256_compression = __root.nc_secp256k1_context_set_sha256_compression;
+    pub const nc_secp256k1_ec_pubkey_parse = __root.nc_secp256k1_ec_pubkey_parse;
+    pub const nc_secp256k1_ec_pubkey_serialize = __root.nc_secp256k1_ec_pubkey_serialize;
+    pub const nc_secp256k1_ec_pubkey_cmp = __root.nc_secp256k1_ec_pubkey_cmp;
+    pub const nc_secp256k1_ec_pubkey_sort = __root.nc_secp256k1_ec_pubkey_sort;
+    pub const nc_secp256k1_ecdsa_signature_parse_compact = __root.nc_secp256k1_ecdsa_signature_parse_compact;
+    pub const nc_secp256k1_ecdsa_signature_parse_der = __root.nc_secp256k1_ecdsa_signature_parse_der;
+    pub const nc_secp256k1_ecdsa_signature_serialize_der = __root.nc_secp256k1_ecdsa_signature_serialize_der;
+    pub const nc_secp256k1_ecdsa_signature_serialize_compact = __root.nc_secp256k1_ecdsa_signature_serialize_compact;
+    pub const nc_secp256k1_ecdsa_verify = __root.nc_secp256k1_ecdsa_verify;
+    pub const nc_secp256k1_ecdsa_signature_normalize = __root.nc_secp256k1_ecdsa_signature_normalize;
+    pub const nc_secp256k1_ecdsa_sign = __root.nc_secp256k1_ecdsa_sign;
+    pub const nc_secp256k1_ec_seckey_verify = __root.nc_secp256k1_ec_seckey_verify;
+    pub const nc_secp256k1_ec_pubkey_create = __root.nc_secp256k1_ec_pubkey_create;
+    pub const nc_secp256k1_ec_seckey_negate = __root.nc_secp256k1_ec_seckey_negate;
+    pub const nc_secp256k1_ec_pubkey_negate = __root.nc_secp256k1_ec_pubkey_negate;
+    pub const nc_secp256k1_ec_seckey_tweak_add = __root.nc_secp256k1_ec_seckey_tweak_add;
+    pub const nc_secp256k1_ec_pubkey_tweak_add = __root.nc_secp256k1_ec_pubkey_tweak_add;
+    pub const nc_secp256k1_ec_seckey_tweak_mul = __root.nc_secp256k1_ec_seckey_tweak_mul;
+    pub const nc_secp256k1_ec_pubkey_tweak_mul = __root.nc_secp256k1_ec_pubkey_tweak_mul;
+    pub const nc_secp256k1_context_randomize = __root.nc_secp256k1_context_randomize;
+    pub const nc_secp256k1_ec_pubkey_combine = __root.nc_secp256k1_ec_pubkey_combine;
+    pub const nc_secp256k1_tagged_sha256 = __root.nc_secp256k1_tagged_sha256;
+    pub const nc_secp256k1_context_preallocated_clone_size = __root.nc_secp256k1_context_preallocated_clone_size;
+    pub const nc_secp256k1_context_preallocated_clone = __root.nc_secp256k1_context_preallocated_clone;
+    pub const nc_secp256k1_context_preallocated_destroy = __root.nc_secp256k1_context_preallocated_destroy;
+    pub const nc_secp256k1_ecdsa_recoverable_signature_parse_compact = __root.nc_secp256k1_ecdsa_recoverable_signature_parse_compact;
+    pub const nc_secp256k1_ecdsa_recoverable_signature_convert = __root.nc_secp256k1_ecdsa_recoverable_signature_convert;
+    pub const nc_secp256k1_ecdsa_recoverable_signature_serialize_compact = __root.nc_secp256k1_ecdsa_recoverable_signature_serialize_compact;
+    pub const nc_secp256k1_ecdsa_sign_recoverable = __root.nc_secp256k1_ecdsa_sign_recoverable;
+    pub const nc_secp256k1_ecdsa_recover = __root.nc_secp256k1_ecdsa_recover;
+    pub const clone = __root.nc_secp256k1_context_clone;
+    pub const destroy = __root.nc_secp256k1_context_destroy;
+    pub const callback = __root.nc_secp256k1_context_set_illegal_callback;
+    pub const compression = __root.nc_secp256k1_context_set_sha256_compression;
+    pub const parse = __root.nc_secp256k1_ec_pubkey_parse;
+    pub const serialize = __root.nc_secp256k1_ec_pubkey_serialize;
+    pub const cmp = __root.nc_secp256k1_ec_pubkey_cmp;
+    pub const sort = __root.nc_secp256k1_ec_pubkey_sort;
+    pub const compact = __root.nc_secp256k1_ecdsa_signature_parse_compact;
+    pub const der = __root.nc_secp256k1_ecdsa_signature_parse_der;
+    pub const verify = __root.nc_secp256k1_ecdsa_verify;
+    pub const normalize = __root.nc_secp256k1_ecdsa_signature_normalize;
+    pub const sign = __root.nc_secp256k1_ecdsa_sign;
+    pub const create = __root.nc_secp256k1_ec_pubkey_create;
+    pub const negate = __root.nc_secp256k1_ec_seckey_negate;
+    pub const add = __root.nc_secp256k1_ec_seckey_tweak_add;
+    pub const mul = __root.nc_secp256k1_ec_seckey_tweak_mul;
+    pub const randomize = __root.nc_secp256k1_context_randomize;
+    pub const combine = __root.nc_secp256k1_ec_pubkey_combine;
+    pub const sha256 = __root.nc_secp256k1_tagged_sha256;
+    pub const size = __root.nc_secp256k1_context_preallocated_clone_size;
+    pub const convert = __root.nc_secp256k1_ecdsa_recoverable_signature_convert;
+    pub const recoverable = __root.nc_secp256k1_ecdsa_sign_recoverable;
+    pub const recover = __root.nc_secp256k1_ecdsa_recover;
+};
+pub const secp256k1_context = struct_secp256k1_context_struct;
+pub const struct_secp256k1_pubkey = extern struct {
+    data: [64]u8 = @import("std").mem.zeroes([64]u8),
+};
+pub const secp256k1_pubkey = struct_secp256k1_pubkey;
+pub const struct_secp256k1_ecdsa_signature = extern struct {
+    data: [64]u8 = @import("std").mem.zeroes([64]u8),
+};
+pub const secp256k1_ecdsa_signature = struct_secp256k1_ecdsa_signature;
+pub const secp256k1_nonce_function = ?*const fn (nonce32: [*c]u8, msg32: [*c]const u8, key32: [*c]const u8, algo16: [*c]const u8, data: ?*anyopaque, attempt: c_uint) callconv(.c) c_int;
+pub extern const nc_secp256k1_context_static: ?*const secp256k1_context;
+pub extern fn nc_secp256k1_selftest() void;
+pub extern fn nc_secp256k1_context_create(flags: c_uint) ?*secp256k1_context;
+pub extern fn nc_secp256k1_context_clone(ctx: ?*const secp256k1_context) ?*secp256k1_context;
+pub extern fn nc_secp256k1_context_destroy(ctx: ?*secp256k1_context) void;
+pub extern fn nc_secp256k1_context_set_illegal_callback(ctx: ?*secp256k1_context, fun: ?*const fn (message: [*c]const u8, data: ?*anyopaque) callconv(.c) void, data: ?*const anyopaque) void;
+pub extern fn nc_secp256k1_context_set_error_callback(ctx: ?*secp256k1_context, fun: ?*const fn (message: [*c]const u8, data: ?*anyopaque) callconv(.c) void, data: ?*const anyopaque) void;
+pub const secp256k1_sha256_compression_function = ?*const fn (state: [*c]u32, blocks64: [*c]const u8, n_blocks: usize) callconv(.c) void;
+pub extern fn nc_secp256k1_context_set_sha256_compression(ctx: ?*secp256k1_context, fn_compression: secp256k1_sha256_compression_function) void;
+pub extern fn nc_secp256k1_ec_pubkey_parse(ctx: ?*const secp256k1_context, pubkey: [*c]secp256k1_pubkey, input: [*c]const u8, inputlen: usize) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_serialize(ctx: ?*const secp256k1_context, output: [*c]u8, outputlen: [*c]usize, pubkey: [*c]const secp256k1_pubkey, flags: c_uint) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_cmp(ctx: ?*const secp256k1_context, pubkey1: [*c]const secp256k1_pubkey, pubkey2: [*c]const secp256k1_pubkey) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_sort(ctx: ?*const secp256k1_context, pubkeys: [*c][*c]const secp256k1_pubkey, n_pubkeys: usize) c_int;
+pub extern fn nc_secp256k1_ecdsa_signature_parse_compact(ctx: ?*const secp256k1_context, sig: [*c]secp256k1_ecdsa_signature, input64: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_ecdsa_signature_parse_der(ctx: ?*const secp256k1_context, sig: [*c]secp256k1_ecdsa_signature, input: [*c]const u8, inputlen: usize) c_int;
+pub extern fn nc_secp256k1_ecdsa_signature_serialize_der(ctx: ?*const secp256k1_context, output: [*c]u8, outputlen: [*c]usize, sig: [*c]const secp256k1_ecdsa_signature) c_int;
+pub extern fn nc_secp256k1_ecdsa_signature_serialize_compact(ctx: ?*const secp256k1_context, output64: [*c]u8, sig: [*c]const secp256k1_ecdsa_signature) c_int;
+pub extern fn nc_secp256k1_ecdsa_verify(ctx: ?*const secp256k1_context, sig: [*c]const secp256k1_ecdsa_signature, msghash32: [*c]const u8, pubkey: [*c]const secp256k1_pubkey) c_int;
+pub extern fn nc_secp256k1_ecdsa_signature_normalize(ctx: ?*const secp256k1_context, sigout: [*c]secp256k1_ecdsa_signature, sigin: [*c]const secp256k1_ecdsa_signature) c_int;
+pub extern const nc_secp256k1_nonce_function_rfc6979: secp256k1_nonce_function;
+pub extern const nc_secp256k1_nonce_function_default: secp256k1_nonce_function;
+pub extern fn nc_secp256k1_ecdsa_sign(ctx: ?*const secp256k1_context, sig: [*c]secp256k1_ecdsa_signature, msghash32: [*c]const u8, seckey: [*c]const u8, noncefp: secp256k1_nonce_function, ndata: ?*const anyopaque) c_int;
+pub extern fn nc_secp256k1_ec_seckey_verify(ctx: ?*const secp256k1_context, seckey: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_create(ctx: ?*const secp256k1_context, pubkey: [*c]secp256k1_pubkey, seckey: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_ec_seckey_negate(ctx: ?*const secp256k1_context, seckey: [*c]u8) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_negate(ctx: ?*const secp256k1_context, pubkey: [*c]secp256k1_pubkey) c_int;
+pub extern fn nc_secp256k1_ec_seckey_tweak_add(ctx: ?*const secp256k1_context, seckey: [*c]u8, tweak32: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_tweak_add(ctx: ?*const secp256k1_context, pubkey: [*c]secp256k1_pubkey, tweak32: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_ec_seckey_tweak_mul(ctx: ?*const secp256k1_context, seckey: [*c]u8, tweak32: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_tweak_mul(ctx: ?*const secp256k1_context, pubkey: [*c]secp256k1_pubkey, tweak32: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_context_randomize(ctx: ?*secp256k1_context, seed32: [*c]const u8) c_int;
+pub extern fn nc_secp256k1_ec_pubkey_combine(ctx: ?*const secp256k1_context, out: [*c]secp256k1_pubkey, ins: [*c]const [*c]const secp256k1_pubkey, n: usize) c_int;
+pub extern fn nc_secp256k1_tagged_sha256(ctx: ?*const secp256k1_context, hash32: [*c]u8, tag: [*c]const u8, taglen: usize, msg: [*c]const u8, msglen: usize) c_int;
+pub extern fn nc_secp256k1_context_preallocated_size(flags: c_uint) usize;
+pub extern fn nc_secp256k1_context_preallocated_create(prealloc: ?*anyopaque, flags: c_uint) ?*secp256k1_context;
+pub extern fn nc_secp256k1_context_preallocated_clone_size(ctx: ?*const secp256k1_context) usize;
+pub extern fn nc_secp256k1_context_preallocated_clone(ctx: ?*const secp256k1_context, prealloc: ?*anyopaque) ?*secp256k1_context;
+pub extern fn nc_secp256k1_context_preallocated_destroy(ctx: ?*secp256k1_context) void;
+pub const struct_secp256k1_ecdsa_recoverable_signature = extern struct {
+    data: [65]u8 = @import("std").mem.zeroes([65]u8),
+};
+pub const secp256k1_ecdsa_recoverable_signature = struct_secp256k1_ecdsa_recoverable_signature;
+pub extern fn nc_secp256k1_ecdsa_recoverable_signature_parse_compact(ctx: ?*const secp256k1_context, sig: [*c]secp256k1_ecdsa_recoverable_signature, input64: [*c]const u8, recid: c_int) c_int;
+pub extern fn nc_secp256k1_ecdsa_recoverable_signature_convert(ctx: ?*const secp256k1_context, sig: [*c]secp256k1_ecdsa_signature, sigin: [*c]const secp256k1_ecdsa_recoverable_signature) c_int;
+pub extern fn nc_secp256k1_ecdsa_recoverable_signature_serialize_compact(ctx: ?*const secp256k1_context, output64: [*c]u8, recid: [*c]c_int, sig: [*c]const secp256k1_ecdsa_recoverable_signature) c_int;
+pub extern fn nc_secp256k1_ecdsa_sign_recoverable(ctx: ?*const secp256k1_context, sig: [*c]secp256k1_ecdsa_recoverable_signature, msghash32: [*c]const u8, seckey: [*c]const u8, noncefp: secp256k1_nonce_function, ndata: ?*const anyopaque) c_int;
+pub extern fn nc_secp256k1_ecdsa_recover(ctx: ?*const secp256k1_context, pubkey: [*c]secp256k1_pubkey, sig: [*c]const secp256k1_ecdsa_recoverable_signature, msghash32: [*c]const u8) c_int;
+
+pub const __VERSION__ = "Aro aro-zig";
+pub const __Aro__ = "";
+pub const __STDC__ = @as(c_int, 1);
+pub const __STDC_HOSTED__ = @as(c_int, 1);
+pub const __STDC_UTF_16__ = @as(c_int, 1);
+pub const __STDC_UTF_32__ = @as(c_int, 1);
+pub const __STDC_EMBED_NOT_FOUND__ = @as(c_int, 0);
+pub const __STDC_EMBED_FOUND__ = @as(c_int, 1);
+pub const __STDC_EMBED_EMPTY__ = @as(c_int, 2);
+pub const __STDC_VERSION__ = @as(c_long, 201710);
+pub const __GNUC__ = @as(c_int, 4);
+pub const __GNUC_MINOR__ = @as(c_int, 2);
+pub const __GNUC_PATCHLEVEL__ = @as(c_int, 1);
+pub const __ARO_EMULATE_NO__ = @as(c_int, 0);
+pub const __ARO_EMULATE_CLANG__ = @as(c_int, 1);
+pub const __ARO_EMULATE_GCC__ = @as(c_int, 2);
+pub const __ARO_EMULATE_MSVC__ = @as(c_int, 3);
+pub const __ARO_EMULATE__ = __ARO_EMULATE_CLANG__;
+pub inline fn __building_module(x: anytype) @TypeOf(@as(c_int, 0)) {
+    _ = &x;
+    return @as(c_int, 0);
+}
+pub const __OPTIMIZE__ = @as(c_int, 1);
+pub const linux = @as(c_int, 1);
+pub const __linux = @as(c_int, 1);
+pub const __linux__ = @as(c_int, 1);
+pub const unix = @as(c_int, 1);
+pub const __unix = @as(c_int, 1);
+pub const __unix__ = @as(c_int, 1);
+pub const __ANDROID__ = @as(c_int, 1);
+pub const __aarch64__ = @as(c_int, 1);
+pub const __AARCH64EL__ = @as(c_int, 1);
+pub const __AARCH64_CMODEL_SMALL__ = @as(c_int, 1);
+pub const __ARM_FP = @as(c_int, 0xE);
+pub const __ARM_NEON = @as(c_int, 1);
+pub const __ARM_NEON_FP = @as(c_int, 0xE);
+pub const __ARM_FEATURE_UNALIGNED = @as(c_int, 1);
+pub const _LP64 = @as(c_int, 1);
+pub const __LP64__ = @as(c_int, 1);
+pub const __FLOAT128__ = @as(c_int, 1);
+pub const __ORDER_LITTLE_ENDIAN__ = @as(c_int, 1234);
+pub const __ORDER_BIG_ENDIAN__ = @as(c_int, 4321);
+pub const __ORDER_PDP_ENDIAN__ = @as(c_int, 3412);
+pub const __BYTE_ORDER__ = __ORDER_LITTLE_ENDIAN__;
+pub const __LITTLE_ENDIAN__ = @as(c_int, 1);
+pub const __ELF__ = @as(c_int, 1);
+pub const __ATOMIC_RELAXED = @as(c_int, 0);
+pub const __ATOMIC_CONSUME = @as(c_int, 1);
+pub const __ATOMIC_ACQUIRE = @as(c_int, 2);
+pub const __ATOMIC_RELEASE = @as(c_int, 3);
+pub const __ATOMIC_ACQ_REL = @as(c_int, 4);
+pub const __ATOMIC_SEQ_CST = @as(c_int, 5);
+pub const __ATOMIC_BOOL_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_CHAR_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_CHAR16_T_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_CHAR32_T_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_WCHAR_T_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_WINT_T_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_SHORT_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_INT_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_LONG_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_LLONG_LOCK_FREE = @as(c_int, 1);
+pub const __ATOMIC_POINTER_LOCK_FREE = @as(c_int, 1);
+pub const __CHAR_UNSIGNED__ = @as(c_int, 1);
+pub const __WCHAR_UNSIGNED__ = @as(c_int, 1);
+pub const __WINT_UNSIGNED__ = @as(c_int, 1);
+pub const __CHAR_BIT__ = @as(c_int, 8);
+pub const __BOOL_WIDTH__ = @as(c_int, 8);
+pub const __SCHAR_MAX__ = @as(c_int, 127);
+pub const __SCHAR_WIDTH__ = @as(c_int, 8);
+pub const __SHRT_MAX__ = @as(c_int, 32767);
+pub const __SHRT_WIDTH__ = @as(c_int, 16);
+pub const __INT_MAX__ = __helpers.promoteIntLiteral(c_int, 2147483647, .decimal);
+pub const __INT_WIDTH__ = @as(c_int, 32);
+pub const __LONG_MAX__ = __helpers.promoteIntLiteral(c_long, 9223372036854775807, .decimal);
+pub const __LONG_WIDTH__ = @as(c_int, 64);
+pub const __LONG_LONG_MAX__ = @as(c_longlong, 9223372036854775807);
+pub const __LONG_LONG_WIDTH__ = @as(c_int, 64);
+pub const __WCHAR_MAX__ = __helpers.promoteIntLiteral(c_uint, 4294967295, .decimal);
+pub const __WCHAR_WIDTH__ = @as(c_int, 32);
+pub const __WINT_MAX__ = __helpers.promoteIntLiteral(c_uint, 4294967295, .decimal);
+pub const __WINT_WIDTH__ = @as(c_int, 32);
+pub const __INTMAX_MAX__ = __helpers.promoteIntLiteral(c_long, 9223372036854775807, .decimal);
+pub const __INTMAX_WIDTH__ = @as(c_int, 64);
+pub const __SIZE_MAX__ = __helpers.promoteIntLiteral(c_ulong, 18446744073709551615, .decimal);
+pub const __SIZE_WIDTH__ = @as(c_int, 64);
+pub const __UINTMAX_MAX__ = __helpers.promoteIntLiteral(c_ulong, 18446744073709551615, .decimal);
+pub const __UINTMAX_WIDTH__ = @as(c_int, 64);
+pub const __PTRDIFF_MAX__ = __helpers.promoteIntLiteral(c_long, 9223372036854775807, .decimal);
+pub const __PTRDIFF_WIDTH__ = @as(c_int, 64);
+pub const __INTPTR_MAX__ = __helpers.promoteIntLiteral(c_long, 9223372036854775807, .decimal);
+pub const __INTPTR_WIDTH__ = @as(c_int, 64);
+pub const __UINTPTR_MAX__ = __helpers.promoteIntLiteral(c_ulong, 18446744073709551615, .decimal);
+pub const __UINTPTR_WIDTH__ = @as(c_int, 64);
+pub const __SIG_ATOMIC_MAX__ = __helpers.promoteIntLiteral(c_int, 2147483647, .decimal);
+pub const __SIG_ATOMIC_WIDTH__ = @as(c_int, 32);
+pub const __BITINT_MAXWIDTH__ = __helpers.promoteIntLiteral(c_int, 65535, .decimal);
+pub const __SIZEOF_FLOAT__ = @as(c_int, 4);
+pub const __SIZEOF_DOUBLE__ = @as(c_int, 8);
+pub const __SIZEOF_LONG_DOUBLE__ = @as(c_int, 16);
+pub const __SIZEOF_SHORT__ = @as(c_int, 2);
+pub const __SIZEOF_INT__ = @as(c_int, 4);
+pub const __SIZEOF_LONG__ = @as(c_int, 8);
+pub const __SIZEOF_LONG_LONG__ = @as(c_int, 8);
+pub const __SIZEOF_POINTER__ = @as(c_int, 8);
+pub const __SIZEOF_PTRDIFF_T__ = @as(c_int, 8);
+pub const __SIZEOF_SIZE_T__ = @as(c_int, 8);
+pub const __SIZEOF_WCHAR_T__ = @as(c_int, 4);
+pub const __SIZEOF_WINT_T__ = @as(c_int, 4);
+pub const __SIZEOF_INT128__ = @as(c_int, 16);
+pub const __INTPTR_TYPE__ = c_long;
+pub const __UINTPTR_TYPE__ = c_ulong;
+pub const __INTMAX_TYPE__ = c_long;
+pub const __INTMAX_C_SUFFIX__ = @compileError("unable to translate macro: undefined identifier `L`"); // <builtin>:111:9
+pub const __INTMAX_C = __helpers.L_SUFFIX;
+pub const __UINTMAX_TYPE__ = c_ulong;
+pub const __UINTMAX_C_SUFFIX__ = @compileError("unable to translate macro: undefined identifier `UL`"); // <builtin>:114:9
+pub const __UINTMAX_C = __helpers.UL_SUFFIX;
+pub const __PTRDIFF_TYPE__ = c_long;
+pub const __SIZE_TYPE__ = c_ulong;
+pub const __WCHAR_TYPE__ = c_uint;
+pub const __WINT_TYPE__ = c_uint;
+pub const __CHAR16_TYPE__ = c_ushort;
+pub const __CHAR32_TYPE__ = c_uint;
+pub const __INT8_TYPE__ = i8;
+pub const __INT8_FMTd__ = "hhd";
+pub const __INT8_FMTi__ = "hhi";
+pub const __INT8_C_SUFFIX__ = "";
+pub inline fn __INT8_C(c: anytype) @TypeOf(c) {
+    _ = &c;
+    return c;
+}
+pub const __INT16_TYPE__ = c_short;
+pub const __INT16_FMTd__ = "hd";
+pub const __INT16_FMTi__ = "hi";
+pub const __INT16_C_SUFFIX__ = "";
+pub inline fn __INT16_C(c: anytype) @TypeOf(c) {
+    _ = &c;
+    return c;
+}
+pub const __INT32_TYPE__ = c_int;
+pub const __INT32_FMTd__ = "d";
+pub const __INT32_FMTi__ = "i";
+pub const __INT32_C_SUFFIX__ = "";
+pub inline fn __INT32_C(c: anytype) @TypeOf(c) {
+    _ = &c;
+    return c;
+}
+pub const __INT64_TYPE__ = c_long;
+pub const __INT64_FMTd__ = "ld";
+pub const __INT64_FMTi__ = "li";
+pub const __INT64_C_SUFFIX__ = @compileError("unable to translate macro: undefined identifier `L`"); // <builtin>:140:9
+pub const __INT64_C = __helpers.L_SUFFIX;
+pub const __UINT8_TYPE__ = u8;
+pub const __UINT8_FMTo__ = "hho";
+pub const __UINT8_FMTu__ = "hhu";
+pub const __UINT8_FMTx__ = "hhx";
+pub const __UINT8_FMTX__ = "hhX";
+pub const __UINT8_C_SUFFIX__ = "";
+pub inline fn __UINT8_C(c: anytype) @TypeOf(c) {
+    _ = &c;
+    return c;
+}
+pub const __UINT8_MAX__ = @as(c_int, 255);
+pub const __INT8_MAX__ = @as(c_int, 127);
+pub const __UINT16_TYPE__ = c_ushort;
+pub const __UINT16_FMTo__ = "ho";
+pub const __UINT16_FMTu__ = "hu";
+pub const __UINT16_FMTx__ = "hx";
+pub const __UINT16_FMTX__ = "hX";
+pub const __UINT16_C_SUFFIX__ = "";
+pub inline fn __UINT16_C(c: anytype) @TypeOf(c) {
+    _ = &c;
+    return c;
+}
+pub const __UINT16_MAX__ = __helpers.promoteIntLiteral(c_int, 65535, .decimal);
+pub const __INT16_MAX__ = @as(c_int, 32767);
+pub const __UINT32_TYPE__ = c_uint;
+pub const __UINT32_FMTo__ = "o";
+pub const __UINT32_FMTu__ = "u";
+pub const __UINT32_FMTx__ = "x";
+pub const __UINT32_FMTX__ = "X";
+pub const __UINT32_C_SUFFIX__ = @compileError("unable to translate macro: undefined identifier `U`"); // <builtin>:165:9
+pub const __UINT32_C = __helpers.U_SUFFIX;
+pub const __UINT32_MAX__ = __helpers.promoteIntLiteral(c_uint, 4294967295, .decimal);
+pub const __INT32_MAX__ = __helpers.promoteIntLiteral(c_int, 2147483647, .decimal);
+pub const __UINT64_TYPE__ = c_ulong;
+pub const __UINT64_FMTo__ = "lo";
+pub const __UINT64_FMTu__ = "lu";
+pub const __UINT64_FMTx__ = "lx";
+pub const __UINT64_FMTX__ = "lX";
+pub const __UINT64_C_SUFFIX__ = @compileError("unable to translate macro: undefined identifier `UL`"); // <builtin>:174:9
+pub const __UINT64_C = __helpers.UL_SUFFIX;
+pub const __UINT64_MAX__ = __helpers.promoteIntLiteral(c_ulong, 18446744073709551615, .decimal);
+pub const __INT64_MAX__ = __helpers.promoteIntLiteral(c_long, 9223372036854775807, .decimal);
+pub const __INT_LEAST8_TYPE__ = i8;
+pub const __INT_LEAST8_MAX__ = @as(c_int, 127);
+pub const __INT_LEAST8_WIDTH__ = @as(c_int, 8);
+pub const INT_LEAST8_FMTd__ = "hhd";
+pub const INT_LEAST8_FMTi__ = "hhi";
+pub const __UINT_LEAST8_TYPE__ = u8;
+pub const __UINT_LEAST8_MAX__ = @as(c_int, 255);
+pub const UINT_LEAST8_FMTo__ = "hho";
+pub const UINT_LEAST8_FMTu__ = "hhu";
+pub const UINT_LEAST8_FMTx__ = "hhx";
+pub const UINT_LEAST8_FMTX__ = "hhX";
+pub const __INT_FAST8_TYPE__ = i8;
+pub const __INT_FAST8_MAX__ = @as(c_int, 127);
+pub const __INT_FAST8_WIDTH__ = @as(c_int, 8);
+pub const INT_FAST8_FMTd__ = "hhd";
+pub const INT_FAST8_FMTi__ = "hhi";
+pub const __UINT_FAST8_TYPE__ = u8;
+pub const __UINT_FAST8_MAX__ = @as(c_int, 255);
+pub const UINT_FAST8_FMTo__ = "hho";
+pub const UINT_FAST8_FMTu__ = "hhu";
+pub const UINT_FAST8_FMTx__ = "hhx";
+pub const UINT_FAST8_FMTX__ = "hhX";
+pub const __INT_LEAST16_TYPE__ = c_short;
+pub const __INT_LEAST16_MAX__ = @as(c_int, 32767);
+pub const __INT_LEAST16_WIDTH__ = @as(c_int, 16);
+pub const INT_LEAST16_FMTd__ = "hd";
+pub const INT_LEAST16_FMTi__ = "hi";
+pub const __UINT_LEAST16_TYPE__ = c_ushort;
+pub const __UINT_LEAST16_MAX__ = __helpers.promoteIntLiteral(c_int, 65535, .decimal);
+pub const UINT_LEAST16_FMTo__ = "ho";
+pub const UINT_LEAST16_FMTu__ = "hu";
+pub const UINT_LEAST16_FMTx__ = "hx";
+pub const UINT_LEAST16_FMTX__ = "hX";
+pub const __INT_FAST16_TYPE__ = c_short;
+pub const __INT_FAST16_MAX__ = @as(c_int, 32767);
+pub const __INT_FAST16_WIDTH__ = @as(c_int, 16);
+pub const INT_FAST16_FMTd__ = "hd";
+pub const INT_FAST16_FMTi__ = "hi";
+pub const __UINT_FAST16_TYPE__ = c_ushort;
+pub const __UINT_FAST16_MAX__ = __helpers.promoteIntLiteral(c_int, 65535, .decimal);
+pub const UINT_FAST16_FMTo__ = "ho";
+pub const UINT_FAST16_FMTu__ = "hu";
+pub const UINT_FAST16_FMTx__ = "hx";
+pub const UINT_FAST16_FMTX__ = "hX";
+pub const __INT_LEAST32_TYPE__ = c_int;
+pub const __INT_LEAST32_MAX__ = __helpers.promoteIntLiteral(c_int, 2147483647, .decimal);
+pub const __INT_LEAST32_WIDTH__ = @as(c_int, 32);
+pub const INT_LEAST32_FMTd__ = "d";
+pub const INT_LEAST32_FMTi__ = "i";
+pub const __UINT_LEAST32_TYPE__ = c_uint;
+pub const __UINT_LEAST32_MAX__ = __helpers.promoteIntLiteral(c_uint, 4294967295, .decimal);
+pub const UINT_LEAST32_FMTo__ = "o";
+pub const UINT_LEAST32_FMTu__ = "u";
+pub const UINT_LEAST32_FMTx__ = "x";
+pub const UINT_LEAST32_FMTX__ = "X";
+pub const __INT_FAST32_TYPE__ = c_int;
+pub const __INT_FAST32_MAX__ = __helpers.promoteIntLiteral(c_int, 2147483647, .decimal);
+pub const __INT_FAST32_WIDTH__ = @as(c_int, 32);
+pub const INT_FAST32_FMTd__ = "d";
+pub const INT_FAST32_FMTi__ = "i";
+pub const __UINT_FAST32_TYPE__ = c_uint;
+pub const __UINT_FAST32_MAX__ = __helpers.promoteIntLiteral(c_uint, 4294967295, .decimal);
+pub const UINT_FAST32_FMTo__ = "o";
+pub const UINT_FAST32_FMTu__ = "u";
+pub const UINT_FAST32_FMTx__ = "x";
+pub const UINT_FAST32_FMTX__ = "X";
+pub const __INT_LEAST64_TYPE__ = c_long;
+pub const __INT_LEAST64_MAX__ = __helpers.promoteIntLiteral(c_long, 9223372036854775807, .decimal);
+pub const __INT_LEAST64_WIDTH__ = @as(c_int, 64);
+pub const INT_LEAST64_FMTd__ = "ld";
+pub const INT_LEAST64_FMTi__ = "li";
+pub const __UINT_LEAST64_TYPE__ = c_ulong;
+pub const __UINT_LEAST64_MAX__ = __helpers.promoteIntLiteral(c_ulong, 18446744073709551615, .decimal);
+pub const UINT_LEAST64_FMTo__ = "lo";
+pub const UINT_LEAST64_FMTu__ = "lu";
+pub const UINT_LEAST64_FMTx__ = "lx";
+pub const UINT_LEAST64_FMTX__ = "lX";
+pub const __INT_FAST64_TYPE__ = c_long;
+pub const __INT_FAST64_MAX__ = __helpers.promoteIntLiteral(c_long, 9223372036854775807, .decimal);
+pub const __INT_FAST64_WIDTH__ = @as(c_int, 64);
+pub const INT_FAST64_FMTd__ = "ld";
+pub const INT_FAST64_FMTi__ = "li";
+pub const __UINT_FAST64_TYPE__ = c_ulong;
+pub const __UINT_FAST64_MAX__ = __helpers.promoteIntLiteral(c_ulong, 18446744073709551615, .decimal);
+pub const UINT_FAST64_FMTo__ = "lo";
+pub const UINT_FAST64_FMTu__ = "lu";
+pub const UINT_FAST64_FMTx__ = "lx";
+pub const UINT_FAST64_FMTX__ = "lX";
+pub const __FLT16_DENORM_MIN__ = @as(f16, 5.9604644775390625e-8);
+pub const __FLT16_HAS_DENORM__ = "";
+pub const __FLT16_DIG__ = @as(c_int, 3);
+pub const __FLT16_DECIMAL_DIG__ = @as(c_int, 5);
+pub const __FLT16_EPSILON__ = @as(f16, 9.765625e-4);
+pub const __FLT16_HAS_INFINITY__ = "";
+pub const __FLT16_HAS_QUIET_NAN__ = "";
+pub const __FLT16_MANT_DIG__ = @as(c_int, 11);
+pub const __FLT16_MAX_10_EXP__ = @as(c_int, 4);
+pub const __FLT16_MAX_EXP__ = @as(c_int, 16);
+pub const __FLT16_MAX__ = @as(f16, 6.5504e+4);
+pub const __FLT16_MIN_10_EXP__ = -@as(c_int, 4);
+pub const __FLT16_MIN_EXP__ = -@as(c_int, 13);
+pub const __FLT16_MIN__ = @as(f16, 6.103515625e-5);
+pub const __FLT_DENORM_MIN__ = @as(f32, 1.40129846e-45);
+pub const __FLT_HAS_DENORM__ = "";
+pub const __FLT_DIG__ = @as(c_int, 6);
+pub const __FLT_DECIMAL_DIG__ = @as(c_int, 9);
+pub const __FLT_EPSILON__ = @as(f32, 1.19209290e-7);
+pub const __FLT_HAS_INFINITY__ = "";
+pub const __FLT_HAS_QUIET_NAN__ = "";
+pub const __FLT_MANT_DIG__ = @as(c_int, 24);
+pub const __FLT_MAX_10_EXP__ = @as(c_int, 38);
+pub const __FLT_MAX_EXP__ = @as(c_int, 128);
+pub const __FLT_MAX__ = @as(f32, 3.40282347e+38);
+pub const __FLT_MIN_10_EXP__ = -@as(c_int, 37);
+pub const __FLT_MIN_EXP__ = -@as(c_int, 125);
+pub const __FLT_MIN__ = @as(f32, 1.17549435e-38);
+pub const __DBL_DENORM_MIN__ = @as(f64, 4.9406564584124654e-324);
+pub const __DBL_HAS_DENORM__ = "";
+pub const __DBL_DIG__ = @as(c_int, 15);
+pub const __DBL_DECIMAL_DIG__ = @as(c_int, 17);
+pub const __DBL_EPSILON__ = @as(f64, 2.2204460492503131e-16);
+pub const __DBL_HAS_INFINITY__ = "";
+pub const __DBL_HAS_QUIET_NAN__ = "";
+pub const __DBL_MANT_DIG__ = @as(c_int, 53);
+pub const __DBL_MAX_10_EXP__ = @as(c_int, 308);
+pub const __DBL_MAX_EXP__ = @as(c_int, 1024);
+pub const __DBL_MAX__ = @as(f64, 1.7976931348623157e+308);
+pub const __DBL_MIN_10_EXP__ = -@as(c_int, 307);
+pub const __DBL_MIN_EXP__ = -@as(c_int, 1021);
+pub const __DBL_MIN__ = @as(f64, 2.2250738585072014e-308);
+pub const __LDBL_DENORM_MIN__ = @as(c_longdouble, 6.47517511943802511092443895822764655e-4966);
+pub const __LDBL_HAS_DENORM__ = "";
+pub const __LDBL_DIG__ = @as(c_int, 33);
+pub const __LDBL_DECIMAL_DIG__ = @as(c_int, 36);
+pub const __LDBL_EPSILON__ = @as(c_longdouble, 1.92592994438723585305597794258492732e-34);
+pub const __LDBL_HAS_INFINITY__ = "";
+pub const __LDBL_HAS_QUIET_NAN__ = "";
+pub const __LDBL_MANT_DIG__ = @as(c_int, 113);
+pub const __LDBL_MAX_10_EXP__ = @as(c_int, 4932);
+pub const __LDBL_MAX_EXP__ = @as(c_int, 16384);
+pub const __LDBL_MAX__ = @as(c_longdouble, 1.18973149535723176508575932662800702e+4932);
+pub const __LDBL_MIN_10_EXP__ = -@as(c_int, 4931);
+pub const __LDBL_MIN_EXP__ = -@as(c_int, 16381);
+pub const __LDBL_MIN__ = @as(c_longdouble, 3.36210314311209350626267781732175260e-4932);
+pub const __FLT_EVAL_METHOD__ = @as(c_int, 0);
+pub const __FLT_RADIX__ = @as(c_int, 2);
+pub const __DECIMAL_DIG__ = __LDBL_DECIMAL_DIG__;
+pub const __pic__ = @as(c_int, 2);
+pub const __PIC__ = @as(c_int, 2);
+pub const NDEBUG = @as(c_int, 1);
+pub const NC_SECP256K1_PREFIX_H = "";
+pub const secp256k1_context_clone = nc_secp256k1_context_clone;
+pub const secp256k1_context_create = nc_secp256k1_context_create;
+pub const secp256k1_context_destroy = nc_secp256k1_context_destroy;
+pub const secp256k1_context_preallocated_clone = nc_secp256k1_context_preallocated_clone;
+pub const secp256k1_context_preallocated_clone_size = nc_secp256k1_context_preallocated_clone_size;
+pub const secp256k1_context_preallocated_create = nc_secp256k1_context_preallocated_create;
+pub const secp256k1_context_preallocated_destroy = nc_secp256k1_context_preallocated_destroy;
+pub const secp256k1_context_preallocated_size = nc_secp256k1_context_preallocated_size;
+pub const secp256k1_context_randomize = nc_secp256k1_context_randomize;
+pub const secp256k1_context_set_error_callback = nc_secp256k1_context_set_error_callback;
+pub const secp256k1_context_set_illegal_callback = nc_secp256k1_context_set_illegal_callback;
+pub const secp256k1_context_set_sha256_compression = nc_secp256k1_context_set_sha256_compression;
+pub const secp256k1_context_static = nc_secp256k1_context_static;
+pub const secp256k1_default_error_callback_fn = @compileError("unable to translate macro: undefined identifier `nc_secp256k1_default_error_callback_fn`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/src/curves/secp256k1_prefix.h:25:9
+pub const secp256k1_default_illegal_callback_fn = @compileError("unable to translate macro: undefined identifier `nc_secp256k1_default_illegal_callback_fn`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/src/curves/secp256k1_prefix.h:26:9
+pub const secp256k1_ec_pubkey_cmp = nc_secp256k1_ec_pubkey_cmp;
+pub const secp256k1_ec_pubkey_combine = nc_secp256k1_ec_pubkey_combine;
+pub const secp256k1_ec_pubkey_create = nc_secp256k1_ec_pubkey_create;
+pub const secp256k1_ec_pubkey_negate = nc_secp256k1_ec_pubkey_negate;
+pub const secp256k1_ec_pubkey_parse = nc_secp256k1_ec_pubkey_parse;
+pub const secp256k1_ec_pubkey_serialize = nc_secp256k1_ec_pubkey_serialize;
+pub const secp256k1_ec_pubkey_sort = nc_secp256k1_ec_pubkey_sort;
+pub const secp256k1_ec_pubkey_tweak_add = nc_secp256k1_ec_pubkey_tweak_add;
+pub const secp256k1_ec_pubkey_tweak_mul = nc_secp256k1_ec_pubkey_tweak_mul;
+pub const secp256k1_ec_seckey_negate = nc_secp256k1_ec_seckey_negate;
+pub const secp256k1_ec_seckey_tweak_add = nc_secp256k1_ec_seckey_tweak_add;
+pub const secp256k1_ec_seckey_tweak_mul = nc_secp256k1_ec_seckey_tweak_mul;
+pub const secp256k1_ec_seckey_verify = nc_secp256k1_ec_seckey_verify;
+pub const secp256k1_ecdsa_recover = nc_secp256k1_ecdsa_recover;
+pub const secp256k1_ecdsa_recoverable_signature_convert = nc_secp256k1_ecdsa_recoverable_signature_convert;
+pub const secp256k1_ecdsa_recoverable_signature_parse_compact = nc_secp256k1_ecdsa_recoverable_signature_parse_compact;
+pub const secp256k1_ecdsa_recoverable_signature_serialize_compact = nc_secp256k1_ecdsa_recoverable_signature_serialize_compact;
+pub const secp256k1_ecdsa_sign = nc_secp256k1_ecdsa_sign;
+pub const secp256k1_ecdsa_sign_recoverable = nc_secp256k1_ecdsa_sign_recoverable;
+pub const secp256k1_ecdsa_signature_normalize = nc_secp256k1_ecdsa_signature_normalize;
+pub const secp256k1_ecdsa_signature_parse_compact = nc_secp256k1_ecdsa_signature_parse_compact;
+pub const secp256k1_ecdsa_signature_parse_der = nc_secp256k1_ecdsa_signature_parse_der;
+pub const secp256k1_ecdsa_signature_serialize_compact = nc_secp256k1_ecdsa_signature_serialize_compact;
+pub const secp256k1_ecdsa_signature_serialize_der = nc_secp256k1_ecdsa_signature_serialize_der;
+pub const secp256k1_ecdsa_verify = nc_secp256k1_ecdsa_verify;
+pub const secp256k1_ecmult_gen_prec_table = @compileError("unable to translate macro: undefined identifier `nc_secp256k1_ecmult_gen_prec_table`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/src/curves/secp256k1_prefix.h:52:9
+pub inline fn secp256k1_nonce_function_default(nonce32: [*c]u8, msg32: [*c]const u8, key32: [*c]const u8, algo16: [*c]const u8, data: ?*anyopaque, attempt: c_uint) c_int {
+    return nc_secp256k1_nonce_function_default.?(nonce32, msg32, key32, algo16, data, attempt);
+}
+pub inline fn secp256k1_nonce_function_rfc6979(nonce32: [*c]u8, msg32: [*c]const u8, key32: [*c]const u8, algo16: [*c]const u8, data: ?*anyopaque, attempt: c_uint) c_int {
+    return nc_secp256k1_nonce_function_rfc6979.?(nonce32, msg32, key32, algo16, data, attempt);
+}
+pub const secp256k1_pre_g = @compileError("unable to translate macro: undefined identifier `nc_secp256k1_pre_g`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/src/curves/secp256k1_prefix.h:55:9
+pub const secp256k1_pre_g_128 = @compileError("unable to translate macro: undefined identifier `nc_secp256k1_pre_g_128`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/src/curves/secp256k1_prefix.h:56:9
+pub const secp256k1_selftest = nc_secp256k1_selftest;
+pub const secp256k1_tagged_sha256 = nc_secp256k1_tagged_sha256;
+pub const SECP256K1_H = "";
+pub const __STDC_VERSION_STDDEF_H__ = @as(c_long, 202311);
+pub const NULL = __helpers.cast(?*anyopaque, @as(c_int, 0));
+pub const offsetof = @compileError("unable to translate macro: undefined identifier `__builtin_offsetof`"); // /Users/runner/work/_temp/244f7f65-7c6c-4590-a570-73f441223f08/zig-aarch64-macos-0.16.0/lib/compiler/aro/include/stddef.h:18:9
+pub const __CLANG_STDINT_H = "";
+pub const __int_least64_t = i64;
+pub const __uint_least64_t = u64;
+pub const __uint32_t_defined = "";
+pub const __int_least32_t = i32;
+pub const __uint_least32_t = u32;
+pub const __int_least16_t = i16;
+pub const __uint_least16_t = u16;
+pub const __int_least8_t = i8;
+pub const __uint_least8_t = u8;
+pub const __int8_t_defined = "";
+pub const __stdint_join3 = @compileError("unable to translate C expr: unexpected token '##'"); // /Users/runner/work/_temp/244f7f65-7c6c-4590-a570-73f441223f08/zig-aarch64-macos-0.16.0/lib/include/stdint.h:291:9
+pub const __intptr_t_defined = "";
+pub const _INTPTR_T = "";
+pub const _UINTPTR_T = "";
+pub inline fn INT64_C(v: anytype) @TypeOf(__INT64_C(v)) {
+    _ = &v;
+    return __INT64_C(v);
+}
+pub inline fn UINT64_C(v: anytype) @TypeOf(__UINT64_C(v)) {
+    _ = &v;
+    return __UINT64_C(v);
+}
+pub inline fn INT32_C(v: anytype) @TypeOf(__INT32_C(v)) {
+    _ = &v;
+    return __INT32_C(v);
+}
+pub inline fn UINT32_C(v: anytype) @TypeOf(__UINT32_C(v)) {
+    _ = &v;
+    return __UINT32_C(v);
+}
+pub inline fn INT16_C(v: anytype) @TypeOf(__INT16_C(v)) {
+    _ = &v;
+    return __INT16_C(v);
+}
+pub inline fn UINT16_C(v: anytype) @TypeOf(__UINT16_C(v)) {
+    _ = &v;
+    return __UINT16_C(v);
+}
+pub inline fn INT8_C(v: anytype) @TypeOf(__INT8_C(v)) {
+    _ = &v;
+    return __INT8_C(v);
+}
+pub inline fn UINT8_C(v: anytype) @TypeOf(__UINT8_C(v)) {
+    _ = &v;
+    return __UINT8_C(v);
+}
+pub const INT64_MAX = INT64_C(__helpers.promoteIntLiteral(c_int, 9223372036854775807, .decimal));
+pub const INT64_MIN = -INT64_C(__helpers.promoteIntLiteral(c_int, 9223372036854775807, .decimal)) - @as(c_int, 1);
+pub const UINT64_MAX = UINT64_C(__helpers.promoteIntLiteral(c_int, 18446744073709551615, .decimal));
+pub const __INT_LEAST64_MIN = INT64_MIN;
+pub const __INT_LEAST64_MAX = INT64_MAX;
+pub const __UINT_LEAST64_MAX = UINT64_MAX;
+pub const INT_LEAST64_MIN = __INT_LEAST64_MIN;
+pub const INT_LEAST64_MAX = __INT_LEAST64_MAX;
+pub const UINT_LEAST64_MAX = __UINT_LEAST64_MAX;
+pub const INT_FAST64_MIN = __INT_LEAST64_MIN;
+pub const INT_FAST64_MAX = __INT_LEAST64_MAX;
+pub const UINT_FAST64_MAX = __UINT_LEAST64_MAX;
+pub const INT32_MAX = INT32_C(__helpers.promoteIntLiteral(c_int, 2147483647, .decimal));
+pub const INT32_MIN = -INT32_C(__helpers.promoteIntLiteral(c_int, 2147483647, .decimal)) - @as(c_int, 1);
+pub const UINT32_MAX = UINT32_C(__helpers.promoteIntLiteral(c_int, 4294967295, .decimal));
+pub const __INT_LEAST32_MIN = INT32_MIN;
+pub const __INT_LEAST32_MAX = INT32_MAX;
+pub const __UINT_LEAST32_MAX = UINT32_MAX;
+pub const INT_LEAST32_MIN = __INT_LEAST32_MIN;
+pub const INT_LEAST32_MAX = __INT_LEAST32_MAX;
+pub const UINT_LEAST32_MAX = __UINT_LEAST32_MAX;
+pub const INT_FAST32_MIN = __INT_LEAST32_MIN;
+pub const INT_FAST32_MAX = __INT_LEAST32_MAX;
+pub const UINT_FAST32_MAX = __UINT_LEAST32_MAX;
+pub const INT16_MAX = INT16_C(@as(c_int, 32767));
+pub const INT16_MIN = -INT16_C(@as(c_int, 32767)) - @as(c_int, 1);
+pub const UINT16_MAX = UINT16_C(__helpers.promoteIntLiteral(c_int, 65535, .decimal));
+pub const __INT_LEAST16_MIN = INT16_MIN;
+pub const __INT_LEAST16_MAX = INT16_MAX;
+pub const __UINT_LEAST16_MAX = UINT16_MAX;
+pub const INT_LEAST16_MIN = __INT_LEAST16_MIN;
+pub const INT_LEAST16_MAX = __INT_LEAST16_MAX;
+pub const UINT_LEAST16_MAX = __UINT_LEAST16_MAX;
+pub const INT_FAST16_MIN = __INT_LEAST16_MIN;
+pub const INT_FAST16_MAX = __INT_LEAST16_MAX;
+pub const UINT_FAST16_MAX = __UINT_LEAST16_MAX;
+pub const INT8_MAX = INT8_C(@as(c_int, 127));
+pub const INT8_MIN = -INT8_C(@as(c_int, 127)) - @as(c_int, 1);
+pub const UINT8_MAX = UINT8_C(@as(c_int, 255));
+pub const __INT_LEAST8_MIN = INT8_MIN;
+pub const __INT_LEAST8_MAX = INT8_MAX;
+pub const __UINT_LEAST8_MAX = UINT8_MAX;
+pub const INT_LEAST8_MIN = __INT_LEAST8_MIN;
+pub const INT_LEAST8_MAX = __INT_LEAST8_MAX;
+pub const UINT_LEAST8_MAX = __UINT_LEAST8_MAX;
+pub const INT_FAST8_MIN = __INT_LEAST8_MIN;
+pub const INT_FAST8_MAX = __INT_LEAST8_MAX;
+pub const UINT_FAST8_MAX = __UINT_LEAST8_MAX;
+pub const __INTN_MIN = @compileError("unable to translate macro: undefined identifier `INT`"); // /Users/runner/work/_temp/244f7f65-7c6c-4590-a570-73f441223f08/zig-aarch64-macos-0.16.0/lib/include/stdint.h:764:10
+pub const __INTN_MAX = @compileError("unable to translate macro: undefined identifier `INT`"); // /Users/runner/work/_temp/244f7f65-7c6c-4590-a570-73f441223f08/zig-aarch64-macos-0.16.0/lib/include/stdint.h:765:10
+pub const __UINTN_MAX = @compileError("unable to translate macro: undefined identifier `UINT`"); // /Users/runner/work/_temp/244f7f65-7c6c-4590-a570-73f441223f08/zig-aarch64-macos-0.16.0/lib/include/stdint.h:766:9
+pub const __INTN_C = @compileError("unable to translate macro: undefined identifier `INT`"); // /Users/runner/work/_temp/244f7f65-7c6c-4590-a570-73f441223f08/zig-aarch64-macos-0.16.0/lib/include/stdint.h:767:10
+pub const __UINTN_C = @compileError("unable to translate macro: undefined identifier `UINT`"); // /Users/runner/work/_temp/244f7f65-7c6c-4590-a570-73f441223f08/zig-aarch64-macos-0.16.0/lib/include/stdint.h:768:9
+pub const INTPTR_MIN = -__INTPTR_MAX__ - @as(c_int, 1);
+pub const INTPTR_MAX = __INTPTR_MAX__;
+pub const UINTPTR_MAX = __UINTPTR_MAX__;
+pub const PTRDIFF_MIN = -__PTRDIFF_MAX__ - @as(c_int, 1);
+pub const PTRDIFF_MAX = __PTRDIFF_MAX__;
+pub const SIZE_MAX = __SIZE_MAX__;
+pub const INTMAX_MIN = -__INTMAX_MAX__ - @as(c_int, 1);
+pub const INTMAX_MAX = __INTMAX_MAX__;
+pub const UINTMAX_MAX = __UINTMAX_MAX__;
+pub const SIG_ATOMIC_MIN = __INTN_MIN(__SIG_ATOMIC_WIDTH__);
+pub const SIG_ATOMIC_MAX = __INTN_MAX(__SIG_ATOMIC_WIDTH__);
+pub const WINT_MIN = __UINTN_C(__WINT_WIDTH__, @as(c_int, 0));
+pub const WINT_MAX = __UINTN_MAX(__WINT_WIDTH__);
+pub const WCHAR_MAX = __WCHAR_MAX__;
+pub const WCHAR_MIN = __UINTN_C(__WCHAR_WIDTH__, @as(c_int, 0));
+pub inline fn INTMAX_C(v: anytype) @TypeOf(__INTMAX_C(v)) {
+    _ = &v;
+    return __INTMAX_C(v);
+}
+pub inline fn UINTMAX_C(v: anytype) @TypeOf(__UINTMAX_C(v)) {
+    _ = &v;
+    return __UINTMAX_C(v);
+}
+pub const SECP256K1_NO_BUILD = "";
+pub const SECP256K1_API = @compileError("unable to translate C expr: unexpected token 'extern'"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/zig-pkg/N-V-__8AAFwQbQAc-L8ZUw4rqyk_OWdYX4-V8crqiWlJ1dhl/include/secp256k1.h:164:21
+pub const SECP256K1_WARN_UNUSED_RESULT = @compileError("unable to translate macro: undefined identifier `__warn_unused_result__`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/zig-pkg/N-V-__8AAFwQbQAc-L8ZUw4rqyk_OWdYX4-V8crqiWlJ1dhl/include/secp256k1.h:173:11
+pub const SECP256K1_ARG_NONNULL = @compileError("unable to translate macro: undefined identifier `__nonnull__`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/zig-pkg/N-V-__8AAFwQbQAc-L8ZUw4rqyk_OWdYX4-V8crqiWlJ1dhl/include/secp256k1.h:178:11
+pub const SECP256K1_DEPRECATED = @compileError("unable to translate macro: undefined identifier `__deprecated__`"); // /Users/runner/work/nitro-crypto/nitro-crypto/packages/zig-engine-crypto/zig-pkg/N-V-__8AAFwQbQAc-L8ZUw4rqyk_OWdYX4-V8crqiWlJ1dhl/include/secp256k1.h:186:11
+pub const SECP256K1_FLAGS_TYPE_MASK = (@as(c_int, 1) << @as(c_int, 8)) - @as(c_int, 1);
+pub const SECP256K1_FLAGS_TYPE_CONTEXT = @as(c_int, 1) << @as(c_int, 0);
+pub const SECP256K1_FLAGS_TYPE_COMPRESSION = @as(c_int, 1) << @as(c_int, 1);
+pub const SECP256K1_FLAGS_BIT_CONTEXT_VERIFY = @as(c_int, 1) << @as(c_int, 8);
+pub const SECP256K1_FLAGS_BIT_CONTEXT_SIGN = @as(c_int, 1) << @as(c_int, 9);
+pub const SECP256K1_FLAGS_BIT_CONTEXT_DECLASSIFY = @as(c_int, 1) << @as(c_int, 10);
+pub const SECP256K1_FLAGS_BIT_COMPRESSION = @as(c_int, 1) << @as(c_int, 8);
+pub const SECP256K1_CONTEXT_NONE = SECP256K1_FLAGS_TYPE_CONTEXT;
+pub const SECP256K1_CONTEXT_VERIFY = SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_VERIFY;
+pub const SECP256K1_CONTEXT_SIGN = SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_SIGN;
+pub const SECP256K1_CONTEXT_DECLASSIFY = SECP256K1_FLAGS_TYPE_CONTEXT | SECP256K1_FLAGS_BIT_CONTEXT_DECLASSIFY;
+pub const SECP256K1_EC_COMPRESSED = SECP256K1_FLAGS_TYPE_COMPRESSION | SECP256K1_FLAGS_BIT_COMPRESSION;
+pub const SECP256K1_EC_UNCOMPRESSED = SECP256K1_FLAGS_TYPE_COMPRESSION;
+pub const SECP256K1_TAG_PUBKEY_EVEN = @as(c_int, 0x02);
+pub const SECP256K1_TAG_PUBKEY_ODD = @as(c_int, 0x03);
+pub const SECP256K1_TAG_PUBKEY_UNCOMPRESSED = @as(c_int, 0x04);
+pub const SECP256K1_TAG_PUBKEY_HYBRID_EVEN = @as(c_int, 0x06);
+pub const SECP256K1_TAG_PUBKEY_HYBRID_ODD = @as(c_int, 0x07);
+pub const SECP256K1_PREALLOCATED_H = "";
+pub const SECP256K1_RECOVERY_H = "";
+pub const secp256k1_context_struct = struct_secp256k1_context_struct;
