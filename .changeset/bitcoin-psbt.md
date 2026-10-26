@@ -1,5 +1,0 @@
----
-'@hzblj/crypto-bitcoin': minor
----
-
-PSBTs (BIP-174, version 0) and watch-only accounts. `crypto.chains.bitcoin.watchAccount({publicKey, path, fingerprint})` is an account of a key held elsewhere, and `watchAccount({extendedKey, path, fingerprint, change?, index?})` any address of an account whose extended public key a signer shared (`derivePublic`, on an engine with public derivation): its address, `createTransaction`, and `createPsbt(plan, {previousTransactions?})`, which writes each input's coin and BIP-32 derivation, the derivation on change, and each coin's previous transaction when given. Every account is one too, now with its wallet's `fingerprint`, and signs with `signPsbt(psbt)` (the inputs that spend its coins, SIGHASH_ALL only). `decodePsbt` reads a PSBT strictly, with each input's address, value and whether that value can be checked, and the fee; `finalizePsbt` verifies every signature on the engine before it extracts the transaction. The adapter now states `psbt: true`. Parity with `@scure/btc-signer` both ways.

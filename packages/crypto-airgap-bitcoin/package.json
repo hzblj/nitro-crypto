@@ -1,6 +1,6 @@
 {
   "name": "@hzblj/crypto-airgap-bitcoin",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Bitcoin air-gapped signing for @hzblj/crypto-airgap: PSBTs as crypto-psbt both ways, checked against the request and finalized by @hzblj/crypto-bitcoin, and accounts as crypto-account output descriptors. No UI, no camera.",
   "author": "Jan Blazej",
   "license": "MIT",

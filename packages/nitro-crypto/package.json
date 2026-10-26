@@ -1,6 +1,6 @@
 {
   "name": "@hzblj/nitro-crypto",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Native cryptography for React Native and Expo: a Zig engine behind Nitro Modules, with hashes, secp256k1, Ed25519, BIP-39 seeds and HD keys that never leave native memory, and a typed registry for chain adapters.",
   "author": "Jan Blazej",
   "license": "MIT",

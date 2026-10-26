@@ -1,6 +1,6 @@
 {
   "name": "@hzblj/crypto-airgap",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Air-gapped signing as data: Uniform Resources (BC-UR v2) with Bytewords, deterministic CBOR and fountain-coded multipart transport, a typed registry, and the public account types (crypto-hdkey, crypto-keypath, crypto-multi-accounts). Pure TypeScript with no dependencies: no UI, no camera, no native code; SHA-256 comes from the caller (the nitro-crypto engine).",
   "author": "Jan Blazej",
   "license": "MIT",
