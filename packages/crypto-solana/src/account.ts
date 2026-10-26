@@ -8,6 +8,8 @@ import {
 } from '@hzblj/nitro-crypto/adapter'
 
 import {addressFromPublicKey, type SolanaAddress, validateAddress} from './address'
+import type {SolanaInstruction} from './instructions'
+import {compileLegacyMessage, type SignedSolanaTransaction, serializeTransaction} from './transaction'
 
 /** Bytes, or text signed as its UTF-8 bytes. */
 export type SolanaMessage = string | Uint8Array
@@ -34,6 +36,17 @@ export type SolanaAccount<Id extends string = string> = {
     readonly message: SolanaMessage
     readonly signature: SolanaSignature
   }) => Promise<boolean>
+  /**
+   * A legacy transaction this account pays for and signs alone: the instructions compiled with the account as fee
+   * payer, the message signed, the wire bytes returned. An instruction that needs another signer is refused.
+   */
+  readonly signTransaction: (request: SolanaTransactionRequest) => Promise<SignedSolanaTransaction>
+}
+
+export type SolanaTransactionRequest = {
+  /** A blockhash from `getLatestBlockhash`, Base58. */
+  readonly recentBlockhash: string
+  readonly instructions: readonly SolanaInstruction[]
 }
 
 const messageBytes = (message: SolanaMessage) => (typeof message === 'string' ? utf8.encode(message) : message)
@@ -99,6 +112,21 @@ export const createAccount = <Id extends string>(
     path: key.path ?? '',
     publicKey,
     signMessage: async ({message}) => key.sign(messageBytes(message)),
+    signTransaction: async ({instructions, recentBlockhash}) => {
+      const message = compileLegacyMessage({feePayer: address, instructions, recentBlockhash})
+      const others = message.signers.filter(signer => signer !== address)
+
+      if (others.length > 0) {
+        throw new CryptoError(
+          'INVALID_ARGUMENT',
+          `This account signs alone; an instruction also needs ${others.join(', ')}.`
+        )
+      }
+
+      const signature = key.sign(message.bytes)
+
+      return {serialized: serializeTransaction(message.bytes, [signature]), signature: base58.encode(signature)}
+    },
     verifyMessage: async ({message, signature}) => verifySigner(context, address, message, signature),
   })
 }

@@ -33,6 +33,7 @@ pub const Capability = enum(u6) {
     bip39,
     @"bip32-secp256k1",
     @"slip10-ed25519",
+    @"mnemonic-generate",
 
     pub fn bit(capability: Capability) u64 {
         return @as(u64, 1) << @intFromEnum(capability);
@@ -57,13 +58,15 @@ test "capability bits match the header" {
     try testing.expectEqual(@as(u64, 1 << 0), Capability.random.bit());
     try testing.expectEqual(@as(u64, 1 << 3), Capability.keccak256.bit());
     try testing.expectEqual(@as(u64, 1 << 12), Capability.@"slip10-ed25519".bit());
-    try testing.expectEqual(@as(u64, (1 << 13) - 1), capabilities());
+    try testing.expectEqual(@as(u64, 1 << 13), Capability.@"mnemonic-generate".bit());
+    try testing.expectEqual(@as(u64, (1 << 14) - 1), capabilities());
 }
 
 test "capability names" {
     try testing.expectEqualStrings("random", capabilityName(0).?);
     try testing.expectEqualStrings("secp256k1-recovery", capabilityName(8).?);
-    try testing.expectEqual(@as(?[:0]const u8, null), capabilityName(13));
+    try testing.expectEqualStrings("mnemonic-generate", capabilityName(13).?);
+    try testing.expectEqual(@as(?[:0]const u8, null), capabilityName(14));
     try testing.expectEqual(@as(?[:0]const u8, null), capabilityName(1000));
 }
 

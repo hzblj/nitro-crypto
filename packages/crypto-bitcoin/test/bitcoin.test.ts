@@ -76,12 +76,12 @@ describe('accounts', () => {
     wallet.dispose()
   })
 
-  test('accounts sign nothing: Bitcoin message signing is not implemented, and the adapter says so', async () => {
+  test('accounts sign no messages: Bitcoin message signing is not implemented, and the adapter says so', async () => {
     const wallet = await crypto.createEphemeralWallet()
     const account = await wallet.deriveAccount({chain: 'bitcoin'})
     assert.equal('signMessage' in account, false)
     assert.equal(bitcoinAdapter().features.messageSigning, false)
-    assert.deepEqual(bitcoinAdapter().formats.signature, [])
+    assert.deepEqual(bitcoinAdapter().formats.signature, ['p2wpkh-bip143'])
     wallet.dispose()
   })
 

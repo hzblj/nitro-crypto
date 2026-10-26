@@ -22,6 +22,7 @@ export const CAPABILITIES = [
   'bip39',
   'bip32-secp256k1',
   'slip10-ed25519',
+  'mnemonic-generate',
 ] as const
 
 export type Capability = (typeof CAPABILITIES)[number]

@@ -47,6 +47,14 @@ inline ByteView view(const std::shared_ptr<ArrayBuffer>& buffer) {
   return ByteView{data, size};
 }
 
+/// Overwrites bytes that held a secret, through a volatile pointer so the stores are not optimized away as dead.
+inline void wipe(uint8_t* data, size_t size) noexcept {
+  volatile uint8_t* bytes = data;
+  for (size_t index = 0; index < size; index++) {
+    bytes[index] = 0;
+  }
+}
+
 /// Bytes the bridge owns, zeroized when they go: a mnemonic or passphrase on its way to a background thread.
 class SecretBytes {
 public:
@@ -57,11 +65,7 @@ public:
   SecretBytes(const SecretBytes&) = delete;
   SecretBytes& operator=(const SecretBytes&) = delete;
   ~SecretBytes() {
-    // Through a volatile pointer, so the stores are not optimized away as dead.
-    volatile uint8_t* bytes = _bytes.data();
-    for (size_t index = 0; index < _bytes.size(); index++) {
-      bytes[index] = 0;
-    }
+    wipe(_bytes.data(), _bytes.size());
   }
 
   const char* chars() const noexcept {
@@ -73,6 +77,20 @@ public:
 
 private:
   std::vector<uint8_t> _bytes;
+};
+
+/// A fixed buffer on the stack for a secret on its way out of the engine, zeroized on every path out of its scope.
+template <size_t Size>
+class StackSecret {
+public:
+  StackSecret() = default;
+  StackSecret(const StackSecret&) = delete;
+  StackSecret& operator=(const StackSecret&) = delete;
+  ~StackSecret() {
+    wipe(bytes, Size);
+  }
+
+  uint8_t bytes[Size] = {};
 };
 
 /// The engine writes into native memory the bridge then hands to JS without a copy.

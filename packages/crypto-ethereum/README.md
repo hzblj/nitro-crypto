@@ -4,8 +4,8 @@
 [![license](https://img.shields.io/npm/l/@hzblj/crypto-ethereum.svg)](https://github.com/hzblj/nitro-crypto/blob/main/LICENSE)
 
 Ethereum and every EVM chain for [`@hzblj/nitro-crypto`](https://www.npmjs.com/package/@hzblj/nitro-crypto):
-secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 message signatures and signer recovery. The keys stay in
-the native engine; this package is TypeScript over it.
+secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 message signatures and signer recovery, EIP-1559
+transactions and ERC-20 call data. The keys stay in the native engine; this package is TypeScript over it.
 
 > [!WARNING]
 > **Not security audited. Never use with real funds.**
@@ -30,6 +30,38 @@ crypto.chains.ethereum.recoverMessageAddress({message: 'Hello from Expo', signat
 crypto.chains.ethereum.validateAddress('0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed') // {valid, checksum: 'valid', normalized}
 ```
 
+### Transactions
+
+Accounts sign EIP-1559 (type 2) transactions for their adapter's chain id; fetching the nonce and fees and
+broadcasting are the app's, over any JSON-RPC client:
+
+```ts
+const crypto = createCryptoEngine({adapters: [ethereumAdapter({id: 'sepolia', chainId: 11155111, name: 'Sepolia'})]})
+const {erc20} = crypto.chains.sepolia
+const account = await wallet.deriveAccount({chain: 'sepolia'})
+
+const {serialized, hash} = await account.signTransaction({
+  to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+  value: 10n ** 15n, // wei
+  nonce, // eth_getTransactionCount(address, 'pending')
+  gas: 21000n,
+  maxFeePerGas, // base fee and tip together
+  maxPriorityFeePerGas,
+})
+// eth_sendRawTransaction(serialized); the receipt is eth_getTransactionReceipt(hash)
+
+// An ERC-20 transfer is a call to the token contract, with value 0:
+const data = erc20.transferData(recipient, 5_000_000n) // 5 USDC, 6 decimals
+await account.signTransaction({to: usdc, data, nonce, gas, maxFeePerGas, maxPriorityFeePerGas})
+
+// And a balance is an eth_call:
+const balance = erc20.decodeUint256(await ethCall({data: erc20.balanceOfData(address), to: usdc}))
+```
+
+A transaction carries the adapter's chain id; a request naming another is refused, so an adapter configured for a
+test network never signs for mainnet. `serializeTransaction(request)` returns the unsigned envelope (its Keccak-256 is
+what is signed), and with a signature, the signed one.
+
 | Request | Path |
 | --- | --- |
 | `{index}` (and `account`, both 0 by default) | `m/44'/60'/{account}'/0/{index}`, MetaMask's |
@@ -43,8 +75,11 @@ crypto.chains.ethereum.validateAddress('0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeA
 
 Signatures are byte-for-byte viem's for the same key and message (RFC 6979, lower S), and both libraries verify each
 other's. Messages are text (signed as UTF-8) or raw bytes. `verifyMessage` is `false` for any signature that does not
-recover to the account, including a malformed one.
+recover to the account, including a malformed one. Signed transactions are byte-for-byte viem's too, and viem recovers
+their sender.
 
-**Not in this version:** EIP-712 typed data, and transaction signing. The adapter's `features` say so.
+**Not in this version:** EIP-712 typed data, legacy (type 0) and EIP-2930 (type 1) transactions, access lists,
+contract creation, and any network access (nonces, fees, gas estimates, broadcasting). The adapter's `features` say
+so.
 
 [Documentation](https://github.com/hzblj/nitro-crypto#readme) · [Security](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md)

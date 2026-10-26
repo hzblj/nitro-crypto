@@ -1,6 +1,7 @@
 # @hzblj/crypto-bitcoin
 
-Bitcoin: BIP-84 native SegWit accounts on four networks, validation of every address type. Signs nothing. Parity: BIP-84 vectors, @scure/btc-signer.
+Bitcoin: BIP-84 native SegWit accounts on four networks, validation of every address type, P2WPKH payments (coin
+selection, fees, BIP-143 signing). No message signing. Parity: BIP-84 and BIP-143 vectors, @scure/btc-signer.
 
 TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, no other adapter. Keys come from the
 `KeySource` a wallet hands `deriveAccount`; the primitives from the `AdapterContext` `create` receives.
@@ -11,7 +12,9 @@ TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, 
 | `src/networks.ts` | The four networks: Bech32 prefix, coin type, legacy version bytes. |
 | `src/segwit.ts` | Witness programs to and from addresses, BIP-173 and BIP-350 rules, output scripts. |
 | `src/address.ts` | P2WPKH from a public key; validation of SegWit and legacy addresses. |
-| `src/account.ts` | `BitcoinAccount`: no `signMessage`, on purpose. |
+| `src/account.ts` | `BitcoinAccount`: `createTransaction` and `signTransaction` over its own address; no `signMessage`, on purpose. |
+| `src/transaction.ts` | Payments: coin selection, the vsize estimate and dust limits, BIP-143 digests, serialization (BIP-144), signing. The plan is rechecked before signing. |
+| `src/der.ts` | A 64-byte `r \|\| s` signature in strict DER (BIP-66). |
 | `src/path.ts` | The account request and its derivation path. |
 | `src/version.ts` | `VERSION`, synced from package.json by `scripts/sync-versions.mjs`; a test holds them equal. |
 | `test/` | Published vectors, and parity on many keys with an independent library, all on the real engine (WebAssembly). |

@@ -163,7 +163,8 @@ describe('adapter', () => {
   test('describes itself honestly, and refuses unknown clusters', () => {
     const adapter = solanaAdapter()
     assert.equal(adapter.curve, 'ed25519')
-    assert.equal(adapter.features.transactionSigning, false)
+    assert.equal(adapter.features.transactionSigning, true)
+    assert.equal(adapter.features.versionedTransactions, false)
     assert.equal(solanaAdapter({cluster: 'devnet'}).name, 'Solana devnet')
     assert.throws(
       () => solanaAdapter({cluster: 'localnet' as 'devnet'}),

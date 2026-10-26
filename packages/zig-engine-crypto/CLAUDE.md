@@ -26,7 +26,7 @@ threading, the compatibility policy.
 | `src/hash/ripemd160.zig` | RIPEMD-160, which Zig's library lacks. |
 | `src/curves/secp256k1.zig`, `.h`, `_prefix.h` | The only file that calls libsecp256k1; its bindings; every libsecp256k1 symbol renamed `nc_secp256k1_*`. |
 | `src/curves/ed25519.zig` | Zig's Ed25519, with errors mapped. |
-| `src/derivation/bip39.zig`, `bip39_english.txt` | Mnemonics; word lookups scan all 2048 entries with masks. The list is pinned by SHA-256. |
+| `src/derivation/bip39.zig`, `bip39_english.txt` | Mnemonics: generation from OS entropy, validation, seeds; word lookups scan all 2048 entries with masks. The list is pinned by SHA-256. |
 | `src/derivation/path.zig`, `bip32.zig`, `slip10.zig` | Derivation paths (strict, canonical), BIP-32 for secp256k1, SLIP-0010 for Ed25519. |
 | `src/vault/handles.zig` | The vault: a fixed table of generation-checked handles, zeroed on release (docs/adr/0004). |
 | `src/vault/keys.zig` | Operations on handles: seeds, derivation, generation, import, public keys, signing. |
@@ -41,6 +41,8 @@ threading, the compatibility policy.
   that needs something new gets a new primitive with its own capability bit (docs/adding-an-adapter.md).
 - **No secret leaves.** No function returns a seed or a private key. A secret is copied out of the vault onto the
   stack for one operation and zeroed before it returns (`defer secure.zero(...)`), on every path, errors included.
+  The one exception is `nc_mnemonic_generate`: a fresh mnemonic, handed out once for backup and never kept
+  (docs/adr/0005). Nothing else joins it without an ADR of its own.
 - **No allocator for secrets.** The vault is a fixed table; buffers are stack arrays.
 - **No secret-dependent branches in code of ours** (word lookups, comparisons). libsecp256k1 and Zig's Ed25519 make
   their own claims.

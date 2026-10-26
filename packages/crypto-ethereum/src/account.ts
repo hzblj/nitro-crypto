@@ -4,6 +4,7 @@ import {type Address, addressFromPublicKey, validateAddress} from './address'
 import type {EthereumNetwork} from './config'
 import {hashMessage} from './message'
 import {parseSignature, serializeSignature} from './signature'
+import {type EthereumTransactionRequest, type SignedEthereumTransaction, signTransaction} from './transaction'
 import type {Hex, SignableMessage} from './types'
 
 /** An Ethereum account whose key the engine holds. */
@@ -19,6 +20,11 @@ export type EthereumAccount<Id extends string = string> = {
   readonly signMessage: (request: {readonly message: SignableMessage}) => Promise<Hex>
   /** Whether `signature` is this account's signature of `message`. */
   readonly verifyMessage: (request: {readonly message: SignableMessage; readonly signature: Hex}) => Promise<boolean>
+  /**
+   * Signs an EIP-1559 (type 2) transaction for this account's network: the result is what `eth_sendRawTransaction`
+   * takes, and its hash. Nothing is sent; fetching the nonce and fees and broadcasting are the app's.
+   */
+  readonly signTransaction: (request: EthereumTransactionRequest) => Promise<SignedEthereumTransaction>
 }
 
 /** The signer of an EIP-191 message, or `undefined` when the signature recovers no key. */
@@ -82,6 +88,7 @@ export const createAccount = <Id extends string>(
     path: key.path ?? '',
     publicKey: hex.encode(uncompressed, {prefix: true}) as Hex,
     signMessage: async ({message}) => serializeSignature(key.sign(hashMessage(message, context.hash.keccak256))),
+    signTransaction: async request => signTransaction(request, network, context.hash.keccak256, key),
     verifyMessage: async ({message, signature}) => verifySigner(context, address, message, signature),
   })
 }

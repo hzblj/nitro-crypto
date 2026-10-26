@@ -25,7 +25,8 @@ Android packaging, and the prebuilt engine. Three entry points:
 ## Rules
 
 - **Bytes stay bytes.** `Uint8Array` in and out; `toArrayBuffer` passes a view's buffer without a copy when the view
-  covers it. Secrets cross only as bytes the facade overwrites afterwards (`withSecretBytes`).
+  covers it. Secrets cross only as bytes the facade overwrites afterwards (`withSecretBytes` going in; going out,
+  only `mnemonic.generate`, which decodes and then wipes the buffer the host returned).
 - **The facade is host-agnostic.** Nothing in `src/engine` or `src/adapters` imports Nitro; only `src/host/nitro.ts`
   and `src/index.ts` do. That is what lets every test run on WebAssembly.
 - **Errors are `CryptoError`.** Native calls go through `native()`/`nativeAsync()`; a native message is never passed

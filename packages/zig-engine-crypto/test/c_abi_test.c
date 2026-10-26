@@ -64,6 +64,7 @@ static void test_version_and_capabilities(void) {
     }
     CHECK(strcmp(nc_capability_name(3), "keccak256") == 0);
     CHECK(strcmp(nc_capability_name(12), "slip10-ed25519") == 0);
+    CHECK((caps & NC_CAP_MNEMONIC_GENERATE) && strcmp(nc_capability_name(13), "mnemonic-generate") == 0);
 }
 
 static void test_status_names(void) {
@@ -167,6 +168,44 @@ static void test_mnemonic(void) {
     const char *unknown = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon xyzzy";
     CHECK_STATUS(NC_ERR_INVALID_MNEMONIC, nc_mnemonic_validate(unknown, strlen(unknown)));
     CHECK_STATUS(NC_ERR_INVALID_MNEMONIC, nc_mnemonic_validate(NULL, 0));
+}
+
+static size_t count_words(const char *sentence, size_t length) {
+    size_t words = length > 0 ? 1 : 0;
+    for (size_t i = 0; i < length; i++) words += sentence[i] == ' ';
+    return words;
+}
+
+_Static_assert(NC_MNEMONIC_MAX_LENGTH == 24 * 9 - 1, "the longest mnemonic: 24 eight-letter words, 23 spaces");
+
+static void test_mnemonic_generate(void) {
+    uint32_t baseline = nc_handle_count();
+    char out[NC_MNEMONIC_MAX_LENGTH], other[NC_MNEMONIC_MAX_LENGTH];
+    size_t written = 0, other_written = 0;
+    static const uint32_t counts[] = {12, 15, 18, 21, 24};
+
+    for (size_t i = 0; i < sizeof counts / sizeof counts[0]; i++) {
+        CHECK_STATUS(NC_OK, nc_mnemonic_generate(counts[i], out, sizeof out, &written));
+        CHECK(count_words(out, written) == counts[i]);
+        CHECK_STATUS(NC_OK, nc_mnemonic_validate(out, written));
+
+        /* What it generates seeds a wallet like any mnemonic. */
+        nc_handle seed = 0;
+        CHECK_STATUS(NC_OK, nc_seed_from_mnemonic(out, written, NULL, 0, &seed));
+        CHECK_STATUS(NC_OK, nc_handle_destroy(seed));
+    }
+
+    CHECK_STATUS(NC_OK, nc_mnemonic_generate(12, out, 12 * 9 - 1, &written));
+    CHECK_STATUS(NC_OK, nc_mnemonic_generate(12, other, sizeof other, &other_written));
+    CHECK(written != other_written || memcmp(out, other, written) != 0);
+
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_mnemonic_generate(12, out, 12 * 9 - 2, &written));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_mnemonic_generate(13, out, sizeof out, &written));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_mnemonic_generate(12, NULL, sizeof out, &written));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_mnemonic_generate(12, out, sizeof out, NULL));
+    CHECK(nc_handle_count() == baseline);
+    memset(out, 0, sizeof out);
+    memset(other, 0, sizeof other);
 }
 
 /* The BIP-32 fingerprint of "abandon ... about" with no passphrase, as BIP-84's and BIP-86's examples show it. */
@@ -355,6 +394,7 @@ int main(void) {
     test_secp256k1_public();
     test_ed25519_verify();
     test_mnemonic();
+    test_mnemonic_generate();
     test_seed_and_ethereum_key();
     test_solana_key();
     test_handle_lifecycle();

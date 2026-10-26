@@ -4,8 +4,8 @@
 [![license](https://img.shields.io/npm/l/@hzblj/crypto-solana.svg)](https://github.com/hzblj/nitro-crypto/blob/main/LICENSE)
 
 Solana for [`@hzblj/nitro-crypto`](https://www.npmjs.com/package/@hzblj/nitro-crypto): Ed25519 accounts derived with
-SLIP-0010, Base58 addresses, and signatures of message bytes. The keys stay in the native engine; this package is
-TypeScript over it.
+SLIP-0010, Base58 addresses, signatures of message bytes, and legacy transactions for SOL and SPL token transfers.
+The keys stay in the native engine; this package is TypeScript over it.
 
 > [!WARNING]
 > **Not security audited. Never use with real funds.**
@@ -39,6 +39,46 @@ signature and adds no off-chain message header. Addresses and signatures match `
 `validateAddress` accepts the canonical Base58 of any 32 bytes, including program-derived addresses, which are off
 the curve.
 
-**Not in this version:** transaction serialization and signing, and off-chain message headers.
+## Transactions
+
+The chain builds instructions; the account compiles them into a legacy message with itself as the fee payer, signs it
+and returns the wire bytes. Fetching a blockhash and sending are the app's, over any RPC client.
+
+```ts
+const solana = crypto.chains.solana
+const {value} = await rpc('getLatestBlockhash') // {blockhash, lastValidBlockHeight}
+
+// SOL
+const sol = await account.signTransaction({
+  instructions: [solana.instructions.transfer({from: account.address, lamports: 10_000_000n, to: recipient})],
+  recentBlockhash: value.blockhash,
+})
+
+// An SPL token, to the recipient's associated token account (created, idempotently, when it does not exist)
+const usdc = await account.signTransaction({
+  instructions: solana.instructions.transferToken({amount: 1_500_000n, decimals: 6, from: account.address, mint, to: recipient}),
+  recentBlockhash: value.blockhash,
+})
+
+usdc.signature // Base58: the transaction id
+await rpc('sendTransaction', [Buffer.from(usdc.serialized).toString('base64'), {encoding: 'base64'}])
+```
+
+| On the chain | What it is |
+| --- | --- |
+| `instructions.transfer` | System Program `Transfer` |
+| `instructions.transferChecked` | Token program `TransferChecked`, between two token accounts |
+| `instructions.createAssociatedTokenAccountIdempotent` | Associated Token Account `CreateIdempotent` |
+| `instructions.transferToken` | Wallet to wallet: their associated token accounts, the recipient's created if needed |
+| `associatedTokenAddress`, `findProgramAddress`, `isOnCurve` | Program-derived addresses, in TypeScript over the engine's SHA-256 |
+| `compileMessage` | The legacy message bytes, for `getFeeForMessage` |
+
+`SYSTEM_PROGRAM`, `TOKEN_PROGRAM`, `TOKEN_2022_PROGRAM` and `ASSOCIATED_TOKEN_PROGRAM` are exported. Accounts are
+merged and ordered as the runtime requires and in `@solana/kit`'s order within each role, so the message and the
+signed transaction are byte for byte what kit produces for the same instructions and key. The account signs alone:
+an instruction that needs another signer is refused, and so is a transaction over 1232 bytes.
+
+**Not in this version:** versioned (v0) transactions and address lookup tables, durable nonces, compute budget
+instructions (add them yourself with any program's instruction), and off-chain message headers.
 
 [Documentation](https://github.com/hzblj/nitro-crypto#readme) · [Security](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md)

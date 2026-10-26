@@ -71,9 +71,14 @@ export interface NitroCrypto extends HybridObject<Native> {
 
   /** Throws `NC_ERR_INVALID_MNEMONIC` or `NC_ERR_MNEMONIC_CHECKSUM`. Takes NFKD-normalized UTF-8. */
   validateMnemonic(mnemonic: ArrayBuffer): void
+  /**
+   * A fresh mnemonic of `wordCount` words from the OS CSPRNG, as UTF-8 bytes (lowercase ASCII, single spaces), for
+   * the user to write down. The engine keeps no copy; the facade decodes it and overwrites these bytes.
+   */
+  generateMnemonic(wordCount: number): ArrayBuffer
   /** A seed from a fresh mnemonic of `wordCount` words. Runs PBKDF2 on a background thread. */
   generateSeed(wordCount: number, passphrase: ArrayBuffer): Promise<NitroSeed>
-  /** A seed from a known mnemonic, for published test vectors. Runs PBKDF2 on a background thread. */
+  /** A seed from a known mnemonic: a restored wallet, or a published test vector. Runs PBKDF2 on a background thread. */
   seedFromMnemonic(mnemonic: ArrayBuffer, passphrase: ArrayBuffer): Promise<NitroSeed>
 
   generateKey(curve: Curve): NitroKey

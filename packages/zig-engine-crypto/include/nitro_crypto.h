@@ -16,7 +16,9 @@
  *   owns, together with its capacity; a function that writes a variable length reports it through `written`.
  *   Strings returned by nc_engine_version(), nc_status_name() and nc_capability_name() are static.
  *
- *   Secret material (seeds, private keys) stays inside the engine, addressed by an opaque nc_handle. A handle
+ *   Secret material (seeds, private keys) stays inside the engine, addressed by an opaque nc_handle. The one
+ *   secret that comes out is a freshly generated mnemonic (nc_mnemonic_generate), once, for the user to write
+ *   down; the caller owns that copy and should zero it when done. A handle
  *   is released with nc_handle_destroy(), which zeroizes the secret before the slot is reused. Handles carry a
  *   generation, so a destroyed or forged handle is rejected (NC_ERR_INVALID_HANDLE) rather than aliasing a
  *   newer secret. Releasing every handle is the caller's job; the engine holds at most NC_HANDLE_CAPACITY.
@@ -88,6 +90,7 @@ const char *nc_build_info(void);
 #define NC_CAP_BIP39 (1ull << 10)
 #define NC_CAP_BIP32_SECP256K1 (1ull << 11)
 #define NC_CAP_SLIP10_ED25519 (1ull << 12)
+#define NC_CAP_MNEMONIC_GENERATE (1ull << 13)
 
 /** Every capability this build provides, as NC_CAP_* bits. */
 uint64_t nc_capabilities(void);
@@ -183,6 +186,19 @@ uint32_t nc_handle_count(void);
  * the English list, means lowercase ASCII). NC_ERR_INVALID_MNEMONIC or NC_ERR_MNEMONIC_CHECKSUM when it fails.
  */
 nc_status nc_mnemonic_validate(const char *mnemonic, size_t mnemonic_len);
+
+/** The longest English mnemonic: 24 words of eight letters and 23 spaces. A buffer this size fits any. */
+#define NC_MNEMONIC_MAX_LENGTH 215
+
+/**
+ * Generates a fresh mnemonic of `word_count` words (12, 15, 18, 21 or 24) from the OS CSPRNG and writes it into
+ * `out`: lowercase ASCII words separated by single spaces, not NUL-terminated, its length through `written`. The
+ * engine keeps no copy. `out_len` must fit the longest sentence of that many words (word_count * 9 - 1 bytes),
+ * checked before any entropy is drawn, so NC_ERR_BUFFER_TOO_SMALL never depends on the words drawn. This is the
+ * one function that hands a secret out: a wallet shows it once for backup, and restores it later through
+ * nc_seed_from_mnemonic. The caller should zero `out` when done with it.
+ */
+nc_status nc_mnemonic_generate(uint32_t word_count, char *out, size_t out_len, size_t *written);
 
 /**
  * Generates a fresh mnemonic of `word_count` words (12, 15, 18, 21 or 24) from the OS CSPRNG and stores its

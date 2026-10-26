@@ -36,7 +36,7 @@ reactor. Every artifact is reproducible and checked (`yarn engine`, `yarn engine
 `src/specs/nitro-crypto.nitro.ts`:
 
 - `NitroCrypto`, the engine: version and capabilities, randomness, hashes, HMAC, the stateless curve operations,
-  mnemonic validation, and the factories for seeds and keys.
+  mnemonic generation and validation, and the factories for seeds and keys.
 - `NitroSeed`, a BIP-39 seed: its fingerprint, and `deriveKey(scheme, path)`.
 - `NitroKey`, a private key: its curve, its public key, `sign`.
 
@@ -81,12 +81,15 @@ capabilities the engine has), so a bad list fails whole, naming the adapter and 
 
 | Secret | Where it lives | How long |
 | --- | --- | --- |
-| A generated mnemonic | The stack of the native call that turns it into a seed | That call |
+| A mnemonic `createEphemeralWallet()` generates | The stack of the native call that turns it into a seed | That call |
+| A mnemonic `crypto.mnemonic.generate()` returns | The engine's stack, then the bridge's stack buffer, then a JS string | The engine and the bridge zero theirs before returning, the facade overwrites its bytes; the string is the app's |
 | A seed, a private key | One slot of the engine's handle table | Until `dispose()`, garbage collection, or the process ends |
 | A copy for one operation | The engine's stack | That operation, zeroed before it returns |
 | A mnemonic or passphrase the app passes in | The app's strings; the facade's UTF-8 bytes; the bridge's copy | The facade and the bridge overwrite theirs; the app's are the app's |
 
-JavaScript holds `NitroSeed` and `NitroKey` objects, never key bytes. See [SECURITY.md](../SECURITY.md).
+JavaScript holds `NitroSeed` and `NitroKey` objects, never key bytes. The one secret that reaches it is a mnemonic the
+app asked for, to show the user once ([ADR 0005](adr/0005-mnemonic-generation-for-backup.md)). See
+[SECURITY.md](../SECURITY.md).
 
 ## Packaging
 

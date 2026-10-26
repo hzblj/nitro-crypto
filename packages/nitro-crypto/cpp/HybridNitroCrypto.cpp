@@ -156,6 +156,16 @@ void HybridNitroCrypto::validateMnemonic(const std::shared_ptr<ArrayBuffer>& mne
   check(nc_mnemonic_validate(reinterpret_cast<const char*>(text.data), text.size));
 }
 
+std::shared_ptr<ArrayBuffer> HybridNitroCrypto::generateMnemonic(double wordCount) {
+  const uint32_t words = static_cast<uint32_t>(lengthOf(wordCount));
+  // The sentence lands on this stack, which is zeroized however the call leaves; JS receives its own copy, which the
+  // facade overwrites once it has decoded it.
+  StackSecret<NC_MNEMONIC_MAX_LENGTH> sentence;
+  size_t written = 0;
+  check(nc_mnemonic_generate(words, reinterpret_cast<char*>(sentence.bytes), NC_MNEMONIC_MAX_LENGTH, &written));
+  return ArrayBuffer::copy(sentence.bytes, written);
+}
+
 std::shared_ptr<Promise<std::shared_ptr<HybridNitroSeedSpec>>>
 HybridNitroCrypto::generateSeed(double wordCount, const std::shared_ptr<ArrayBuffer>& passphrase) {
   const uint32_t words = static_cast<uint32_t>(lengthOf(wordCount));

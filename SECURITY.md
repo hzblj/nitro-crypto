@@ -20,7 +20,8 @@ changelog and a GitHub advisory once a fixed version is published.
 
 - JavaScript never holding key material in ordinary use. Seeds and private keys live in the engine's native memory,
   behind opaque handles; JavaScript holds objects, public keys, addresses and signatures. A leak through the JS heap,
-  a debugger attached to JavaScript, a crash report of JS state or a log line does not carry a key.
+  a debugger attached to JavaScript, a crash report of JS state or a log line does not carry a key. The exception is
+  a mnemonic the app asks for (`crypto.mnemonic.generate`) or passes in to restore a wallet: that string is the app's.
 - Secrets not outliving their use inside the engine: a disposed key or seed is zeroized, its slot reused only under a
   new generation, so a stale handle never reaches another secret.
 - Errors never carrying inputs: native errors are status names (`NC_ERR_INVALID_LENGTH`), and the facade drops any
@@ -35,20 +36,24 @@ changelog and a GitHub advisory once a fixed version is published.
   memory as easily as JavaScript's.
 - Hardware isolation. These keys are **not** in Secure Enclave or StrongBox: neither holds secp256k1 or Ed25519 keys
   for general signing, and nothing here pretends otherwise.
-- Persistence, backup and recovery: there is none (see below).
+- Persistence and secure storage: there is none (see below). Backup is the user's: the engine can hand out a fresh
+  mnemonic once, and restore a wallet from one.
 - Side channels beyond what the underlying implementations claim (see "Primitives").
 - Physical and fault attacks.
 
 ## Key lifecycle
 
 1. **Created** inside the engine: from 16 to 32 bytes of OS entropy turned into a BIP-39 mnemonic and its seed
-   (`createEphemeralWallet()`), from a mnemonic for test vectors (`createEphemeralWallet({mnemonic})`), from fresh
-   entropy for a lone key (`keys.generate`), or from raw bytes for interoperability (`keys.importRawSecret`, which is
-   absent from every ordinary flow and named to say so).
+   (`createEphemeralWallet()`), from a mnemonic the user wrote down, one `crypto.mnemonic.generate()` returned or a
+   test vector (`createEphemeralWallet({mnemonic})`), from fresh entropy for a lone key (`keys.generate`), or from raw
+   bytes for interoperability (`keys.importRawSecret`, which is absent from every ordinary flow and named to say so).
 2. **Held** in a fixed table inside the engine (1024 slots, no allocator), addressed by a 64-bit handle that encodes a
    slot and a generation. Each operation copies the one secret it needs onto the stack, uses it and zeroes the copy.
 3. **Used**: derivation (BIP-32, SLIP-0010) creates new key handles; signing returns a signature. No operation returns
-   a secret. A generated mnemonic exists only on the stack of the call that turns it into a seed.
+   a seed or a private key. The mnemonic behind `createEphemeralWallet()` exists only on the stack of the call that
+   turns it into a seed; `crypto.mnemonic.generate()` is the one call that hands a mnemonic out, once, for the user to
+   write down (docs/adr/0005). The engine keeps no copy of it, the bridge zeroes its stack buffer, and the facade
+   overwrites its bytes after decoding them; the string it returns is the app's.
 4. **Destroyed** by `dispose()` on a key or a wallet (a wallet disposes every key derived from it), or when the
    native object is garbage-collected: the slot is zeroized and freed. A reload, a restart or an uninstall ends the
    process and the memory with it. **Nothing is ever persisted.**
@@ -60,14 +65,22 @@ changelog and a GitHub advisory once a fixed version is published.
   strings and native UI buffers before the facade encodes it; the facade overwrites its own byte copies after use,
   and the C++ bridge zeroes its copies, but the JS engine may have made others. Swap and core dumps are the
   operating system's.
-- **No secure storage.** Persistence, biometric authorization, passkeys, encrypted backup, recovery and mnemonic
-  export each need their own design and review. They are deliberately absent from v1.
-- **Mnemonic import is for test vectors.** It takes a mnemonic across the bridge as bytes it overwrites afterwards,
-  but the string the app held is outside its control.
+- **No secure storage.** Persistence, biometric authorization, passkeys and encrypted backup each need their own design
+  and review, and are deliberately absent from the library. An app that keeps a mnemonic decides where: the platform's
+  keychain, behind its biometric prompt, is the least it should do.
+- **A generated or restored mnemonic is a JavaScript string.** `crypto.mnemonic.generate()` returns one, and
+  `createEphemeralWallet({mnemonic})` takes one across the bridge as bytes it overwrites afterwards. Strings cannot be
+  wiped: the one the app holds, and any copies the JS engine made, are outside the library's control.
 - **Spin lock, not a mutex.** Handle-table operations are microseconds long; under heavy contention a thread spins,
   then yields.
-- **Chains: what is not implemented is refused, not imitated.** Bitcoin accounts have no `signMessage`; Ethereum's
-  typed data (EIP-712) and transactions, Bitcoin's PSBT, BIP-322 and Taproot, and Solana transactions are not in v1.
+- **Chains: what is not implemented is refused, not imitated.** The adapters build and sign Ethereum EIP-1559
+  transactions (ether and ERC-20 transfers), Bitcoin P2WPKH payments and Solana legacy transactions (SOL and SPL
+  transfers). Bitcoin accounts have no `signMessage`; Ethereum's typed data (EIP-712), legacy and access-list
+  transactions, Bitcoin's PSBT, BIP-322 and Taproot, and Solana's versioned transactions are not implemented.
+- **The example wallet is a testnet demo.** `apps/example` keeps its recovery phrase in the platform keychain
+  (`expo-secure-store`, this device only, behind Face ID or the passcode), reads it into JavaScript to unlock, and
+  wipes the engine's seed and keys after a minute in the background. That is the least a wallet should do, not an
+  audited design; it talks to Sepolia, Bitcoin testnet4 and Solana devnet only.
 
 ## Primitives and dependencies
 

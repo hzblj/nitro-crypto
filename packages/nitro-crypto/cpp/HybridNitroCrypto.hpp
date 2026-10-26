@@ -37,6 +37,7 @@ public:
                      const std::shared_ptr<ArrayBuffer>& signature) override;
 
   void validateMnemonic(const std::shared_ptr<ArrayBuffer>& mnemonic) override;
+  std::shared_ptr<ArrayBuffer> generateMnemonic(double wordCount) override;
   std::shared_ptr<Promise<std::shared_ptr<HybridNitroSeedSpec>>>
   generateSeed(double wordCount, const std::shared_ptr<ArrayBuffer>& passphrase) override;
   std::shared_ptr<Promise<std::shared_ptr<HybridNitroSeedSpec>>>

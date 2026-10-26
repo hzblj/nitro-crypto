@@ -45,6 +45,7 @@ type Exports = {
   ) => Status
   readonly nc_ed25519_verify: (...args: [Pointer, number, Pointer, number, Pointer, number]) => Status
   readonly nc_mnemonic_validate: (mnemonic: Pointer, length: number) => Status
+  readonly nc_mnemonic_generate: (words: number, out: Pointer, length: number, written: Pointer) => Status
   readonly nc_seed_generate: (words: number, passphrase: Pointer, length: number, out: Pointer) => Status
   readonly nc_seed_from_mnemonic: (...args: [Pointer, number, Pointer, number, Pointer]) => Status
   readonly nc_seed_fingerprint: (seed: Handle, out: Pointer) => Status
@@ -65,6 +66,8 @@ const SCHEMES: Record<DerivationScheme, number> = {bip32: 1, slip10: 2}
 const KEY_KINDS: Record<number, Curve> = {2: 'secp256k1', 3: 'ed25519'}
 /** The largest output any call writes: an uncompressed public key, a recoverable signature, a SHA-512 digest. */
 const MAX_OUTPUT = 65
+/** `NC_MNEMONIC_MAX_LENGTH`: 24 words of eight letters and 23 spaces. */
+const MNEMONIC_MAX_LENGTH = 215
 /** WASI's EIO: `random_get` returns it when the host has no CSPRNG, and the engine then fails closed. */
 const EIO = 29
 /** `crypto.getRandomValues` fills at most this many bytes per call. */
@@ -342,6 +345,15 @@ export const createWasmHost = (): NitroCrypto => {
     engineVersion: readCString(engine, engine.nc_engine_version()),
     equals: other => other === host,
     generateKey: curve => createKey(handleOut((_, out) => engine.nc_key_generate(CURVES[curve], out))),
+    // The frame zeroes the sentence in linear memory on release; what JS receives is a copy, as from the bridge.
+    generateMnemonic: wordCount =>
+      call((frame, check) => {
+        const out = frame.allocate(MNEMONIC_MAX_LENGTH)
+        const written = frame.allocate(4)
+        check(engine.nc_mnemonic_generate(wordCount, out, MNEMONIC_MAX_LENGTH, written))
+
+        return frame.read(out, frame.view().getUint32(written, true))
+      }),
     generateSeed: (wordCount, passphrase) =>
       settle(() =>
         createSeed(

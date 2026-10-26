@@ -3,20 +3,24 @@ import type {Registry} from '../adapters/registry'
 import {CryptoError, native, nativeAsync} from '../core/errors'
 import type {DerivationScheme, NitroCrypto, NitroSeed} from '../specs/nitro-crypto.nitro'
 import {isScheme, type KeyOf, type SchemeCurve, type SigningKey, wrapKey} from './keys'
-import {countWords, MNEMONIC_LENGTHS, type MnemonicLength, nfkd, normalizeMnemonic, withSecretBytes} from './mnemonic'
+import {countWords, type MnemonicLength, nfkd, normalizeMnemonic, withSecretBytes, wordCount} from './mnemonic'
 
 export type WalletOptions =
-  /** A fresh mnemonic of `words` words (12 by default), generated and kept inside the engine. */
+  /**
+   * A fresh mnemonic of `words` words (12 by default), generated and kept inside the engine: a wallet nobody can
+   * back up. For one the user writes down, generate the words with `crypto.mnemonic.generate()` and pass them here.
+   */
   | {readonly passphrase?: string; readonly words?: MnemonicLength}
   /**
-   * A known mnemonic, for published test vectors and reproducible demos. It crosses into the engine once, as bytes
-   * this package overwrites afterwards; never type a real seed phrase into a demo.
+   * A known mnemonic: one `crypto.mnemonic.generate()` returned, a wallet being restored, or a published test vector.
+   * It crosses into the engine as bytes this package overwrites afterwards; the string itself stays the app's.
    */
   | {readonly mnemonic: string; readonly passphrase?: string}
 
 /**
  * A wallet that lives in memory only: a BIP-39 seed held by the engine and the keys derived from it. Nothing is
- * persisted, so it is gone after `dispose()`, a reload or a restart. Its mnemonic is never readable.
+ * persisted, so it is gone after `dispose()`, a reload or a restart. The engine never reads its mnemonic back: a
+ * wallet the user can restore starts from words `crypto.mnemonic.generate()` returned.
  */
 export type EphemeralWallet<Chains> = {
   /** The BIP-32 fingerprint of the seed's master key: a public name for the wallet. */
@@ -35,16 +39,6 @@ export type EphemeralWallet<Chains> = {
 }
 
 const disposed = () => new CryptoError('DISPOSED', 'This wallet has been disposed.')
-
-const wordCount = (words: number | undefined): MnemonicLength => {
-  const count = words ?? 12
-
-  if (!MNEMONIC_LENGTHS.includes(count as MnemonicLength)) {
-    throw new CryptoError('INVALID_ARGUMENT', `A mnemonic has ${MNEMONIC_LENGTHS.join(', ')} words.`)
-  }
-
-  return count as MnemonicLength
-}
 
 const createSeed = async (host: NitroCrypto, options: WalletOptions) => {
   const passphrase = nfkd(options.passphrase ?? '')

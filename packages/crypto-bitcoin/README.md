@@ -4,8 +4,9 @@
 [![license](https://img.shields.io/npm/l/@hzblj/crypto-bitcoin.svg)](https://github.com/hzblj/nitro-crypto/blob/main/LICENSE)
 
 Bitcoin for [`@hzblj/nitro-crypto`](https://www.npmjs.com/package/@hzblj/nitro-crypto): native SegWit (P2WPKH)
-accounts at BIP-84 paths on mainnet, testnet, signet or regtest, and validation of every address type. The keys stay
-in the native engine; this package is TypeScript over it.
+accounts at BIP-84 paths on mainnet, testnet, signet or regtest, validation of every address type, and payments from
+an account: coin selection, fees and BIP-143 signatures. The keys stay in the native engine; this package is
+TypeScript over it.
 
 > [!WARNING]
 > **Not security audited. Never use with real funds.**
@@ -43,8 +44,37 @@ crypto.chains.bitcoin.validateAddress('bc1p…') // {valid, type: 'p2tr', script
 legacy Base58Check, on the adapter's network only; an address of another network is invalid, with a reason that says
 so. Addresses match BIP-84's test vectors and `@scure/btc-signer`.
 
-**Not in this version:** signing of any kind. Bitcoin message signing (BIP-137, BIP-322) differs from Ethereum's and is
-not implemented, nor are PSBT and Taproot (BIP-86, Schnorr); accounts have no `signMessage`, and the adapter's
-`features` say so.
+## Payments
+
+An account spends the coins its address holds. `createTransaction` plans a payment and `signTransaction` signs and
+serializes it; fetching coins and broadcasting are the app's (any Esplora or Bitcoin Core node).
+
+```ts
+const utxos = (await (await fetch(`${esplora}/address/${account.address}/utxo`)).json()).map(
+  ({txid, vout, value}) => ({txid, value: BigInt(value), vout})
+)
+
+const plan = account.createTransaction({amount: 25_000n, feeRate: 2, to: 'tb1q…', utxos})
+plan.fee // satoshis, for the estimated plan.vsize
+plan.outputs // the recipient, then change back to the account when it is worth an output
+
+const {hex, txid} = await account.signTransaction(plan)
+await fetch(`${esplora}/tx`, {body: hex, method: 'POST'})
+```
+
+| | |
+| --- | --- |
+| Coin selection | Largest coins first, until they cover the amount and the fee. `amount: 'max'` spends every coin, less the fee, with no change. |
+| Fee | `ceil(vsize × feeRate)`, from an estimate that assumes the longest signatures, so the real rate is never lower. |
+| Change | Back to the account's address, or `changeAddress`. Change under the dust limit (294 sats for P2WPKH) joins the fee. |
+| Checks | A recipient of another network is `INVALID_ADDRESS`; an amount under the recipient's dust limit, or more than the coins cover (saying by how much), is `INVALID_ARGUMENT`. `signTransaction` refuses a plan whose outputs or fee were changed after it was made. |
+| Signing | Version 2, lock time 0, every input replaceable (BIP-125), SIGHASH_ALL over BIP-143, strict DER with a low S. Every input must pay the account's own address. |
+
+`crypto.chains.bitcoin.dustThreshold(address)` says the smallest amount an address can be paid. Transactions match
+BIP-143's published example and `@scure/btc-signer`, byte for byte.
+
+**Not in this version:** message signing. Bitcoin's (BIP-137, BIP-322) differs from Ethereum's and is not
+implemented, nor are PSBT, Taproot (BIP-86, Schnorr), spending from several addresses at once, or inputs of any type
+but P2WPKH; accounts have no `signMessage`, and the adapter's `features` say so.
 
 [Documentation](https://github.com/hzblj/nitro-crypto#readme) · [Security](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md)

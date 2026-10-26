@@ -20,7 +20,9 @@ threads (Nitro's thread pool derives seeds while the JS thread signs), that surv
 - **A spin lock that yields.** Zig 0.16 moved its blocking mutex onto `std.Io`, which a C library called from foreign
   threads has no instance of; critical sections are microseconds, so spinning briefly, then yielding, is enough.
 - **No export.** No ABI function returns a secret. Raw import exists (`nc_key_import`) for test vectors; a generated
-  mnemonic exists only on the stack of the call that turns it into a seed.
+  mnemonic exists only on the stack of the call that turns it into a seed. (Amended by
+  [0005](0005-mnemonic-generation-for-backup.md): `nc_mnemonic_generate` hands a fresh mnemonic out once, for backup.
+  Seeds and private keys still never leave.)
 - **Ownership above the ABI**: the C++ bridge owns a handle per Hybrid Object and releases it on `dispose()` or
   destruction (an atomic exchange, so the two cannot double-free); the facade tracks disposal itself, because Nitro
   detaches a disposed object from JavaScript, and a wallet disposes every key it handed out.

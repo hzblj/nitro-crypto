@@ -1,5 +1,5 @@
-//! BIP-39 mnemonics, English word list: entropy to sentence, sentence to entropy (with the checksum), and the
-//! seed (PBKDF2-HMAC-SHA512, 2048 rounds, salt "mnemonic" + passphrase).
+//! BIP-39 mnemonics, English word list: fresh sentences from OS entropy, entropy to sentence, sentence to entropy
+//! (with the checksum), and the seed (PBKDF2-HMAC-SHA512, 2048 rounds, salt "mnemonic" + passphrase).
 //!
 //! A mnemonic is a secret, so a word is never looked up by branching on it: both directions scan all 2048
 //! entries and keep the match with masks, which costs about 20 µs per word and leaks nothing about which word
@@ -8,6 +8,7 @@
 
 const std = @import("std");
 
+const entropy_source = @import("../os/entropy.zig");
 const hash = @import("../hash.zig");
 const secure = @import("../core/secure.zig");
 const Error = @import("../core/status.zig").Error;
@@ -57,6 +58,12 @@ pub fn entropyLength(words: usize) Error!usize {
 
 pub const max_words = 24;
 pub const max_sentence_length = max_words * max_word_length + (max_words - 1);
+
+/// The longest sentence of `words` words: every word eight letters, single spaces between them. What a caller
+/// sizes its buffer by before a sentence of that many words is generated.
+pub fn maxSentenceLength(words: usize) usize {
+    return words * (max_word_length + 1) - 1;
+}
 
 /// A mnemonic sentence in a fixed buffer, so it never touches an allocator. Zero it when done.
 pub const Sentence = struct {
@@ -167,6 +174,16 @@ pub fn fromEntropy(entropy: []const u8, out: *Sentence) Error!void {
     }
 }
 
+/// A fresh mnemonic of `words` words (12, 15, 18, 21 or 24) from the OS CSPRNG, into `out`. The entropy is zeroed
+/// before this returns; the sentence is the caller's to zero.
+pub fn generate(words: usize, out: *Sentence) Error!void {
+    const length = entropyLength(words) catch return error.InvalidArgument;
+    var bytes: [32]u8 = undefined;
+    defer secure.zero(&bytes);
+    try entropy_source.fill(bytes[0..length]);
+    try fromEntropy(bytes[0..length], out);
+}
+
 /// The entropy a mnemonic encodes, after its checksum: written into the front of `out`, length returned.
 pub fn toEntropy(mnemonic: []const u8, out: *[32]u8) Error!usize {
     if (mnemonic.len == 0 or mnemonic.len > max_sentence_length) return error.InvalidMnemonic;
@@ -271,6 +288,25 @@ test "a short entropy buffer is refused" {
     var sentence: Sentence = .{};
     try testing.expectError(error.InvalidLength, fromEntropy(&[_]u8{0} ** 15, &sentence));
     try testing.expectError(error.InvalidLength, fromEntropy(&[_]u8{0} ** 33, &sentence));
+}
+
+test "generated sentences validate, have the asked word count, and differ" {
+    for ([_]usize{ 12, 15, 18, 21, 24 }) |words| {
+        var a: Sentence = .{};
+        defer a.zero();
+        var b: Sentence = .{};
+        defer b.zero();
+        try generate(words, &a);
+        try generate(words, &b);
+        try validate(a.slice());
+        try testing.expectEqual(words, std.mem.count(u8, a.slice(), " ") + 1);
+        try testing.expect(a.len <= maxSentenceLength(words));
+        try testing.expect(!std.mem.eql(u8, a.slice(), b.slice()));
+    }
+    var sentence: Sentence = .{};
+    try testing.expectError(error.InvalidArgument, generate(13, &sentence));
+    try testing.expectError(error.InvalidArgument, generate(0, &sentence));
+    try testing.expectEqual(max_sentence_length, maxSentenceLength(max_words));
 }
 
 test "an over-long passphrase is refused" {

@@ -218,6 +218,25 @@ fn validateMnemonic(mnemonic: ?[*]const u8, mnemonic_len: usize) Error!void {
     try bip39.validate(try input(mnemonic, mnemonic_len));
 }
 
+export fn nc_mnemonic_generate(word_count: u32, out: ?[*]u8, out_len: usize, written: ?*usize) i32 {
+    return code(mnemonicGenerate(word_count, out, out_len, written));
+}
+
+/// The capacity is checked against the longest sentence of that many words before any entropy is drawn, so a
+/// buffer is either always large enough or never, whichever words come out.
+fn mnemonicGenerate(word_count: u32, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    _ = bip39.entropyLength(word_count) catch return error.InvalidArgument;
+    if (written == null) return error.InvalidArgument;
+    const buffer = try output(out, out_len);
+    if (buffer.len < bip39.maxSentenceLength(word_count)) return error.BufferTooSmall;
+
+    var sentence: bip39.Sentence = .{};
+    defer sentence.zero();
+    try bip39.generate(word_count, &sentence);
+    @memcpy(buffer[0..sentence.len], sentence.slice());
+    try store(usize, written, sentence.len);
+}
+
 export fn nc_seed_generate(word_count: u32, passphrase: ?[*]const u8, passphrase_len: usize, out: ?*Handle) i32 {
     return code(seedGenerate(word_count, passphrase, passphrase_len, out));
 }
@@ -322,6 +341,7 @@ fn fuzzBoundary(_: void, smith: *testing.Smith) anyerror!void {
         nc_secp256k1_recover(data_ptr, @min(data_len, 32), data_ptr, @min(data_len, 65), 1, out_ptr, out_len, &written),
         nc_ed25519_verify(data_ptr, @min(data_len, 32), data_ptr, data_len, data_ptr, @min(data_len, 64)),
         nc_mnemonic_validate(data_ptr, data_len),
+        nc_mnemonic_generate(selector % 32, out_ptr, out_len, if (smith.value(bool)) &written else null),
         nc_key_public(handle, 1, out_ptr, out_len, &written),
         nc_key_sign(handle, data_ptr, data_len, out_ptr, out_len, &written),
         nc_handle_destroy(handle),
@@ -346,4 +366,27 @@ test "statuses carry through the exported functions" {
     try testing.expectEqual(@intFromEnum(status.Status.buffer_too_small), nc_hash(1, "abc", 3, &out, 31));
     try testing.expectEqual(@intFromEnum(status.Status.invalid_argument), nc_hash(1, null, 3, &out, 32));
     try testing.expectEqual(@intFromEnum(status.Status.invalid_handle), nc_handle_destroy(0));
+}
+
+test "a generated mnemonic comes out whole, validates, and stores nothing" {
+    var out: [bip39.max_sentence_length]u8 = undefined;
+    var again: [bip39.max_sentence_length]u8 = undefined;
+    var written: usize = 0;
+    var written_again: usize = 0;
+    const count = nc_handle_count();
+
+    try testing.expectEqual(@as(i32, 0), nc_mnemonic_generate(24, &out, out.len, &written));
+    try testing.expectEqual(@as(i32, 0), nc_mnemonic_validate(&out, written));
+    try testing.expectEqual(@as(usize, 24), std.mem.count(u8, out[0..written], " ") + 1);
+    try testing.expectEqual(@as(i32, 0), nc_mnemonic_generate(24, &again, again.len, &written_again));
+    try testing.expect(!std.mem.eql(u8, out[0..written], again[0..written_again]));
+    try testing.expectEqual(@as(i32, 0), nc_mnemonic_generate(12, &out, bip39.maxSentenceLength(12), &written));
+    try testing.expectEqual(@as(usize, 12), std.mem.count(u8, out[0..written], " ") + 1);
+    try testing.expectEqual(count, nc_handle_count());
+
+    const too_small = bip39.maxSentenceLength(12) - 1;
+    try testing.expectEqual(@intFromEnum(status.Status.buffer_too_small), nc_mnemonic_generate(12, &out, too_small, &written));
+    try testing.expectEqual(@intFromEnum(status.Status.invalid_argument), nc_mnemonic_generate(13, &out, out.len, &written));
+    try testing.expectEqual(@intFromEnum(status.Status.invalid_argument), nc_mnemonic_generate(12, &out, out.len, null));
+    try testing.expectEqual(@intFromEnum(status.Status.invalid_argument), nc_mnemonic_generate(12, null, out.len, &written));
 }

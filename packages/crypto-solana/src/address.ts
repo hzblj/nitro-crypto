@@ -1,4 +1,4 @@
-import {type AddressValidation, base58, isCryptoError} from '@hzblj/nitro-crypto/adapter'
+import {type AddressValidation, base58, CryptoError, isCryptoError} from '@hzblj/nitro-crypto/adapter'
 
 /** A Solana address: the Base58 text of 32 bytes, usually an Ed25519 public key. */
 export type SolanaAddress = string
@@ -31,4 +31,15 @@ export const validateAddress = (address: string): AddressValidation => {
 
     throw error
   }
+}
+
+/** The 32 bytes of an address, which must be valid: `what` names it in the error (`recipient`, `mint`). */
+export const addressBytes = (address: string, what: string): Uint8Array => {
+  const validation = validateAddress(address)
+
+  if (!validation.valid) {
+    throw new CryptoError('INVALID_ADDRESS', `The ${what} is not a Solana address: ${validation.reason}`)
+  }
+
+  return base58.decode(address)
 }

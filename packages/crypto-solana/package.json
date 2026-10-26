@@ -1,7 +1,7 @@
 {
   "name": "@hzblj/crypto-solana",
   "version": "0.1.0",
-  "description": "Solana adapter for @hzblj/nitro-crypto: Ed25519 accounts derived with SLIP-0010, Base58 addresses, and byte-message signatures.",
+  "description": "Solana adapter for @hzblj/nitro-crypto: Ed25519 accounts derived with SLIP-0010, Base58 addresses, byte-message signatures, and signed legacy transactions for SOL and SPL tokens.",
   "author": "Jan Blazej",
   "license": "MIT",
   "repository": {
@@ -21,6 +21,8 @@
     "react-native",
     "slip10",
     "solana",
+    "spl-token",
+    "transaction",
     "wallet"
   ],
   "main": "./build/index.js",

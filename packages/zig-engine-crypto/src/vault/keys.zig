@@ -87,14 +87,9 @@ pub fn seedFromMnemonic(vault: *Vault, mnemonic: []const u8, passphrase: []const
 
 /// A seed from a mnemonic made of fresh OS entropy. The mnemonic exists only on this stack frame.
 pub fn seedGenerate(vault: *Vault, words: u32, passphrase: []const u8) Error!Handle {
-    const length = bip39.entropyLength(words) catch return error.InvalidArgument;
-    var bytes: [32]u8 = undefined;
-    defer secure.zero(&bytes);
-    try entropy.fill(bytes[0..length]);
-
     var sentence: bip39.Sentence = .{};
     defer sentence.zero();
-    try bip39.fromEntropy(bytes[0..length], &sentence);
+    try bip39.generate(words, &sentence);
     return storeSeed(vault, sentence.slice(), passphrase);
 }
 

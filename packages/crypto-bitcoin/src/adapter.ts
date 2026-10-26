@@ -10,6 +10,7 @@ import {type BitcoinAccount, createAccount} from './account'
 import {type BitcoinAddressValidation, p2wpkhAddress, validateAddress} from './address'
 import {type BitcoinNetwork, type BitcoinNetworkName, NETWORKS} from './networks'
 import {type BitcoinAccountRequest, derivationPath} from './path'
+import {dustThreshold} from './transaction'
 import {VERSION} from './version'
 
 export type BitcoinConfig<Id extends string = 'bitcoin'> = {
@@ -29,6 +30,12 @@ export type BitcoinChain<Id extends string = 'bitcoin'> = {
   readonly validateAddress: (address: string) => BitcoinAddressValidation
   /** The P2WPKH address of a compressed public key on this network. */
   readonly addressFromPublicKey: (publicKey: Uint8Array) => string
+  /**
+   * The smallest amount in satoshis an output to `address` may carry for nodes to relay it (Bitcoin Core's dust limit
+   * at 3 sat/vB): 294 for P2WPKH, 330 for P2WSH and P2TR, 546 for P2PKH. Throws `INVALID_ADDRESS` for anything that
+   * is not an address of this network.
+   */
+  readonly dustThreshold: (address: string) => bigint
 }
 
 const createChain = <Id extends string>(context: AdapterContext, id: Id, network: BitcoinNetwork): BitcoinChain<Id> =>
@@ -37,14 +44,23 @@ const createChain = <Id extends string>(context: AdapterContext, id: Id, network
       p2wpkhAddress(publicKey, network, context.hash.sha256, context.hash.ripemd160).address,
     deriveAccount: async (keys: KeySource, request: BitcoinAccountRequest) =>
       createAccount(context, id, network, keys.deriveKey('bip32', derivationPath(request, network))),
+    dustThreshold: (address: string) => {
+      const result = validateAddress(address, network, context.hash.sha256)
+
+      if (!result.valid) {
+        throw new CryptoError('INVALID_ADDRESS', result.reason)
+      }
+
+      return dustThreshold(result.scriptPubKey)
+    },
     network,
     validateAddress: (address: string) => validateAddress(address, network, context.hash.sha256),
   })
 
 /**
- * Bitcoin: native SegWit (P2WPKH) accounts at BIP-84 paths on mainnet, testnet, signet or regtest, and validation of
- * every address type. It signs nothing yet: message signing (BIP-322), PSBT and Taproot (BIP-86, Schnorr) are later
- * capabilities, and `features` says so.
+ * Bitcoin: native SegWit (P2WPKH) accounts at BIP-84 paths on mainnet, testnet, signet or regtest, validation of
+ * every address type, and payments from an account: coin selection, fees and BIP-143 signatures. Message signing
+ * (BIP-322), PSBT and Taproot (BIP-86, Schnorr) are later capabilities, and `features` says so.
  */
 export const bitcoinAdapter = <const Id extends string = 'bitcoin'>(
   config: BitcoinConfig<Id> = {}
@@ -66,8 +82,8 @@ export const bitcoinAdapter = <const Id extends string = 'bitcoin'>(
   return defineAdapter({
     create: (context: AdapterContext) => createChain(context, id, network),
     curve: 'secp256k1',
-    features: {messageSigning: false, psbt: false, taproot: false, transactionSigning: false},
-    formats: {address: ['bech32-p2wpkh'], signature: []},
+    features: {messageSigning: false, psbt: false, taproot: false, transactionSigning: true},
+    formats: {address: ['bech32-p2wpkh'], signature: ['p2wpkh-bip143']},
     id,
     name,
     requires: ['sha256', 'ripemd160', 'bip32-secp256k1'],

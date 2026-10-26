@@ -88,13 +88,23 @@ around them.
 | | |
 | --- | --- |
 | `createEphemeralWallet({words?, passphrase?})` | A fresh 12 to 24 word mnemonic, generated inside the engine and never readable |
-| `createEphemeralWallet({mnemonic, passphrase?})` | A known mnemonic, for published test vectors. Never type a real seed phrase into a demo. |
+| `crypto.mnemonic.generate(words?)` | A fresh 12 to 24 word mnemonic handed out once, for the user to write down |
+| `crypto.mnemonic.validate(mnemonic)` | Whether a mnemonic is BIP-39 English, and why not |
+| `createEphemeralWallet({mnemonic, passphrase?})` | A wallet from a known mnemonic: one `generate` returned, one being restored, or a test vector |
 | `wallet.deriveAccount({chain, …})` | An account by a registered adapter |
 | `wallet.deriveKey('bip32' \| 'slip10', path)` | A key at any path |
 | `wallet.fingerprint` | The BIP-32 fingerprint: a public name for the seed |
 | `wallet.dispose()` | Zeroizes the seed and every key derived from it |
 
-Nothing is persisted: a reload or a restart loses every wallet. There is no mnemonic export in this version.
+Nothing is persisted: a reload or a restart loses every wallet. A wallet the user can restore starts from
+`crypto.mnemonic.generate()`: show the words once, keep them only where the platform protects them (the keychain,
+behind biometrics), and restore with `createEphemeralWallet({mnemonic})`. The engine hands out no other secret, and
+cannot read a mnemonic back from a seed.
+
+```ts
+const mnemonic = crypto.mnemonic.generate(12) // show once, for the user to write down
+const wallet = await crypto.createEphemeralWallet({mnemonic})
+```
 
 ### Errors
 

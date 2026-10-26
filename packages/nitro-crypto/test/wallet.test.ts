@@ -5,10 +5,12 @@ import {ed25519} from '@noble/curves/ed25519.js'
 import {hmac} from '@noble/hashes/hmac.js'
 import {sha512} from '@noble/hashes/sha2.js'
 import {HDKey} from '@scure/bip32'
-import {mnemonicToSeedSync} from '@scure/bip39'
+import {mnemonicToSeedSync, validateMnemonic} from '@scure/bip39'
+import {wordlist} from '@scure/bip39/wordlists/english.js'
 
 import {isCryptoError} from '../src/core/errors'
 import {utf8} from '../src/encoding'
+import {MNEMONIC_LENGTHS} from '../src/engine/mnemonic'
 import {ABANDON, crypto} from './support'
 
 const rejectsCode = async (run: () => Promise<unknown>, code: string) =>
@@ -154,4 +156,49 @@ test('mnemonic.validate reports why, after normalizing', () => {
   })
   assert.deepEqual(crypto.mnemonic.validate('hello world'), {reason: 'INVALID_MNEMONIC', valid: false, words: 2})
   assert.deepEqual(crypto.mnemonic.validate(''), {reason: 'INVALID_MNEMONIC', valid: false, words: 0})
+})
+
+describe('mnemonic.generate', () => {
+  test('every BIP-39 length, valid to the engine and to @scure/bip39, each one different', () => {
+    for (const words of MNEMONIC_LENGTHS) {
+      const first = crypto.mnemonic.generate(words)
+      const second = crypto.mnemonic.generate(words)
+      assert.equal(first.split(' ').length, words)
+      assert.match(first, /^[a-z]+( [a-z]+)*$/)
+      assert.deepEqual(crypto.mnemonic.validate(first), {valid: true, words})
+      assert.ok(validateMnemonic(first, wordlist), first)
+      assert.notEqual(first, second)
+    }
+  })
+
+  test('12 words by default, and other counts refused', () => {
+    assert.equal(crypto.mnemonic.generate().split(' ').length, 12)
+    throwsCode(() => crypto.mnemonic.generate(13 as 12), 'INVALID_ARGUMENT')
+    throwsCode(() => crypto.mnemonic.generate(0 as 12), 'INVALID_ARGUMENT')
+  })
+
+  test('restores the wallet @scure/bip32 derives from the same words, with and without a passphrase', async () => {
+    for (const words of [12, 24] as const) {
+      for (const passphrase of ['', 'TREZOR']) {
+        const mnemonic = crypto.mnemonic.generate(words)
+        const wallet = await crypto.createEphemeralWallet({mnemonic, passphrase})
+        const reference = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic, passphrase))
+        assert.equal(wallet.fingerprint, reference.fingerprint)
+        assert.equal(wallet.words, words)
+        assert.deepEqual(
+          wallet.deriveKey('bip32', "m/44'/60'/0'/0/0").publicKey(),
+          reference.derive("m/44'/60'/0'/0/0").publicKey
+        )
+        wallet.dispose()
+      }
+    }
+  })
+
+  test('stores nothing in the engine', () => {
+    const before = crypto.liveHandles()
+    for (let index = 0; index < 20; index++) {
+      crypto.mnemonic.generate(24)
+    }
+    assert.equal(crypto.liveHandles(), before)
+  })
 })

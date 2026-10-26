@@ -4,13 +4,16 @@ import {
   CryptoError,
   defineAdapter,
   type KeySource,
+  type RecoverableSignature,
 } from '@hzblj/nitro-crypto/adapter'
 
 import {createAccount, type EthereumAccount, recoverSigner, verifySigner} from './account'
 import {type Address, checksumAddress, type EthereumAddressValidation, validateAddress} from './address'
 import {type EthereumConfig, type EthereumNetwork, resolveConfig} from './config'
+import {createErc20, type Erc20} from './erc20'
 import {hashMessage} from './message'
 import {derivationPath, type EthereumAccountRequest} from './path'
+import {type EthereumTransactionRequest, serializeTransaction} from './transaction'
 import type {Hex, SignableMessage} from './types'
 import {VERSION} from './version'
 
@@ -34,6 +37,13 @@ export type EthereumChain<Id extends string = 'ethereum'> = {
     readonly message: SignableMessage
     readonly signature: Hex
   }) => boolean
+  /**
+   * The EIP-2718 envelope of an EIP-1559 transaction on this network: unsigned without a signature (its Keccak-256
+   * is what a key signs), ready to broadcast with one. Accounts sign with `signTransaction`.
+   */
+  readonly serializeTransaction: (request: EthereumTransactionRequest, signature?: RecoverableSignature) => Hex
+  /** ERC-20 call data and results: `transfer`, `balanceOf`. */
+  readonly erc20: Erc20
 }
 
 const createChain = <Id extends string>(
@@ -55,9 +65,12 @@ const createChain = <Id extends string>(
     },
     deriveAccount: async (keys: KeySource, request: EthereumAccountRequest) =>
       createAccount(context, id, network, keys.deriveKey('bip32', derivationPath(request))),
+    erc20: createErc20(keccak256),
     hashMessage: (message: SignableMessage) => hashMessage(message, keccak256),
     network,
     recoverMessageAddress: ({message, signature}) => recoverSigner(context, message, signature),
+    serializeTransaction: (request: EthereumTransactionRequest, signature?: RecoverableSignature) =>
+      serializeTransaction(request, network, keccak256, signature),
     validateAddress: (address: string) => validateAddress(address, keccak256),
     verifyMessage: ({address, message, signature}) => verifySigner(context, address, message, signature),
   })
@@ -65,9 +78,10 @@ const createChain = <Id extends string>(
 
 /**
  * Ethereum and every EVM chain: secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 message signatures
- * and signer recovery. Register one per network, each with its own id and chain id; the addresses are the same.
+ * and signer recovery, EIP-1559 transactions, and ERC-20 call data. Register one per network, each with its own id
+ * and chain id; the addresses are the same, and each signs transactions for its own chain id only.
  *
- * Not here (yet): EIP-712 typed data and transaction signing.
+ * Not here (yet): EIP-712 typed data, legacy and EIP-2930 transactions, and contract creation.
  */
 export const ethereumAdapter = <const Id extends string = 'ethereum'>(
   config: EthereumConfig<Id> = {}
@@ -77,8 +91,8 @@ export const ethereumAdapter = <const Id extends string = 'ethereum'>(
   return defineAdapter({
     create: (context: AdapterContext) => createChain(context, id, network),
     curve: 'secp256k1',
-    features: {messageSigning: true, transactionSigning: false, typedData: false},
-    formats: {address: ['eip55'], signature: ['eip191']},
+    features: {messageSigning: true, transactionSigning: true, typedData: false},
+    formats: {address: ['eip55'], signature: ['eip191', 'eip1559']},
     id,
     name: network.name,
     requires: ['keccak256', 'secp256k1-ecdsa', 'secp256k1-recovery', 'bip32-secp256k1'],
