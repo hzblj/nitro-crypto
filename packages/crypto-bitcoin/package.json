@@ -1,6 +1,6 @@
 {
   "name": "@hzblj/crypto-bitcoin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bitcoin adapter for @hzblj/nitro-crypto: native SegWit (P2WPKH) accounts at BIP-84 paths, bech32 addresses for mainnet, testnet, signet and regtest, address validation, and P2WPKH payments with coin selection and BIP-143 signing.",
   "author": "Jan Blazej",
   "license": "MIT",
