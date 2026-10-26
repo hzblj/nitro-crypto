@@ -19,10 +19,11 @@ packages/*/android/.cxx/
 packages/*/android/.gradle/
 *.tgz
 
-# The engine: Zig's caches and fetched packages, and the prebuilt artifacts `yarn engine` writes into the package
-packages/zig-engine-crypto/.zig-cache/
-packages/zig-engine-crypto/zig-out/
-packages/zig-engine-crypto/zig-pkg/
+# The engine: Zig's caches and fetched packages wherever a build leaves them (CI's setup-zig puts its cache at the
+# root, and changesets commits whatever is not ignored), and the prebuilt artifacts `yarn engine` writes into the package
+.zig-cache/
+zig-out/
+zig-pkg/
 packages/nitro-crypto/engine/
 packages/nitro-crypto/src/host/wasm-binary.generated.ts
 
