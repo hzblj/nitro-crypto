@@ -1,0 +1,15 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    // Not the `source` condition: published packages ship one too (kara-ui's points at platform-split sources this
+    // config can't resolve). The example maps the workspace packages to their source by `paths` instead.
+    "customConditions": ["react-native"]
+  }
+}

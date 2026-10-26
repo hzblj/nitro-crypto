@@ -1,0 +1,13 @@
+{
+  "name": "@hzblj/zig-engine-crypto",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The nitro-crypto engine in Zig: its source, tests and benchmark. Its artifacts ship inside @hzblj/nitro-crypto.",
+  "scripts": {
+    "build:wasm": "node ../../scripts/build-native/index.mjs --platform wasm",
+    "bench": "zig build bench",
+    "test": "zig build test --summary all",
+    "lint": "zig fmt --check build.zig build.zig.zon src test bench",
+    "lint:fix": "zig fmt build.zig build.zig.zon src test bench"
+  }
+}

@@ -1,0 +1,25 @@
+# The Performance screen on a release build (no dev client, the bundle embedded): the numbers docs/benchmarks.md
+# reports, photographed at two payload sizes. Run it by name, on a release build:
+# `yarn e2e ios release-benchmarks --release`.
+appId: ${APP_ID}
+---
+- runFlow: steps/open.yaml
+- tapOn: Lab
+# The last row of the page: it cannot be scrolled to the centre.
+- scrollUntilVisible:
+    element: 'Performance'
+    direction: DOWN
+- tapOn: 'Performance'
+
+- runFlow:
+    file: steps/measure.yaml
+    env:
+      ITERATIONS: '1000×'
+      NAME: 32b
+      PAYLOAD: '32 B'
+- runFlow:
+    file: steps/measure.yaml
+    env:
+      ITERATIONS: '100×'
+      NAME: 64k
+      PAYLOAD: '64 KiB'

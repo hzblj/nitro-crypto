@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZIG_VERSION: 0.16.0
+  NDK_VERSION: 27.1.12297006
+
+jobs:
+  check:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Biome
+        run: yarn biome:check
+
+      - name: Zig format
+        run: yarn workspace @hzblj/zig-engine-crypto lint
+
+      # The TypeScript type-checks against the WebAssembly engine's generated module.
+      - name: Build the engine as WebAssembly
+        run: yarn engine:wasm
+
+      - name: Typecheck
+        run: yarn typecheck
+
+      # The engine (units, published vectors, Wycheproof, property tests, the C ABI harness) and every TypeScript
+      # test, run on the engine compiled to WebAssembly.
+      - name: Test
+        run: yarn test
+
+  engine-macos:
+    name: Engine on macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      # The Apple entropy path (getentropy), and the threads test on another kernel.
+      - name: Test the engine
+        working-directory: packages/zig-engine-crypto
+        run: zig build test --summary all
+
+  android:
+    name: Android build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Install the NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" > /dev/null
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build the engine for Android
+        run: yarn engine --platform android,wasm
+
+      - name: Verify the engine
+        run: yarn engine:verify --skip-ios
+
+      # The bridge compiles and links against the engine inside the example's Gradle project, the way an app builds
+      # it: every ABI the package ships.
+      - name: Prebuild the example
+        run: yarn workspace nitro-crypto-example expo prebuild --platform android --no-install
+
+      - name: Build the example
+        working-directory: apps/example/android
+        run: ./gradlew :app:assembleDebug --console=plain
+
+  ios:
+    name: iOS build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build the engine for iOS
+        run: yarn engine --platform ios,wasm
+
+      - name: Verify the engine
+        run: yarn engine:verify --skip-android
+
+      - name: Prebuild the example
+        run: yarn workspace nitro-crypto-example expo prebuild --platform ios
+
+      - name: Build the example for the simulator
+        working-directory: apps/example/ios
+        run: >
+          xcodebuild -workspace CryptoExample.xcworkspace -scheme CryptoExample -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+  pack:
+    name: Engine artifacts and pack check
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+
+      - name: Install the NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" > /dev/null
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      # Every artifact, as a release builds them, twice: a second clean build must produce the same bytes.
+      - name: Build the engine
+        run: yarn engine
+
+      - name: Verify the engine
+        run: yarn engine:verify
+
+      - name: Check the build is reproducible
+        run: |
+          cp packages/nitro-crypto/engine/manifest.json "$RUNNER_TEMP/manifest.json"
+          rm -rf packages/zig-engine-crypto/.zig-cache packages/zig-engine-crypto/zig-out
+          yarn engine
+          diff "$RUNNER_TEMP/manifest.json" packages/nitro-crypto/engine/manifest.json
+
+      # Packs every package the way npm will receive it, and type-checks real usage from a throwaway consumer.
+      - name: Pack check
+        run: yarn pack:check

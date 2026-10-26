@@ -1,0 +1,8 @@
+{
+  // The tests run in Node, against the WebAssembly engine; the app's own config keeps Node's globals out of app code.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "../native-icons.d.ts", "../expo-env.d.ts"]
+}

@@ -1,0 +1,39 @@
+# One run of the Performance screen (`ITERATIONS` calls, `PAYLOAD` bytes), photographed in three parts: the hashes,
+# the curves, the wallet. Each part is scrolled to from the Run button down, so its rows sit clear of a header that
+# floats over the content (iOS 26 and later), which a row scrolled to the top of the page would be behind.
+appId: ${APP_ID}
+---
+- scrollUntilVisible:
+    element:
+      id: run-benchmarks
+    direction: UP
+    centerElement: true
+- tapOn: ${ITERATIONS}
+- tapOn: ${PAYLOAD}
+- tapOn:
+    id: run-benchmarks
+- extendedWaitUntil:
+    visible: 'Measuring .*'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: 'Measuring .*'
+    timeout: 600000
+
+- scrollUntilVisible:
+    element:
+      id: run-benchmarks
+    direction: UP
+    centerElement: true
+- takeScreenshot: ${OUT}-${NAME}-1-hashes
+- scrollUntilVisible:
+    element:
+      id: benchmark-secp256k1-sign
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: ${OUT}-${NAME}-2-curves
+- scrollUntilVisible:
+    element:
+      id: benchmark-wallet
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: ${OUT}-${NAME}-3-wallet

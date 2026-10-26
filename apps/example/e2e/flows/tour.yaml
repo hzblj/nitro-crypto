@@ -1,0 +1,98 @@
+# The screens the smoke flow does not reach: the primitives (a fresh key that signs and verifies, every vector
+# matching), a benchmark run, and the about page. Photographs each, for the README and for docs/benchmarks.md.
+appId: ${APP_ID}
+---
+- runFlow: steps/open.yaml
+
+# Lab: hashes of the default input, a fresh secp256k1 key, then Ed25519.
+- tapOn: Lab
+- extendedWaitUntil:
+    visible:
+      id: digest-sha256
+    timeout: 10000
+- assertVisible: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+- takeScreenshot: ${OUT}-01-primitives
+- scrollUntilVisible:
+    element:
+      id: new-key
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: new-key
+- scrollUntilVisible:
+    element: 'Verifies'
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: ${OUT}-02-secp256k1-key
+- scrollUntilVisible:
+    element: 'Ed25519'
+    direction: UP
+    centerElement: true
+- tapOn: 'Ed25519'
+- tapOn:
+    id: new-key
+- scrollUntilVisible:
+    element: 'Verifies'
+    direction: DOWN
+    centerElement: true
+
+# Every published vector matches, each shown with its value.
+- scrollUntilVisible:
+    element:
+      id: vector-tron
+    direction: DOWN
+    centerElement: true
+- assertNotVisible: 'Mismatch'
+- takeScreenshot: ${OUT}-03-vectors
+
+# Performance: the engine against @noble, at the default settings.
+# The last row of the page: it cannot be scrolled to the centre.
+- scrollUntilVisible:
+    element: 'Performance'
+    direction: DOWN
+- tapOn: 'Performance'
+- scrollUntilVisible:
+    element:
+      id: run-benchmarks
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: run-benchmarks
+# Running, the button says what it is measuring; done, it says "Run benchmarks" again.
+- extendedWaitUntil:
+    visible: 'Measuring .*'
+    timeout: 10000
+- extendedWaitUntil:
+    notVisible: 'Measuring .*'
+    timeout: 300000
+- scrollUntilVisible:
+    element:
+      id: benchmark-results
+    direction: UP
+    centerElement: true
+- takeScreenshot: ${OUT}-04-performance
+- scrollUntilVisible:
+    element:
+      id: benchmark-wallet
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: ${OUT}-05-performance-more
+
+# About: the architecture, the security model, versions and licenses.
+- tapOn: Overview
+- scrollUntilVisible:
+    element: 'About and security'
+    direction: DOWN
+    centerElement: true
+- tapOn: 'About and security'
+- extendedWaitUntil:
+    visible:
+      id: architecture
+    timeout: 10000
+- takeScreenshot: ${OUT}-06-about
+- scrollUntilVisible:
+    element:
+      id: security
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: ${OUT}-07-security

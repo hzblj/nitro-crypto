@@ -1,0 +1,103 @@
+{
+  "name": "@hzblj/nitro-crypto",
+  "version": "0.1.0",
+  "description": "Native cryptography for React Native and Expo: a Zig engine behind Nitro Modules, with hashes, secp256k1, Ed25519, BIP-39 seeds and HD keys that never leave native memory, and a typed registry for chain adapters.",
+  "author": "Jan Blazej",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hzblj/nitro-crypto.git",
+    "directory": "packages/nitro-crypto"
+  },
+  "bugs": {
+    "url": "https://github.com/hzblj/nitro-crypto/issues"
+  },
+  "homepage": "https://github.com/hzblj/nitro-crypto#readme",
+  "keywords": [
+    "bip32",
+    "bip39",
+    "crypto",
+    "cryptography",
+    "ed25519",
+    "expo",
+    "keccak",
+    "nitro",
+    "react-native",
+    "secp256k1",
+    "slip10",
+    "wallet",
+    "zig"
+  ],
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./adapter": {
+      "source": "./src/adapter.ts",
+      "types": "./build/adapter.d.ts",
+      "default": "./build/adapter.js"
+    },
+    "./testing": {
+      "source": "./src/testing.ts",
+      "types": "./build/testing.d.ts",
+      "default": "./build/testing.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "android/build.gradle",
+    "android/CMakeLists.txt",
+    "android/fix-prefab.gradle",
+    "android/gradle.properties",
+    "android/src/main/**",
+    "build",
+    "cpp",
+    "engine/android/**",
+    "engine/include/**",
+    "engine/ios/**",
+    "engine/manifest.json",
+    "nitro.json",
+    "nitrogen/generated/**",
+    "NitroCrypto.podspec"
+  ],
+  "scripts": {
+    "build": "rm -rf build && tsc -p ./tsconfig.build.json",
+    "clean": "rm -rf build",
+    "codegen": "nitrogen --logLevel=warning",
+    "prepack": "yarn run -T turbo run build --filter=$npm_package_name...",
+    "lint": "yarn run -T concurrently \"yarn biome:check\" \"yarn tsc:check\"",
+    "lint:fix": "yarn run -T biome check --write .",
+    "biome:check": "yarn run -T biome check .",
+    "tsc:check": "tsc -p ./tsconfig.json",
+    "test": "node --conditions=source --import tsx --test 'test/**/*.test.ts'"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "react-native-nitro-modules": "^0.37.1"
+  },
+  "devDependencies": {
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@scure/base": "2.4.0",
+    "@scure/bip32": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "@types/node": "^22.19.0",
+    "@types/react": "~19.2.14",
+    "nitrogen": "0.37.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-nitro-modules": "0.37.1",
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

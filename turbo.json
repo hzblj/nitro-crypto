@@ -1,0 +1,39 @@
+{
+  "$schema": "https://turborepo.org/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "build/**"
+      ]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "lint:fix": {
+      "outputs": []
+    },
+    "tsc:check": {
+      "outputs": []
+    },
+    "biome:check": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": [
+        "@hzblj/zig-engine-crypto#build:wasm"
+      ],
+      "outputs": []
+    },
+    "@hzblj/zig-engine-crypto#build:wasm": {
+      "cache": false
+    },
+    "@hzblj/zig-engine-crypto#test": {
+      "dependsOn": [],
+      "outputs": []
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "name": "@hzblj/crypto-solana",
+  "version": "0.1.0",
+  "description": "Solana adapter for @hzblj/nitro-crypto: Ed25519 accounts derived with SLIP-0010, Base58 addresses, and byte-message signatures.",
+  "author": "Jan Blazej",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hzblj/nitro-crypto.git",
+    "directory": "packages/crypto-solana"
+  },
+  "bugs": {
+    "url": "https://github.com/hzblj/nitro-crypto/issues"
+  },
+  "homepage": "https://github.com/hzblj/nitro-crypto/tree/main/packages/crypto-solana#readme",
+  "keywords": [
+    "base58",
+    "ed25519",
+    "expo",
+    "nitro-crypto",
+    "react-native",
+    "slip10",
+    "solana",
+    "wallet"
+  ],
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "rm -rf build && tsc -p ./tsconfig.build.json",
+    "clean": "rm -rf build",
+    "prepack": "yarn run -T turbo run build --filter=$npm_package_name...",
+    "lint": "yarn run -T concurrently \"yarn biome:check\" \"yarn tsc:check\"",
+    "lint:fix": "yarn run -T biome check --write .",
+    "biome:check": "yarn run -T biome check .",
+    "tsc:check": "tsc -p ./tsconfig.json",
+    "test": "node --conditions=source --import tsx --test 'test/**/*.test.ts'"
+  },
+  "peerDependencies": {
+    "@hzblj/nitro-crypto": "workspace:^"
+  },
+  "devDependencies": {
+    "@hzblj/nitro-crypto": "workspace:*",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "@solana/kit": "8.5.0",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

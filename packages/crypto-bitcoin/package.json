@@ -1,0 +1,68 @@
+{
+  "name": "@hzblj/crypto-bitcoin",
+  "version": "0.1.0",
+  "description": "Bitcoin adapter for @hzblj/nitro-crypto: native SegWit (P2WPKH) accounts at BIP-84 paths, bech32 addresses for mainnet, testnet, signet and regtest, and address validation.",
+  "author": "Jan Blazej",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hzblj/nitro-crypto.git",
+    "directory": "packages/crypto-bitcoin"
+  },
+  "bugs": {
+    "url": "https://github.com/hzblj/nitro-crypto/issues"
+  },
+  "homepage": "https://github.com/hzblj/nitro-crypto/tree/main/packages/crypto-bitcoin#readme",
+  "keywords": [
+    "bech32",
+    "bip84",
+    "bitcoin",
+    "expo",
+    "nitro-crypto",
+    "p2wpkh",
+    "react-native",
+    "secp256k1",
+    "segwit",
+    "wallet"
+  ],
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "rm -rf build && tsc -p ./tsconfig.build.json",
+    "clean": "rm -rf build",
+    "prepack": "yarn run -T turbo run build --filter=$npm_package_name...",
+    "lint": "yarn run -T concurrently \"yarn biome:check\" \"yarn tsc:check\"",
+    "lint:fix": "yarn run -T biome check --write .",
+    "biome:check": "yarn run -T biome check .",
+    "tsc:check": "tsc -p ./tsconfig.json",
+    "test": "node --conditions=source --import tsx --test 'test/**/*.test.ts'"
+  },
+  "peerDependencies": {
+    "@hzblj/nitro-crypto": "workspace:^"
+  },
+  "devDependencies": {
+    "@hzblj/nitro-crypto": "workspace:*",
+    "@scure/bip32": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "@scure/btc-signer": "2.4.1",
+    "@types/node": "^22.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "~7.0.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // `source` resolves @hzblj/nitro-crypto/adapter to its TypeScript, so a type check needs no build. Safe here: the
+    // workspace package is the only dependency this resolves differently (the base config explains why the example
+    // app cannot do the same).
+    "customConditions": ["source", "react-native"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

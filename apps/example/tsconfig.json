@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The packages' TypeScript source, as Metro runs it (metro.config.js maps their `source` exports), so the example
+    // type-checks against them without a build.
+    "paths": {
+      "@hzblj/crypto-bitcoin": ["../../packages/crypto-bitcoin/src/index.ts"],
+      "@hzblj/crypto-ethereum": ["../../packages/crypto-ethereum/src/index.ts"],
+      "@hzblj/crypto-solana": ["../../packages/crypto-solana/src/index.ts"],
+      "@hzblj/nitro-crypto": ["../../packages/nitro-crypto/src/index.ts"],
+      "@hzblj/nitro-crypto/adapter": ["../../packages/nitro-crypto/src/adapter.ts"],
+      "@hzblj/nitro-crypto/testing": ["../../packages/nitro-crypto/src/testing.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts", "native-icons.d.ts"],
+  "exclude": ["test"]
+}

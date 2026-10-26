@@ -1,0 +1,124 @@
+# The whole example in one pass, asserting the published values rather than only photographing them: the engine's
+# self-test, a wallet from the published test mnemonic, each chain's published address, an Ethereum and a Solana
+# signature that verify and stop verifying once changed, Bitcoin's stated lack of signing, and the wallet's deletion
+# zeroizing its secrets.
+appId: ${APP_ID}
+---
+- runFlow: steps/open.yaml
+
+# Overview: every published vector, through the native engine.
+- extendedWaitUntil:
+    visible: '15 of 15 vectors match'
+    timeout: 60000
+- takeScreenshot: ${OUT}-01-overview
+
+# Wallet: the published test mnemonic has the published BIP-32 fingerprint.
+- tapOn: Wallet
+# Centred before every tap: iOS 26 and later float the tab bar over the content, and a control behind it takes the
+# tap meant for it.
+- scrollUntilVisible:
+    element:
+      id: load-test-wallet
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: load-test-wallet
+- extendedWaitUntil:
+    visible: '73c5da0a'
+    timeout: 20000
+- takeScreenshot: ${OUT}-02-wallet
+
+# Accounts: each adapter's address for it, as BIP-44, BIP-84 and SLIP-0010 publish them.
+- tapOn: Accounts
+- extendedWaitUntil:
+    visible: '0x9858EfFD232B4033E47d90003D41EC34EcaEda94'
+    timeout: 20000
+- takeScreenshot: ${OUT}-03-ethereum
+- tapOn: BTC
+- extendedWaitUntil:
+    visible: 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu'
+    timeout: 10000
+- takeScreenshot: ${OUT}-04-bitcoin
+- tapOn: SOL
+- extendedWaitUntil:
+    visible: 'HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk'
+    timeout: 10000
+- tapOn: TRX
+- extendedWaitUntil:
+    visible: 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'
+    timeout: 10000
+
+# Sign: EIP-191 verifies, and a changed message does not.
+- tapOn: Sign
+- tapOn:
+    id: sign
+- scrollUntilVisible:
+    element:
+      id: verdict-text
+    direction: DOWN
+    centerElement: true
+- assertVisible: The signer signed this message.
+- takeScreenshot: ${OUT}-05-ethereum-signed
+- scrollUntilVisible:
+    element:
+      id: tamper-message
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: tamper-message
+- scrollUntilVisible:
+    element: 'Does not verify'
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: ${OUT}-06-ethereum-tampered
+
+# Solana: Ed25519 over the message bytes, and a changed signature.
+- scrollUntilVisible:
+    element:
+      id: sign-chain
+    direction: UP
+    centerElement: true
+- tapOn: Solana
+- tapOn:
+    id: sign
+- scrollUntilVisible:
+    element: 'The signer signed this message.'
+    direction: DOWN
+    centerElement: true
+- scrollUntilVisible:
+    element:
+      id: tamper-signature
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: tamper-signature
+- scrollUntilVisible:
+    element: 'Does not verify'
+    direction: DOWN
+    centerElement: true
+- takeScreenshot: ${OUT}-07-solana-tampered
+
+# Bitcoin: said plainly, not faked.
+- scrollUntilVisible:
+    element:
+      id: sign-chain
+    direction: UP
+    centerElement: true
+- tapOn: Bitcoin
+- assertVisible: Not supported in this version
+- takeScreenshot: ${OUT}-08-bitcoin-unsupported
+
+# Deleting the wallet zeroizes every secret it held.
+- tapOn: Wallet
+- scrollUntilVisible:
+    element:
+      id: delete-wallet
+    direction: DOWN
+    centerElement: true
+- tapOn:
+    id: delete-wallet
+- scrollUntilVisible:
+    element: '[0-9]+ secrets zeroized in the engine\.'
+    direction: UP
+    centerElement: true
+- takeScreenshot: ${OUT}-09-deleted

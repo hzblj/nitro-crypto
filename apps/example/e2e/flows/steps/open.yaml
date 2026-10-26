@@ -1,0 +1,21 @@
+# The shared prologue: a fresh install's state, then the app started, and the engine's self-test finished. A development
+# build opens straight on the running Metro server (launching first and linking after races the dev launcher's own
+# start); a release build carries its bundle and just launches.
+appId: ${APP_ID}
+---
+- stopApp
+- clearState
+- runFlow:
+    when:
+      true: ${BUILD == 'release'}
+    commands:
+      - launchApp
+- runFlow:
+    when:
+      true: ${BUILD != 'release'}
+    commands:
+      - openLink: ${DEV_SERVER_LINK}
+- extendedWaitUntil:
+    visible:
+      id: self-test-summary
+    timeout: 120000

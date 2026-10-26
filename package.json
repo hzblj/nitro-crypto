@@ -1,0 +1,45 @@
+{
+  "name": "nitro-crypto-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "example": "yarn workspace nitro-crypto-example",
+    "start": "yarn example start",
+    "ios": "yarn engine:ios && yarn example ios",
+    "android": "yarn engine:android && yarn example android",
+    "prebuild": "yarn engine && yarn example expo:prebuild",
+    "engine": "node ./scripts/build-native/index.mjs",
+    "engine:ios": "node ./scripts/build-native/index.mjs --platform ios",
+    "engine:android": "node ./scripts/build-native/index.mjs --platform android",
+    "engine:wasm": "node ./scripts/build-native/index.mjs --platform wasm",
+    "engine:test": "yarn workspace @hzblj/zig-engine-crypto test",
+    "engine:verify": "node ./scripts/verify-artifacts/index.mjs",
+    "build": "yarn turbo run build --filter='./packages/*'",
+    "typecheck": "yarn turbo run tsc:check",
+    "lint": "yarn turbo run lint",
+    "test": "yarn turbo run test",
+    "biome:check": "biome check .",
+    "biome:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "pack:check": "yarn build && node ./scripts/pack-check.mjs",
+    "changeset": "changeset",
+    "changeset:version": "changeset version && node ./scripts/sync-versions.mjs && yarn install --mode=update-lockfile",
+    "release": "yarn engine && yarn engine:verify && yarn build && yarn workspaces foreach --all --no-private --topological npm publish --tolerate-republish && changeset tag",
+    "clean": "rm -rf .turbo node_modules/.cache/turbo && find . -name '.turbo' -type d -prune -exec rm -rf '{}' + && yarn example clean:native"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.4",
+    "@changesets/changelog-github": "0.7.0",
+    "@changesets/cli": "2.31.1",
+    "@hzblj/biome-config": "^0.2.1",
+    "concurrently": "^10.0.5",
+    "turbo": "^2.10.12",
+    "typescript": "~7.0.2"
+  },
+  "packageManager": "yarn@4.18.0"
+}
