@@ -39,6 +39,7 @@ import {
   TOKEN_PROGRAM,
 } from '../src'
 import {compactU16, compareAddresses} from '../src/transaction'
+import {toInstruction} from './support'
 
 const ABANDON = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
 const USDC_DEVNET = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
@@ -505,8 +506,14 @@ describe('messages signed elsewhere', () => {
         ])
       )
       // Compiled again, the decoded message is the same bytes.
+      assert.equal(decoded.version, 'legacy')
+      assert.deepEqual(decoded.addressTableLookups, [])
       assert.deepEqual(
-        solana.compileMessage({feePayer: payer, instructions: decoded.instructions, recentBlockhash: blockhash}),
+        solana.compileMessage({
+          feePayer: payer,
+          instructions: decoded.instructions.map(toInstruction),
+          recentBlockhash: blockhash,
+        }),
         bytes
       )
     }
@@ -590,7 +597,7 @@ describe('messages signed elsewhere', () => {
     wallet.dispose()
   })
 
-  test('malformed and versioned messages are refused', () => {
+  test('malformed messages, and versions after v0, are refused', () => {
     const payer = randomAddress()
     const message = solana.compileMessage({
       feePayer: payer,
@@ -599,7 +606,9 @@ describe('messages signed elsewhere', () => {
     })
     const cases = [
       new Uint8Array(0),
+      // A v0 prefix on a legacy message: it ends where its lookup tables should begin.
       Uint8Array.of(0x80, ...message),
+      Uint8Array.of(0x81, ...message),
       message.subarray(0, message.length - 1),
       Uint8Array.of(...message, 0),
       // No signer.

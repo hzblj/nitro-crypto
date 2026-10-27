@@ -38,7 +38,7 @@ const ADAPTER = ['package.json', 'README.md', 'LICENSE', 'build/index.js', 'buil
 const REQUIRED = {
   '@hzblj/crypto-bitcoin': ADAPTER,
   '@hzblj/crypto-ethereum': [...ADAPTER, 'build/viem.js', 'build/viem.d.ts'],
-  '@hzblj/crypto-solana': ADAPTER,
+  '@hzblj/crypto-solana': [...ADAPTER, 'build/kit.js', 'build/kit.d.ts'],
   '@hzblj/nitro-crypto': [
     'package.json',
     'README.md',
@@ -133,33 +133,35 @@ for (const {directory, name} of packages) {
     fail(`${name} publishes a \`source\` condition in its exports, to a src/ it does not ship`)
   }
 
-  // An optional peer dependency belongs to its subpath alone: no other file may import it, or installing the package
-  // without it would break the main entry.
-  for (const [peer, meta] of Object.entries(packed.peerDependenciesMeta ?? {})) {
-    if (!meta.optional) {
-      continue
-    }
-    const importers = files.filter(
-      file =>
-        /^build\/.*\.js$/.test(file) &&
-        file !== `build/${peer}.js` &&
-        new RegExp(`from ['"]${peer}(/[^'"]*)?['"]`).test(run('tar', ['-xzOf', tarball, `package/${file}`]))
-    )
-    if (importers.length > 0) {
-      fail(`${name} imports its optional peer ${peer} outside build/${peer}.js:\n  ${importers.join('\n  ')}`)
-    }
-  }
-
   const installed = path.join(WORK, 'node_modules', name)
   await mkdir(installed, {recursive: true})
   run('tar', ['-xzf', tarball, '-C', installed, '--strip-components', '1'])
   fileCount += files.length
+
+  // An optional peer dependency is the app's to install or not: only its own subpath's file may load it
+  // (`build/viem.js` loads viem), so the main entry installs without it. Types may be named anywhere, as
+  // `@hzblj/crypto-solana/kit` names @solana/kit's, since declarations load nothing.
+  const optional = Object.entries(packed.peerDependenciesMeta ?? {}).flatMap(([peer, meta]) =>
+    meta.optional ? [peer] : []
+  )
+  for (const file of files.filter(file => file.endsWith('.js'))) {
+    const code = await readFile(path.join(installed, file), 'utf8')
+    const loaded = optional.filter(
+      peer =>
+        file !== `build/${peer.split('/').pop()}.js` &&
+        new RegExp(`(from|import|require)\\s*\\(?\\s*['"]${peer}['"/]`).test(code)
+    )
+    if (loaded.length > 0) {
+      fail(`${name}'s ${file} loads ${loaded.join(', ')}, an optional peer dependency`)
+    }
+  }
 }
 
 const consumer = `import {bitcoinAdapter} from '@hzblj/crypto-bitcoin'
 import {ethereumAdapter, type Hex, type ParsedEthereumTransaction} from '@hzblj/crypto-ethereum'
 import {toViemAccount} from '@hzblj/crypto-ethereum/viem'
 import {solanaAdapter} from '@hzblj/crypto-solana'
+import {toKitSigner} from '@hzblj/crypto-solana/kit'
 import {
   base58,
   type CryptoEngine,
@@ -172,6 +174,7 @@ import {
 } from '@hzblj/nitro-crypto'
 import {defineAdapter, type KeySource} from '@hzblj/nitro-crypto/adapter'
 import {createTestCryptoEngine} from '@hzblj/nitro-crypto/testing'
+import type {MessagePartialSigner, TransactionPartialSigner} from '@solana/kit'
 import {createWalletClient, http} from 'viem'
 import {sepolia} from 'viem/chains'
 
@@ -209,14 +212,24 @@ export const elsewhere = async (psbt: Uint8Array, unsigned: Uint8Array, signatur
   const watch = crypto.chains.bitcoin.watchAccount({extendedKey, fingerprint: wallet.fingerprint, index: 2, path: "m/84'/1'/0'"})
   const fee: bigint | undefined = crypto.chains.bitcoin.decodePsbt(psbt).fee
   const signed: Uint8Array = (await (await wallet.deriveAccount({chain: 'bitcoin'})).signPsbt(psbt)).psbt
+  const sol = await wallet.deriveAccount({chain: 'solana'})
+  const v0: Uint8Array = crypto.chains.solana.compileMessage({addressLookupTables: {}, feePayer: sol.address, instructions: [], recentBlockhash: '', version: 0})
+  const looked: string | undefined = crypto.chains.solana.decodeTransaction(unsigned, {addressLookupTables: {}}).accounts[0]?.address
+  const partial: boolean = (await sol.partiallySignTransaction(unsigned)).complete
+  const offchain: Uint8Array = (await sol.signOffchainMessage({signers: [sol.address], text: 'Hello', version: 1})).signature
+  const kitSigner: TransactionPartialSigner & MessagePartialSigner = toKitSigner(sol)
   const transaction = crypto.chains.ethereum.parseTransaction(unsigned)
   const signer: string | undefined = crypto.chains.ethereum.recoverTransactionAddress({signature, transaction})
   wallet.dispose()
 
   // @ts-expect-error: public derivation takes an extended public key, not a path alone
   crypto.bip32.derivePublic("m/84'/1'/0'", 'm/0/1')
+  // @ts-expect-error: off-chain messages are version 0 or 1
+  await sol.signOffchainMessage({signers: [sol.address], text: 'Hello', version: 2})
+  // @ts-expect-error: a kit signer is a Solana account's, not an Ethereum one's
+  toKitSigner(await wallet.deriveAccount({chain: 'ethereum'}))
 
-  return [child, watch.address, fee, signed, signer]
+  return [child, watch.address, fee, signed, signer, v0, looked, partial, offchain, kitSigner]
 }
 
 // Ethereum beyond EIP-1559: typed data, EIP-7702 authorizations and transactions, and a viem account.

@@ -9,8 +9,16 @@ import {
 
 import {addressFromPublicKey, type SolanaAddress, validateAddress} from './address'
 import type {SolanaInstruction} from './instructions'
-import {decodeMessage} from './message'
-import {compileLegacyMessage, type SignedSolanaTransaction, serializeTransaction} from './transaction'
+import {decodeMessage, decodeTransaction} from './message'
+import {offchainMessageBytes, type SignedSolanaOffchainMessage, type SolanaOffchainMessage} from './offchain'
+import {
+  compileMessage,
+  type PartiallySignedSolanaTransaction,
+  type SignedSolanaTransaction,
+  type SolanaAddressLookupTables,
+  type SolanaMessageVersion,
+  serializeTransaction,
+} from './transaction'
 
 /** Bytes, or text signed as its UTF-8 bytes. */
 export type SolanaMessage = string | Uint8Array
@@ -21,8 +29,9 @@ export type SolanaSignature = Uint8Array | string
 export type SolanaCluster = 'mainnet-beta' | 'devnet' | 'testnet'
 
 /**
- * A Solana account whose key the engine holds. `signMessage` signs the message bytes exactly as given, like a
- * wallet's `signMessage`: it is not a transaction signature, and it adds no off-chain message header.
+ * A Solana account whose key the engine holds. `signMessage` signs the message bytes exactly as given, as a wallet's
+ * `signMessage` does for Phantom's API and Sign In With Solana; `signOffchainMessage` signs Solana's off-chain message
+ * format instead, whose header no transaction can start with.
  */
 export type SolanaAccount<Id extends string = string> = {
   readonly chain: Id
@@ -31,29 +40,50 @@ export type SolanaAccount<Id extends string = string> = {
   /** The Ed25519 public key, 32 bytes. */
   readonly publicKey: Uint8Array
   readonly path: string
-  /** The 64-byte Ed25519 signature of the message. */
+  /**
+   * The 64-byte Ed25519 signature of the message bytes, exactly as given: no prefix and no header, as dApps calling a
+   * wallet's `signMessage` (Sign In With Solana among them) expect. Show the text before signing it.
+   */
   readonly signMessage: (request: {readonly message: SolanaMessage}) => Promise<Uint8Array>
   readonly verifyMessage: (request: {
     readonly message: SolanaMessage
     readonly signature: SolanaSignature
   }) => Promise<boolean>
   /**
-   * A legacy transaction this account pays for and signs alone: the instructions compiled with the account as fee
-   * payer, the message signed, the wire bytes returned. An instruction that needs another signer is refused.
+   * Signs an off-chain message (version 0 or 1), given as its fields or as the bytes a dApp sent: the bytes are read
+   * first, and refused (`INVALID_ARGUMENT`) unless they are an off-chain message naming this account as a signer.
+   * Returns the encoded message and this account's signature of it, as @solana/kit's signers make it.
+   */
+  readonly signOffchainMessage: (message: SolanaOffchainMessage | Uint8Array) => Promise<SignedSolanaOffchainMessage>
+  /**
+   * A transaction this account pays for and signs alone: the instructions compiled with the account as fee payer
+   * (a legacy message, or v0 with its lookup tables), the message signed, the wire bytes returned. An instruction
+   * that needs another signer is refused, and so is a transaction over 1232 bytes.
    */
   readonly signTransaction: (request: SolanaTransactionRequest) => Promise<SignedSolanaTransaction>
   /**
-   * Signs a compiled legacy message made elsewhere (a watch-only wallet's, received over a QR code, say): the
-   * transaction signature, 64 bytes. The message is read first and refused (`INVALID_ARGUMENT`) unless it is a legacy
-   * message this account must sign. Show what it does first (`crypto.chains.solana.decodeMessage`).
+   * Signs a compiled message (legacy or v0) made elsewhere (a watch-only wallet's, received over a QR code, say): the
+   * transaction signature, 64 bytes. The message is read first and refused (`INVALID_ARGUMENT`) unless this account
+   * must sign it. Show what it does first (`crypto.chains.solana.decodeMessage`).
    */
   readonly signTransactionMessage: (message: Uint8Array) => Promise<Uint8Array>
+  /**
+   * Signs this account's slot of a wire transaction (legacy or v0) that others build and sign too: what a dApp hands
+   * a wallet's `signTransaction`. Every other slot is kept as it is, signed or not. Refused (`INVALID_ARGUMENT`)
+   * unless the transaction reads strictly and this account is among its signers. Show what it does first
+   * (`crypto.chains.solana.decodeTransaction`).
+   */
+  readonly partiallySignTransaction: (transaction: Uint8Array) => Promise<PartiallySignedSolanaTransaction>
 }
 
 export type SolanaTransactionRequest = {
   /** A blockhash from `getLatestBlockhash`, Base58. */
   readonly recentBlockhash: string
   readonly instructions: readonly SolanaInstruction[]
+  /** `'legacy'` unless stated; `0` for a versioned transaction. */
+  readonly version?: SolanaMessageVersion
+  /** For a v0 transaction: lookup tables to load accounts from (`compileMessage` explains which). */
+  readonly addressLookupTables?: SolanaAddressLookupTables
 }
 
 const messageBytes = (message: SolanaMessage) => (typeof message === 'string' ? utf8.encode(message) : message)
@@ -103,6 +133,8 @@ export const verifySigner = (
   }
 }
 
+const EMPTY_SIGNATURE = new Uint8Array(64)
+
 export const createAccount = <Id extends string>(
   context: AdapterContext,
   chain: Id,
@@ -111,16 +143,47 @@ export const createAccount = <Id extends string>(
 ): SolanaAccount<Id> => {
   const publicKey = key.publicKey()
   const address = addressFromPublicKey(publicKey)
+  const notASigner = (what: string) => new CryptoError('INVALID_ARGUMENT', `This account is not among the ${what}.`)
 
   return Object.freeze({
     address,
     chain,
     cluster,
+    partiallySignTransaction: async (transaction: Uint8Array) => {
+      const decoded = decodeTransaction(transaction)
+      const slot = decoded.signers.indexOf(address)
+
+      if (slot < 0) {
+        throw notASigner('transaction`s signers')
+      }
+
+      const signature = key.sign(decoded.message)
+      const signatures = decoded.signatures.map((existing, index) => (index === slot ? signature : existing))
+      const payer = signatures[0]
+
+      return Object.freeze({
+        complete: signatures.every(existing => existing !== undefined),
+        serialized: serializeTransaction(
+          decoded.message,
+          signatures.map(existing => existing ?? EMPTY_SIGNATURE)
+        ),
+        signature: payer && base58.encode(payer),
+      })
+    },
     path: key.path ?? '',
     publicKey,
     signMessage: async ({message}) => key.sign(messageBytes(message)),
-    signTransaction: async ({instructions, recentBlockhash}) => {
-      const message = compileLegacyMessage({feePayer: address, instructions, recentBlockhash})
+    signOffchainMessage: async (message: SolanaOffchainMessage | Uint8Array) => {
+      const {bytes, signers} = offchainMessageBytes(message)
+
+      if (!signers.includes(address)) {
+        throw notASigner('off-chain message`s signers')
+      }
+
+      return Object.freeze({message: bytes, signature: key.sign(bytes)})
+    },
+    signTransaction: async ({addressLookupTables, instructions, recentBlockhash, version}) => {
+      const message = compileMessage({addressLookupTables, feePayer: address, instructions, recentBlockhash, version})
       const others = message.signers.filter(signer => signer !== address)
 
       if (others.length > 0) {
@@ -136,7 +199,7 @@ export const createAccount = <Id extends string>(
     },
     signTransactionMessage: async (message: Uint8Array) => {
       if (!decodeMessage(message).signers.includes(address)) {
-        throw new CryptoError('INVALID_ARGUMENT', 'This account is not among the message`s signers.')
+        throw notASigner('message`s signers')
       }
 
       return key.sign(message)

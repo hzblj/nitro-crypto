@@ -16,9 +16,32 @@ export type {
   TransferRequest,
   TransferTokenRequest,
 } from './instructions'
-export {COMPUTE_BUDGET_PROGRAM, type DecodedSolanaMessage, type SolanaInstructionSummary} from './message'
+export {
+  COMPUTE_BUDGET_PROGRAM,
+  type DecodedSolanaAccount,
+  type DecodedSolanaInstruction,
+  type DecodedSolanaMessage,
+  type DecodedSolanaTransaction,
+  type DecodeMessageOptions,
+  type SolanaAddressTableLookup,
+  type SolanaInstructionSummary,
+} from './message'
+export type {
+  DecodedSolanaOffchainMessage,
+  SignedSolanaOffchainMessage,
+  SolanaOffchainMessage,
+  SolanaOffchainMessageFormat,
+} from './offchain'
 export type {SolanaAccountRequest} from './path'
 export type {AssociatedTokenRequest, ProgramAddress} from './pda'
 export {ASSOCIATED_TOKEN_PROGRAM, SYSTEM_PROGRAM, TOKEN_2022_PROGRAM, TOKEN_PROGRAM} from './programs'
-export {type CompileMessageRequest, type SignedSolanaTransaction, TRANSACTION_SIZE_LIMIT} from './transaction'
+export {
+  type CompileMessageRequest,
+  type LookupSource,
+  type PartiallySignedSolanaTransaction,
+  type SignedSolanaTransaction,
+  type SolanaAddressLookupTables,
+  type SolanaMessageVersion,
+  TRANSACTION_SIZE_LIMIT,
+} from './transaction'
 export {VERSION} from './version'

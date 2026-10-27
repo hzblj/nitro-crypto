@@ -2016,6 +2016,10 @@ __metadata:
     typescript: "npm:~7.0.2"
   peerDependencies:
     "@hzblj/nitro-crypto": "workspace:^"
+    "@solana/kit": ^8.5.0
+  peerDependenciesMeta:
+    "@solana/kit":
+      optional: true
   languageName: unknown
   linkType: soft
 
