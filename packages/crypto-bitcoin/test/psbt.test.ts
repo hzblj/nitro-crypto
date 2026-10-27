@@ -257,6 +257,32 @@ describe('PSBT', async () => {
     throwsWith(() => chain.decodePsbt(lying), 'INVALID_ARGUMENT', /disagrees/)
   })
 
+  test('a PSBT whose outputs exceed its inputs reads, and neither signs nor finalizes', async () => {
+    // A marketplace offer: the seller's coin and the asking price, waiting for a buyer's inputs.
+    const offer = new Transaction({allowUnknownOutputs: true, lockTime: 0, version: 2})
+    offer.addInput({
+      index: 0,
+      sighashType: 0x83,
+      txid: 'ab'.repeat(32),
+      witnessUtxo: {amount: 546n, script: account.scriptPubKey},
+    })
+    offer.addOutputAddress(recipient, 250_000n, TEST_NETWORK)
+    const psbt = offer.toPSBT()
+    const decoded = chain.decodePsbt(psbt)
+
+    assert.equal(decoded.balance, 546n - 250_000n)
+    assert.equal(decoded.fee, undefined)
+    assert.equal(decoded.inputs[0]?.sighashType, 0x83)
+    await rejectsWith(account.signPsbt(psbt), 'INVALID_ARGUMENT')
+    throwsWith(() => chain.finalizePsbt(psbt), 'INVALID_ARGUMENT', /not finished/)
+
+    // A finished PSBT reports the same number twice.
+    const plan = account.createTransaction({amount: 10_000n, feeRate: 1, to: recipient, utxos: [utxo('aa', 50_000)]})
+    const finished = chain.decodePsbt(account.createPsbt(plan))
+    assert.equal(finished.balance, plan.fee)
+    assert.equal(finished.fee, plan.fee)
+  })
+
   test('only SIGHASH_ALL is signed', async () => {
     const theirs = Transaction.fromPSBT(
       account.createPsbt(

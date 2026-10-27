@@ -112,8 +112,15 @@ export type BitcoinPsbt = {
   readonly locktime: number
   readonly inputs: readonly BitcoinPsbtInput[]
   readonly outputs: readonly BitcoinPsbtOutput[]
-  /** Satoshis: the inputs less the outputs, when every input states its value. */
+  /** Satoshis: the inputs less the outputs, when every input states its value and the outputs do not exceed them. */
   readonly fee: bigint | undefined
+  /**
+   * Satoshis: the inputs less the outputs, when every input states its value. Negative for a PSBT that is not finished:
+   * its outputs ask for more than its inputs hold, as a marketplace offer does (a seller's coin and asking price,
+   * signed SIGHASH_SINGLE | ANYONECANPAY, waiting for a buyer's inputs). Such a PSBT reads, and neither signs here nor
+   * finalizes.
+   */
+  readonly balance: bigint | undefined
 }
 
 type KeyValue = {readonly key: Uint8Array; readonly value: Uint8Array}
@@ -600,18 +607,15 @@ const decode = (data: Uint8Array, network: BitcoinNetwork, sha256: Hash): Decode
   })
   const values = inputs.map(input => input.spent?.value)
   const total = (items: readonly bigint[]) => items.reduce((sum, value) => sum + value, 0n)
-  const fee = values.every(value => value !== undefined)
+  const balance = values.every(value => value !== undefined)
     ? total(values as bigint[]) - total(outputs.map(output => output.value))
     : undefined
-
-  if (fee !== undefined && fee < 0n) {
-    throw invalid('The PSBT spends more than its inputs hold.')
-  }
 
   return {
     maps,
     psbt: Object.freeze({
-      fee,
+      balance,
+      fee: balance !== undefined && balance >= 0n ? balance : undefined,
       inputs: Object.freeze(inputs),
       locktime: tx.locktime,
       outputs: Object.freeze(outputs),
@@ -844,6 +848,13 @@ const taprootInputSigner = (
  */
 export const signPsbt = (data: Uint8Array, signer: AccountSigner, context: SignPsbtContext): SignedPsbt => {
   const {maps, psbt, tx} = decode(data, context.network, context.sha256)
+
+  // This signs SIGHASH_ALL (or Taproot's DEFAULT), which commits to every input: a PSBT whose outputs exceed its
+  // inputs could never be completed with such a signature.
+  if (psbt.balance !== undefined && psbt.balance < 0n) {
+    throw invalid('The PSBT pays out more than its inputs hold: it is not finished, and this signs only SIGHASH_ALL.')
+  }
+
   const raw = withValues(tx, psbt)
   const sign =
     signer.type === 'p2tr' ? taprootInputSigner(psbt, raw, signer, context) : p2wpkhInputSigner(raw, signer, context)
@@ -1005,6 +1016,10 @@ const taprootWitness = (
 export const finalizePsbt = (data: Uint8Array, context: FinalizeContext): SignedBitcoinTransaction => {
   const {maps, psbt, tx} = decode(data, context.network, context.sha256)
   const raw = withValues(tx, psbt)
+
+  if (psbt.balance !== undefined && psbt.balance < 0n) {
+    throw invalid('The PSBT pays out more than its inputs hold: it is not finished, so it does not finalize.')
+  }
 
   if (psbt.fee === undefined) {
     throw invalid('Every input needs its coin`s value to be finalized.')
