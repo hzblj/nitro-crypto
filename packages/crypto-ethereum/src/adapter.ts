@@ -4,12 +4,18 @@ import {
   CryptoError,
   defineAdapter,
   type ExtendedPublicKey,
-  isCryptoError,
   type KeySource,
   type RecoverableSignature,
 } from '@hzblj/nitro-crypto/adapter'
 
-import {createAccount, type EthereumAccount, recoverSigner, verifySigner} from './account'
+import {
+  createAccount,
+  type EthereumAccount,
+  recoverAddress,
+  recoverSigner,
+  verifyRecovered,
+  verifySigner,
+} from './account'
 import {
   type Address,
   addressFromPublicKey,
@@ -17,19 +23,34 @@ import {
   type EthereumAddressValidation,
   validateAddress,
 } from './address'
+import {
+  authorizationDigest,
+  type EthereumAuthorization,
+  type EthereumAuthorizationRequest,
+  hashAuthorization,
+} from './authorization'
 import {type EthereumConfig, type EthereumNetwork, resolveConfig} from './config'
 import {createErc20, type Erc20} from './erc20'
 import {hashMessage} from './message'
 import {derivationPath, type EthereumAccountRequest} from './path'
-import {parseSignature} from './signature'
+import {toRecoverable} from './signature'
 import {
   assembleTransaction,
   type EthereumTransactionRequest,
+  type ParsedEthereumTransaction,
   parseTransaction,
   type SignedEthereumTransaction,
   serializeTransaction,
   transactionDigest,
 } from './transaction'
+import {
+  hashDomain,
+  hashStruct,
+  hashTypedData,
+  type TypedDataDefinition,
+  type TypedDataDomain,
+  type TypedDataTypes,
+} from './typed-data'
 import type {Hex, SignableMessage} from './types'
 import {VERSION} from './version'
 
@@ -54,8 +75,44 @@ export type EthereumChain<Id extends string = 'ethereum'> = {
     readonly signature: Hex
   }) => boolean
   /**
-   * The EIP-2718 envelope of an EIP-1559 transaction on this network: unsigned without a signature (its Keccak-256
-   * is what a key signs), ready to broadcast with one. Accounts sign with `signTransaction`.
+   * The EIP-712 digest of typed data, what `signTypedData` signs: `keccak256(0x19 0x01 || domainSeparator ||
+   * hashStruct(message))`. A domain chain id other than this network's is `CHAIN_MISMATCH`.
+   */
+  readonly hashTypedData: (typedData: TypedDataDefinition) => Uint8Array
+  /**
+   * The domain separator, as a contract's `DOMAIN_SEPARATOR()` returns it. `EIP712Domain` comes from `types` when
+   * they declare it, or from the fields the domain has. Not bound to this network: it is a part, not a digest.
+   */
+  readonly hashDomain: (request: {readonly domain: TypedDataDomain; readonly types?: TypedDataTypes}) => Uint8Array
+  /** `hashStruct(data)` for a struct of `types`, EIP-712's `keccak256(typeHash || encodeData(data))`. */
+  readonly hashStruct: (request: {
+    readonly types: TypedDataTypes
+    readonly primaryType: string
+    readonly data: {readonly [member: string]: unknown}
+  }) => Uint8Array
+  /**
+   * The address that signed the typed data, or `undefined` when the signature recovers no key. Bound to this network
+   * as `hashTypedData` is; malformed typed data throws.
+   */
+  readonly recoverTypedDataAddress: (request: TypedDataDefinition & {readonly signature: Hex}) => Address | undefined
+  /** Whether `address` signed the typed data: recovery, compared with the address. */
+  readonly verifyTypedData: (
+    request: TypedDataDefinition & {readonly address: string; readonly signature: Hex}
+  ) => boolean
+  /**
+   * The EIP-7702 digest of an authorization, what `signAuthorization` signs: `keccak256(0x05 || rlp([chainId,
+   * address, nonce]))`. The same checks: this network's chain id, or 0 with `allowAllChains`.
+   */
+  readonly hashAuthorization: (request: EthereumAuthorizationRequest) => Uint8Array
+  /**
+   * The account that signed an authorization (from a transaction's list, or sent to a sponsor), or `undefined` when
+   * the signature recovers no key. Its chain id is this network's or 0.
+   */
+  readonly recoverAuthorizationAddress: (authorization: EthereumAuthorization) => Address | undefined
+  /**
+   * A transaction's raw bytes on this network: unsigned without a signature (its Keccak-256 is what a key signs),
+   * ready to broadcast with one. Legacy (EIP-155), EIP-2930, EIP-1559 and EIP-7702. Accounts sign with
+   * `signTransaction`.
    */
   readonly serializeTransaction: (request: EthereumTransactionRequest, signature?: RecoverableSignature) => Hex
   /** ERC-20 call data and results: `transfer`, `balanceOf`. */
@@ -63,13 +120,12 @@ export type EthereumChain<Id extends string = 'ethereum'> = {
   /** The address of a SEC1 public key, compressed or not. Throws `INVALID_PUBLIC_KEY` for a key that is not a point. */
   readonly addressFromPublicKey: (publicKey: Uint8Array) => Address
   /**
-   * The request in an unsigned EIP-1559 envelope, as `serializeTransaction` writes it: what a signer that receives a
-   * transaction to sign (over a QR code, say) reads and shows first. Strict, and bound to this network's chain id;
-   * anything else is `INVALID_ARGUMENT` (malformed RLP is `INVALID_ENCODING`).
+   * The request in an unsigned transaction of any type this adapter signs, as `serializeTransaction` writes it: what
+   * a signer that receives a transaction to sign (over a QR code, say) reads and shows first. Strict, and bound to
+   * this network's chain id (`CHAIN_MISMATCH`). A signed, unprotected legacy or malformed transaction is
+   * `INVALID_ARGUMENT` (malformed RLP is `INVALID_ENCODING`); a blob transaction or an unknown type is `UNSUPPORTED`.
    */
-  readonly parseTransaction: (
-    serialized: Hex | Uint8Array
-  ) => EthereumTransactionRequest & {readonly chainId: number; readonly to: Address; readonly data: Hex}
+  readonly parseTransaction: (serialized: Hex | Uint8Array) => ParsedEthereumTransaction
   /** The address that signed `request`, from a signature made elsewhere; `undefined` when it recovers no key. */
   readonly recoverTransactionAddress: (request: {
     readonly transaction: EthereumTransactionRequest
@@ -89,9 +145,6 @@ export type EthereumChain<Id extends string = 'ethereum'> = {
    */
   readonly derivePublic: (key: ExtendedPublicKey, path: string) => ExtendedPublicKey
 }
-
-const toRecoverable = (signature: RecoverableSignature | Hex | Uint8Array): RecoverableSignature =>
-  typeof signature === 'string' || signature instanceof Uint8Array ? parseSignature(signature) : signature
 
 const createChain = <Id extends string>(
   context: AdapterContext,
@@ -124,40 +177,38 @@ const createChain = <Id extends string>(
       return context.bip32.derivePublic(key, path)
     },
     erc20: createErc20(keccak256),
+    hashAuthorization: (request: EthereumAuthorizationRequest) => hashAuthorization(request, network, keccak256),
+    hashDomain: request => hashDomain(request, keccak256),
     hashMessage: (message: SignableMessage) => hashMessage(message, keccak256),
+    hashStruct: request => hashStruct(request, keccak256),
+    hashTypedData: (typedData: TypedDataDefinition) => hashTypedData(typedData, keccak256, network),
     network,
     parseTransaction: (serialized: Hex | Uint8Array) => parseTransaction(serialized, network, keccak256),
+    recoverAuthorizationAddress: (authorization: EthereumAuthorization) =>
+      recoverAddress(context, () => authorizationDigest(authorization, network, keccak256), authorization.signature),
     recoverMessageAddress: ({message, signature}) => recoverSigner(context, message, signature),
-    recoverTransactionAddress: ({signature, transaction}) => {
-      try {
-        const recovered = context.secp256k1.recover(
-          transactionDigest(transaction, network, keccak256),
-          toRecoverable(signature),
-          'uncompressed'
-        )
-
-        return addressFromPublicKey(recovered, keccak256)
-      } catch (error) {
-        if (isCryptoError(error, 'INVALID_SIGNATURE') || isCryptoError(error, 'VERIFICATION_FAILED')) {
-          return undefined
-        }
-
-        throw error
-      }
-    },
+    recoverTransactionAddress: ({signature, transaction}) =>
+      recoverAddress(context, () => transactionDigest(transaction, network, keccak256), signature),
+    recoverTypedDataAddress: ({signature, ...typedData}) =>
+      recoverAddress(context, () => hashTypedData(typedData, keccak256, network), signature),
     serializeTransaction: (request: EthereumTransactionRequest, signature?: RecoverableSignature) =>
       serializeTransaction(request, network, keccak256, signature),
     validateAddress: (address: string) => validateAddress(address, keccak256),
     verifyMessage: ({address, message, signature}) => verifySigner(context, address, message, signature),
+    verifyTypedData: ({address, signature, ...typedData}) =>
+      verifyRecovered(context, address, () =>
+        recoverAddress(context, () => hashTypedData(typedData, keccak256, network), signature)
+      ),
   })
 }
 
 /**
- * Ethereum and every EVM chain: secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 message signatures
- * and signer recovery, EIP-1559 transactions, and ERC-20 call data. Register one per network, each with its own id
- * and chain id; the addresses are the same, and each signs transactions for its own chain id only.
+ * Ethereum and every EVM chain: secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 messages, EIP-712
+ * typed data, transactions of types 0 (EIP-155), 1, 2 and 4 with access lists and contract creation, EIP-7702
+ * authorizations, and ERC-20 call data. Register one per network, each with its own id and chain id; the addresses
+ * are the same, and each signs for its own chain id only (`CHAIN_MISMATCH` otherwise).
  *
- * Not here (yet): EIP-712 typed data, legacy and EIP-2930 transactions, and contract creation.
+ * Not here: EIP-4844 blob transactions, and signing a bare hash (`eth_sign`).
  */
 export const ethereumAdapter = <const Id extends string = 'ethereum'>(
   config: EthereumConfig<Id> = {}
@@ -167,8 +218,18 @@ export const ethereumAdapter = <const Id extends string = 'ethereum'>(
   return defineAdapter({
     create: (context: AdapterContext) => createChain(context, id, network),
     curve: 'secp256k1',
-    features: {messageSigning: true, transactionSigning: true, typedData: false},
-    formats: {address: ['eip55'], signature: ['eip191', 'eip1559']},
+    features: {
+      accessLists: true,
+      blobTransactions: false,
+      contractCreation: true,
+      hashSigning: false,
+      legacyTransactions: true,
+      messageSigning: true,
+      setCodeTransactions: true,
+      transactionSigning: true,
+      typedData: true,
+    },
+    formats: {address: ['eip55'], signature: ['eip191', 'eip712', 'eip155', 'eip2930', 'eip1559', 'eip7702']},
     id,
     name: network.name,
     requires: ['keccak256', 'secp256k1-ecdsa', 'secp256k1-recovery', 'bip32-secp256k1'],

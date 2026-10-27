@@ -49,6 +49,39 @@ export const word = (value: bigint | Uint8Array): Uint8Array => {
   return out
 }
 
+/** The bytes without their leading zeros: an integer's minimal big-endian form (zero is no bytes at all). */
+export const trimLeadingZeros = (raw: Uint8Array): Uint8Array => {
+  const start = raw.findIndex(byte => byte !== 0)
+
+  return start === -1 ? new Uint8Array(0) : raw.slice(start)
+}
+
+const INTEGER_TEXT = /^(-?)(0x[0-9a-fA-F]+|[0-9]+)$/
+
+/**
+ * An integer as a `bigint`, a safe `number`, or text the way JSON-RPC payloads carry one (decimal, or `0x` hex, either
+ * with a leading minus). `undefined` for anything else, a fractional or unsafe number included.
+ */
+export const toInteger = (value: unknown): bigint | undefined => {
+  if (typeof value === 'bigint') {
+    return value
+  }
+
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) ? BigInt(value) : undefined
+  }
+
+  const match = typeof value === 'string' ? INTEGER_TEXT.exec(value) : null
+
+  if (!match) {
+    return undefined
+  }
+
+  const magnitude = BigInt(match[2] ?? '0')
+
+  return match[1] === '-' ? -magnitude : magnitude
+}
+
 /** Big-endian bytes as an unsigned integer. */
 export const bytesToUint = (raw: Uint8Array): bigint => {
   let out = 0n

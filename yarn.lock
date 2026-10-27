@@ -1995,6 +1995,10 @@ __metadata:
     viem: "npm:2.57.11"
   peerDependencies:
     "@hzblj/nitro-crypto": "workspace:^"
+    viem: ^2.26.0
+  peerDependenciesMeta:
+    viem:
+      optional: true
   languageName: unknown
   linkType: soft
 

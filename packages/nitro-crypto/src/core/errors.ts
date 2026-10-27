@@ -33,12 +33,15 @@ export const CRYPTO_ERROR_CODES = [
   'INVALID_ADAPTER',
   'INVALID_CONFIG',
   'UNKNOWN_CHAIN',
+  // From the adapters
+  'CHAIN_MISMATCH',
 ] as const
 
 export type CryptoErrorCode = (typeof CRYPTO_ERROR_CODES)[number]
 
 const DEFAULT_MESSAGES: Record<CryptoErrorCode, string> = {
   ABI_MISMATCH: 'The native engine implements a different C ABI version than this package expects.',
+  CHAIN_MISMATCH: 'The request is for another network than the one the adapter signs for.',
   DERIVATION_FAILED: 'Key derivation produced an invalid key at this path.',
   DISPOSED: 'This key or wallet has been disposed.',
   DUPLICATE_ADAPTER: 'Two adapters share one id.',
