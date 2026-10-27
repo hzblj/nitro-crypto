@@ -1,5 +1,11 @@
 # @hzblj/crypto-bitcoin
 
+## 0.3.1
+
+### Patch Changes
+
+- [#18](https://github.com/hzblj/nitro-crypto/pull/18) [`b73ed73`](https://github.com/hzblj/nitro-crypto/commit/b73ed7358702d4a4e8f6136756bc215c895f2b81) Thanks [@hzblj](https://github.com/hzblj)! - `decodePsbt` reads a PSBT whose outputs exceed its inputs instead of refusing it, so a wallet can show an unfinished one such as a marketplace offer (a seller's coin and asking price, signed `SIGHASH_SINGLE | ANYONECANPAY`, waiting for a buyer's inputs). The new `balance` is the inputs less the outputs, negative for such a PSBT, whose `fee` is then `undefined`. `signPsbt` and `finalizePsbt` still refuse it: this package signs only `SIGHASH_ALL` (or Taproot's default), which could never complete it.
+
 ## 0.3.0
 
 ### Minor Changes
