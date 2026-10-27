@@ -1,6 +1,6 @@
 {
   "name": "@hzblj/crypto-solana",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Solana adapter for @hzblj/nitro-crypto: Ed25519 accounts derived with SLIP-0010, Base58 addresses, message and off-chain message signatures, signed legacy and v0 transactions with address lookup tables, and a @solana/kit signer.",
   "author": "Jan Blazej",
   "license": "MIT",

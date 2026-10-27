@@ -1,5 +1,16 @@
 # @hzblj/crypto-ethereum
 
+## 0.3.0
+
+### Minor Changes
+
+- [#11](https://github.com/hzblj/nitro-crypto/pull/11) [`315484b`](https://github.com/hzblj/nitro-crypto/commit/315484b5ec891b6b45f38c2415d323841243df8a) Thanks [@hzblj](https://github.com/hzblj)! - EIP-712 typed data, every transaction type a wallet signs, EIP-7702, and a viem account. `account.signTypedData({domain, types, primaryType, message})` signs viem's shape (and `eth_signTypedData_v4`'s), with the whole of EIP-712: nested structs, arrays of any dimension, every `intN`, `uintN` and `bytesN` checked, `EIP712Domain` declared or derived; malformed typed data is refused with messages that never repeat a value. The chain adds `hashTypedData`, `hashDomain`, `hashStruct`, `recoverTypedDataAddress` and `verifyTypedData`. Transactions: legacy (type 0, always with EIP-155), EIP-2930 (type 1), access lists on types 1, 2 and 4, contract creation (`to: null`, init code in `data`) on types 0 to 2, and EIP-7702 (type 4) with its authorization list; `account.signAuthorization({address, nonce})` signs an authorization, with chain id 0 (every chain) refused unless `allowAllChains` is set, and the chain adds `hashAuthorization` and `recoverAuthorizationAddress`. `parseTransaction` reads every type it signs and returns its `type`. A request for another network (a transaction, a typed data domain, an authorization, a parsed transaction) is now `CHAIN_MISMATCH` instead of `INVALID_ARGUMENT`. `@hzblj/crypto-ethereum/viem` exports `toViemAccount(account)`, a viem `LocalAccount` that signs byte for byte as `privateKeyToAccount` does, with no raw-hash `sign`; viem is an optional peer dependency. `features` gain `typedData`, `legacyTransactions`, `accessLists`, `contractCreation` and `setCodeTransactions` (true), and `blobTransactions` and `hashSigning` (false). Parity with viem.
+
+### Patch Changes
+
+- Updated dependencies [[`315484b`](https://github.com/hzblj/nitro-crypto/commit/315484b5ec891b6b45f38c2415d323841243df8a), [`dc6062d`](https://github.com/hzblj/nitro-crypto/commit/dc6062d9d700ddf9e33e7cc4ff43836c658f65f6), [`c1ceb75`](https://github.com/hzblj/nitro-crypto/commit/c1ceb759f9c3b840153933d6c288d6c887f28a2d), [`fbd3720`](https://github.com/hzblj/nitro-crypto/commit/fbd37205d4c57696f91e988b513d04cef29b2cb8), [`b8ee6b2`](https://github.com/hzblj/nitro-crypto/commit/b8ee6b24c3fb198ad25b4e7baa8854fb856dba46)]:
+  - @hzblj/nitro-crypto@0.1.5
+
 ## 0.2.0
 
 ### Minor Changes
