@@ -20,9 +20,11 @@ adapters and tested against independent libraries in [`apps/example/test/chains.
 | `mnemonic-generate` | A fresh BIP-39 mnemonic handed out for backup (`crypto.mnemonic.generate`); no adapter needs it |
 | `bip32-extended-public` | An account's extended public key (`keys.extendedPublicKey`), never the master's (ADR 0007) |
 | `bip32-public-derivation` | Public derivation from an extended public key (`bip32.derivePublic`), non-hardened steps only |
+| `secp256k1-schnorr` | BIP-340 Schnorr signatures (`key.signSchnorr`, `schnorr.verify`) |
+| `taproot-tweak` | BIP-341's tweak (`schnorr.taprootTweak`) and key path signatures by the tweaked key (`key.signTaproot`) |
 
 TRON needs `bip32-secp256k1`, `keccak256` and `sha256` (for Base58Check): all there. If yours needs something that is
-not (Schnorr for Taproot, sr25519 for Polkadot, Blake2b for Cardano), see "When the engine lacks a primitive" below.
+not (sr25519 for Polkadot, Blake2b for Cardano), see "When the engine lacks a primitive" below.
 
 ## 2. Write the adapter
 
@@ -60,7 +62,10 @@ What each part is for:
   letters, digits and dashes. Two adapters may not share one; to register the same chain twice (mainnet and a
   testnet), take the id from the configuration.
 - **`requires`** is checked when the engine is created: an engine without one of them refuses the adapter with
-  `MISSING_CAPABILITY`, naming it, instead of failing later on a missing operation.
+  `MISSING_CAPABILITY`, naming it, instead of failing later on a missing operation. It is all or nothing, so list only
+  what every use needs. A capability only some features need (Bitcoin's Taproot needs `secp256k1-schnorr` and
+  `taproot-tweak`, its P2WPKH neither) is checked where it is used, `context.engine.has(…)`, with `UNSUPPORTED` when it
+  is missing: an app whose JavaScript is newer than its native engine (an update over the air) keeps the rest.
 - **`features`** says what the adapter does and does not do. Say `false` rather than leaving a flag out: the example
   app shows these, and an app can branch on them.
 - **`create`** runs once, with the engine's stateless primitives and its info. Close over `context`; never import a

@@ -25,6 +25,8 @@ export const CAPABILITIES = [
   'mnemonic-generate',
   'bip32-extended-public',
   'bip32-public-derivation',
+  'secp256k1-schnorr',
+  'taproot-tweak',
 ] as const
 
 export type Capability = (typeof CAPABILITIES)[number]

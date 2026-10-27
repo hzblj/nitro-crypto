@@ -69,6 +69,9 @@ static void test_version_and_capabilities(void) {
     CHECK((caps & NC_CAP_BIP32_PUBLIC_DERIVATION) && strcmp(nc_capability_name(15), "bip32-public-derivation") == 0);
     CHECK((caps & NC_CAP_BIP39_ENTROPY) && strcmp(nc_capability_name(16), "bip39-entropy") == 0);
     CHECK((caps & NC_CAP_BACKUP_ARGON2ID) && strcmp(nc_capability_name(17), "backup-argon2id") == 0);
+    CHECK((caps & NC_CAP_SECP256K1_SCHNORR) && strcmp(nc_capability_name(18), "secp256k1-schnorr") == 0);
+    CHECK((caps & NC_CAP_TAPROOT_TWEAK) && strcmp(nc_capability_name(19), "taproot-tweak") == 0);
+    CHECK((caps & NC_CAP_BACKUP_HKDF_SHA256) && strcmp(nc_capability_name(20), "backup-hkdf-sha256") == 0);
 }
 
 static void test_status_names(void) {
@@ -163,6 +166,40 @@ static void test_ed25519_verify(void) {
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_ed25519_verify(public_key, 32, NULL, 0, signature, 63));
 }
 
+/* BIP-340 vector 1 (verify only, from its public parts), and BIP-341's first two scriptPubKey vectors. */
+static void test_schnorr_public(void) {
+    uint8_t public_key[32], message[32], signature[64], out[33];
+    size_t written = 0;
+    hex_decode("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", public_key, 32);
+    hex_decode("243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", message, 32);
+    hex_decode("6896bd60eeae296db48a229ff71dfe071bde413e6d43f917dc8dcf8c78de33418906d11ac976abccb20b091292bff4ea897efcb639ea871cfa95f6de339e4b0a", signature, 64);
+    CHECK_STATUS(NC_OK, nc_secp256k1_schnorr_verify(public_key, 32, message, 32, signature, 64));
+    message[31] ^= 1;
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_secp256k1_schnorr_verify(public_key, 32, message, 32, signature, 64));
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_secp256k1_schnorr_verify(public_key, 32, NULL, 0, signature, 64));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_secp256k1_schnorr_verify(public_key, 33, message, 32, signature, 64));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_secp256k1_schnorr_verify(public_key, 32, message, 32, signature, 65));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_secp256k1_schnorr_verify(public_key, 32, NULL, 32, signature, 64));
+    /* BIP-340 vector 14: a public key above the field size. */
+    memset(public_key, 0xff, 32);
+    CHECK_STATUS(NC_ERR_INVALID_PUBLIC_KEY, nc_secp256k1_schnorr_verify(public_key, 32, message, 32, signature, 64));
+
+    /* No script tree: Q's x and its parity (BIP-341 wallet vector 0); then one with a merkle root (vector 1). */
+    uint8_t merkle_root[32];
+    hex_decode("d6889cb081036e0faefa3a35157ad71086b123b2b144b649798b494c300a961d", public_key, 32);
+    CHECK_STATUS(NC_OK, nc_secp256k1_taproot_tweak(public_key, 32, NULL, 0, out, 33, &written));
+    CHECK(written == 33 && equals_hex(out + 1, "53a1f6e454df1aa2776a2814a721372d6258050de330b3c6d10ee8f4e0dda343"));
+    hex_decode("187791b6f712a8ea41c8ecdd0ee77fab3e85263b37e1ec18a3651926b3a6cf27", public_key, 32);
+    hex_decode("5b75adecf53548f3ec6ad7d78383bf84cc57b55a3127c72b9a2481752dd88b21", merkle_root, 32);
+    CHECK_STATUS(NC_OK, nc_secp256k1_taproot_tweak(public_key, 32, merkle_root, 32, out, 33, &written));
+    CHECK(out[0] == 0x03 && equals_hex(out + 1, "147c9c57132f6e7ecddba9800bb0c4449251c92a1e60371ee77557b6620f3ea3"));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_secp256k1_taproot_tweak(public_key, 32, merkle_root, 31, out, 33, &written));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_secp256k1_taproot_tweak(public_key, 31, NULL, 0, out, 33, &written));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_secp256k1_taproot_tweak(public_key, 32, NULL, 32, out, 33, &written));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_secp256k1_taproot_tweak(public_key, 32, NULL, 0, out, 32, &written));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_secp256k1_taproot_tweak(public_key, 32, NULL, 0, out, 33, NULL));
+}
+
 /* ------------------------------------------------------------------------------------------ seeds, keys */
 
 static void test_mnemonic(void) {
@@ -236,6 +273,27 @@ static void test_entropy(void) {
     CHECK_STATUS(NC_OK, nc_handle_destroy(from_words));
     CHECK_STATUS(NC_OK, nc_handle_destroy(from_entropy));
 
+    /* A passphrase is hashed as given, so the caller normalizes it: e-acute in NFKD (e, then U+0301) makes the seed the
+       words make under it, NFC (U+00E9) another. */
+    const char *nfkd = "e\xcc\x81", *nfc = "\xc3\xa9";
+    nc_handle from_nfc = 0;
+    uint32_t c = 0;
+    CHECK_STATUS(NC_OK, nc_seed_from_mnemonic(ABANDON, strlen(ABANDON), nfkd, strlen(nfkd), &from_words));
+    CHECK_STATUS(NC_OK, nc_seed_from_entropy(zero, sizeof zero, nfkd, strlen(nfkd), &from_entropy));
+    CHECK_STATUS(NC_OK, nc_seed_from_entropy(zero, sizeof zero, nfc, strlen(nfc), &from_nfc));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_words, &a));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_entropy, &b));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_nfc, &c));
+    CHECK(a == b && b != c);
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_words));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_entropy));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_nfc));
+    static char long_passphrase[1025];
+    memset(long_passphrase, 'a', sizeof long_passphrase);
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_seed_from_entropy(zero, 16, long_passphrase, 1025, &from_entropy));
+    CHECK_STATUS(NC_OK, nc_seed_from_entropy(zero, 16, long_passphrase, 1024, &from_entropy));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_entropy));
+
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_seed_from_entropy(zero, 15, NULL, 0, &from_entropy));
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_mnemonic_from_entropy(zero, 15, words, sizeof words, &written));
     CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_mnemonic_from_entropy(zero, 16, words, 12 * 9 - 2, &written));
@@ -272,6 +330,59 @@ static void test_backup(void) {
     CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_seal(entropy, 32, password, 0, sealed, NC_BACKUP_MAX_LENGTH - 1, &written));
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_seal(entropy, 15, password, 0, sealed, sizeof sealed, &written));
     memset(opened, 0, sizeof opened);
+
+    /* What a backup sealed under a password says, and what opening it under a key does. */
+    uint32_t kdf = 0;
+    uint8_t key[NC_BACKUP_KEY_LENGTH];
+    memset(key, 0x42, sizeof key);
+    CHECK_STATUS(NC_OK, nc_backup_kdf(other, other_written, &kdf));
+    CHECK(kdf == NC_BACKUP_KDF_ARGON2ID);
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_open_with_key(other, other_written, key, 32, opened, sizeof opened, &length));
+}
+
+/* A backup sealed under a 32-byte key, as a passkey's PRF gives one: sealed, opened, and refused every other way. */
+static void test_backup_with_key(void) {
+    static const uint8_t entropy[16] = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5, 6};
+    uint8_t key[NC_BACKUP_KEY_LENGTH], wrong[NC_BACKUP_KEY_LENGTH], zero[NC_BACKUP_KEY_LENGTH] = {0};
+    uint8_t sealed[NC_BACKUP_MAX_LENGTH], other[NC_BACKUP_MAX_LENGTH], opened[NC_ENTROPY_MAX_LENGTH];
+    size_t written = 0, other_written = 0, length = 0;
+    uint32_t kdf = 0;
+    CHECK_STATUS(NC_OK, nc_random_bytes(key, sizeof key));
+    memcpy(wrong, key, sizeof key);
+    wrong[0] ^= 1;
+
+    CHECK_STATUS(NC_OK, nc_backup_seal_with_key(entropy, 16, key, 32, sealed, sizeof sealed, &written));
+    CHECK(written == NC_BACKUP_KEY_HEADER_LENGTH + 16 + 16);
+    CHECK(memcmp(sealed, "ncbk\x01\x02", 6) == 0);
+    CHECK_STATUS(NC_OK, nc_backup_kdf(sealed, written, &kdf));
+    CHECK(kdf == NC_BACKUP_KDF_KEY);
+    CHECK_STATUS(NC_OK, nc_backup_open_with_key(sealed, written, key, 32, opened, sizeof opened, &length));
+    CHECK(length == 16 && memcmp(opened, entropy, 16) == 0);
+    CHECK_STATUS(NC_OK, nc_backup_seal_with_key(entropy, 16, key, 32, other, sizeof other, &other_written));
+    CHECK(other_written == written && memcmp(other, sealed, written) != 0);
+
+    /* A wrong key and a changed backup fail alike; a password cannot open it, nor it a password's backup. */
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_backup_open_with_key(sealed, written, wrong, 32, opened, sizeof opened, &length));
+    other[NC_BACKUP_KEY_HEADER_LENGTH - 1] ^= 1;
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_backup_open_with_key(other, written, key, 32, opened, sizeof opened, &length));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_open(sealed, written, "pw", 2, opened, sizeof opened, &length));
+
+    /* Lengths, buffers, a key of zeros, a header this engine does not read. */
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_seal_with_key(entropy, 16, key, 31, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_seal_with_key(entropy, 15, key, 32, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_seal_with_key(entropy, 16, zero, 32, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_seal_with_key(entropy, 16, NULL, 32, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_seal_with_key(entropy, 16, key, 32, sealed, written - 1, &length));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_open_with_key(sealed, written, key, 32, opened, 31, &length));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_open_with_key(sealed, written - 1, key, 32, opened, sizeof opened, &length));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_kdf(sealed, written - 1, &kdf));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_kdf(sealed, 5, &kdf));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_kdf(sealed, written, NULL));
+    sealed[4] = 2;
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_kdf(sealed, written, &kdf));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_open_with_key(sealed, written, key, 32, opened, sizeof opened, &length));
+    memset(opened, 0, sizeof opened);
+    memset(key, 0, sizeof key);
 }
 
 /* The BIP-32 fingerprint of "abandon ... about" with no passphrase, as BIP-84's and BIP-86's examples show it. */
@@ -315,6 +426,67 @@ static void test_seed_and_ethereum_key(void) {
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_secp256k1_verify(uncompressed, 65, digest, 32, signature, 65));
 
     CHECK_STATUS(NC_OK, nc_handle_destroy(key));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(seed));
+    CHECK(nc_handle_count() == baseline);
+}
+
+/* BIP-86's first receiving key of "abandon ... about": its internal and output keys, and a key path signature. */
+static void test_taproot_key(void) {
+    uint32_t baseline = nc_handle_count();
+    nc_handle seed = 0, key = 0, ed25519 = 0;
+    const char *path = "m/86'/0'/0'/0/0";
+    CHECK_STATUS(NC_OK, nc_seed_from_mnemonic(ABANDON, strlen(ABANDON), NULL, 0, &seed));
+    CHECK_STATUS(NC_OK, nc_key_derive(seed, NC_SCHEME_BIP32_SECP256K1, path, strlen(path), &key));
+
+    uint8_t internal[32], output[33], compressed[33], sighash[32], signature[64];
+    size_t written = 0;
+    CHECK_STATUS(NC_OK, nc_key_public_xonly(key, internal, 32, &written));
+    CHECK(written == 32 && equals_hex(internal, "cc8a4bc64d897bddc5fbc2f670f7a8ba0b386779106cf1223c6fc5d7cd6fc115"));
+    CHECK_STATUS(NC_OK, nc_secp256k1_taproot_tweak(internal, 32, NULL, 0, output, 33, &written));
+    CHECK(equals_hex(output + 1, "a60869f0dbcf1dc659c9cecbaf8050135ea9e8cdc487053f1dc6880949dc684c"));
+    /* The compressed public key tweaks to the same output key. */
+    uint8_t again[33];
+    CHECK_STATUS(NC_OK, nc_key_public(key, 1, compressed, 33, &written));
+    CHECK_STATUS(NC_OK, nc_secp256k1_taproot_tweak(compressed, 33, NULL, 0, again, 33, &written));
+    CHECK(memcmp(again, output, 33) == 0);
+
+    memset(sighash, 0x5a, sizeof sighash);
+    CHECK_STATUS(NC_OK, nc_key_sign_taproot(key, sighash, 32, NULL, 0, signature, 64, &written));
+    CHECK(written == 64);
+    CHECK_STATUS(NC_OK, nc_secp256k1_schnorr_verify(output + 1, 32, sighash, 32, signature, 64));
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_secp256k1_schnorr_verify(internal, 32, sighash, 32, signature, 64));
+
+    /* Untweaked, any length: verifies under the internal key. Two signatures differ (fresh aux randomness). */
+    uint8_t other[64];
+    CHECK_STATUS(NC_OK, nc_key_sign_schnorr(key, sighash, 7, signature, 64, &written));
+    CHECK_STATUS(NC_OK, nc_key_sign_schnorr(key, sighash, 7, other, 64, &written));
+    CHECK(memcmp(signature, other, 64) != 0);
+    CHECK_STATUS(NC_OK, nc_secp256k1_schnorr_verify(internal, 32, sighash, 7, signature, 64));
+    CHECK_STATUS(NC_OK, nc_secp256k1_schnorr_verify(internal, 32, sighash, 7, other, 64));
+    CHECK_STATUS(NC_OK, nc_key_sign_schnorr(key, NULL, 0, signature, 64, &written));
+    CHECK_STATUS(NC_OK, nc_secp256k1_schnorr_verify(internal, 32, NULL, 0, signature, 64));
+
+    /* With a merkle root: verifies under that output key. */
+    uint8_t merkle_root[32];
+    memset(merkle_root, 0x11, sizeof merkle_root);
+    CHECK_STATUS(NC_OK, nc_key_sign_taproot(key, sighash, 32, merkle_root, 32, signature, 64, &written));
+    CHECK_STATUS(NC_OK, nc_secp256k1_taproot_tweak(internal, 32, merkle_root, 32, output, 33, &written));
+    CHECK_STATUS(NC_OK, nc_secp256k1_schnorr_verify(output + 1, 32, sighash, 32, signature, 64));
+
+    /* Refusals: a sighash that is not 32 bytes, a merkle root that is not, a short buffer, other handles. */
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_key_sign_taproot(key, sighash, 31, NULL, 0, signature, 64, &written));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_key_sign_taproot(key, sighash, 32, merkle_root, 16, signature, 64, &written));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_key_sign_schnorr(key, sighash, 32, signature, 63, &written));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_key_public_xonly(key, internal, 31, &written));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_key_sign_schnorr(key, sighash, 32, signature, 64, NULL));
+    CHECK_STATUS(NC_OK, nc_key_generate(NC_CURVE_ED25519, &ed25519));
+    CHECK_STATUS(NC_ERR_INVALID_HANDLE, nc_key_sign_schnorr(ed25519, sighash, 32, signature, 64, &written));
+    CHECK_STATUS(NC_ERR_INVALID_HANDLE, nc_key_sign_taproot(seed, sighash, 32, NULL, 0, signature, 64, &written));
+    CHECK_STATUS(NC_ERR_INVALID_HANDLE, nc_key_public_xonly(ed25519, internal, 32, &written));
+
+    CHECK_STATUS(NC_OK, nc_handle_destroy(ed25519));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(key));
+    CHECK_STATUS(NC_ERR_INVALID_HANDLE, nc_key_sign_schnorr(key, sighash, 32, signature, 64, &written));
     CHECK_STATUS(NC_OK, nc_handle_destroy(seed));
     CHECK(nc_handle_count() == baseline);
 }
@@ -508,11 +680,14 @@ int main(void) {
     test_hmac();
     test_secp256k1_public();
     test_ed25519_verify();
+    test_schnorr_public();
     test_mnemonic();
     test_mnemonic_generate();
     test_entropy();
     test_backup();
+    test_backup_with_key();
     test_seed_and_ethereum_key();
+    test_taproot_key();
     test_extended_public_key();
     test_solana_key();
     test_handle_lifecycle();

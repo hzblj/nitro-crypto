@@ -25,4 +25,8 @@ export const seededBytes = (seed: number) => {
 export const vectors = <T>(file: string): T =>
   JSON.parse(readFileSync(path.join(import.meta.dirname, 'vectors', file), 'utf8')) as T
 
+/** A published vector file the engine's own tests run too (packages/zig-engine-crypto/test/vectors), as text. */
+export const engineVectorText = (file: string): string =>
+  readFileSync(path.join(import.meta.dirname, '../../zig-engine-crypto/test/vectors', file), 'utf8')
+
 export const ABANDON = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'

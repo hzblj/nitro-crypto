@@ -1,20 +1,23 @@
-import {bytes, CryptoError, hex} from '@hzblj/nitro-crypto/adapter'
+import {bytes, CryptoError, hex, isCryptoError} from '@hzblj/nitro-crypto/adapter'
 
-import {addressFromScript, type Hash, hash160} from './address'
+import {addressFromScript, type BitcoinAccountType, type Hash, hash160, type TaprootTweak} from './address'
 import {decodeDerSignature, encodeDerSignature} from './der'
 import type {BitcoinNetwork} from './networks'
 import {
+  type AccountSigner,
   type BitcoinTransactionPlan,
   bip143Digest,
   hash256,
   MAX_MONEY,
-  type P2wpkhSigner,
   p2wpkhScriptCode,
   type RawTransaction,
   SIGHASH_ALL,
+  SIGHASH_DEFAULT,
   type SignedBitcoinTransaction,
   signedTransaction,
+  TAPROOT_SIGHASH_TYPES,
   type TransactionContext,
+  taprootSighash,
   u32,
   u64,
   unsignedTransaction,
@@ -37,6 +40,17 @@ export type BitcoinKeyOrigin = {
   readonly path: string
 }
 
+/** A Taproot key's origin (BIP-371): its x-only key, where it came from, and the script leaves it signs in. */
+export type BitcoinTaprootKeyOrigin = {
+  /** The x-only public key, 32 bytes. */
+  readonly publicKey: Uint8Array
+  readonly fingerprint: number
+  /** `m/86'/1'/0'/0/0`. */
+  readonly path: string
+  /** The hashes of the script leaves the key signs in (32 bytes each); none for a key that signs the key path. */
+  readonly leafHashes: readonly Uint8Array[]
+}
+
 /** The coin an input spends, as the PSBT states it. */
 export type BitcoinSpentOutput = {readonly value: bigint; readonly scriptPubKey: Uint8Array}
 
@@ -55,11 +69,23 @@ export type BitcoinPsbtInput = {
    * malicious coordinator would lie about (to make the fee look smaller).
    */
   readonly verifiedValue: boolean
-  /** The signature hash type asked for; `undefined` means SIGHASH_ALL. */
+  /** The signature hash type asked for; `undefined` means SIGHASH_ALL (SIGHASH_DEFAULT for a Taproot coin). */
   readonly sighashType: number | undefined
+  /** BIP-32 derivations of the keys that sign it (`PSBT_IN_BIP32_DERIVATION`): a P2WPKH coin's. */
   readonly derivations: readonly BitcoinKeyOrigin[]
   /** Signatures made so far: DER with the sighash byte, by key. */
   readonly partialSignatures: readonly {readonly publicKey: Uint8Array; readonly signature: Uint8Array}[]
+  /** Taproot derivations (`PSBT_IN_TAP_BIP32_DERIVATION`, BIP-371): x-only keys with their origins. */
+  readonly taprootDerivations: readonly BitcoinTaprootKeyOrigin[]
+  /** A Taproot coin's x-only internal key (`PSBT_IN_TAP_INTERNAL_KEY`), 32 bytes, when the PSBT says. */
+  readonly taprootInternalKey: Uint8Array | undefined
+  /** The merkle root of its script tree (`PSBT_IN_TAP_MERKLE_ROOT`), 32 bytes; `undefined` for a BIP-86 key. */
+  readonly taprootMerkleRoot: Uint8Array | undefined
+  /**
+   * The key path signature so far (`PSBT_IN_TAP_KEY_SIG`): 64 bytes for SIGHASH_DEFAULT, 65 with any other type in
+   * the last byte.
+   */
+  readonly taprootKeySignature: Uint8Array | undefined
   /** Whether the input already has its final witness or script. */
   readonly finalized: boolean
 }
@@ -72,6 +98,10 @@ export type BitcoinPsbtOutput = {
   readonly value: bigint
   /** The keys the output pays, when the PSBT says: how a signer recognizes change to itself. */
   readonly derivations: readonly BitcoinKeyOrigin[]
+  /** The same for a Taproot output (`PSBT_OUT_TAP_BIP32_DERIVATION`): x-only keys with their origins. */
+  readonly taprootDerivations: readonly BitcoinTaprootKeyOrigin[]
+  /** A Taproot output's x-only internal key (`PSBT_OUT_TAP_INTERNAL_KEY`), 32 bytes, when the PSBT says. */
+  readonly taprootInternalKey: Uint8Array | undefined
 }
 
 /** What a PSBT asks to be signed, read and checked: every field a wallet shows before it signs. */
@@ -101,7 +131,13 @@ const IN_SIGHASH_TYPE = 0x03
 const IN_BIP32_DERIVATION = 0x06
 const IN_FINAL_SCRIPTSIG = 0x07
 const IN_FINAL_SCRIPTWITNESS = 0x08
+const IN_TAP_KEY_SIG = 0x13
+const IN_TAP_BIP32_DERIVATION = 0x16
+const IN_TAP_INTERNAL_KEY = 0x17
+const IN_TAP_MERKLE_ROOT = 0x18
 const OUT_BIP32_DERIVATION = 0x02
+const OUT_TAP_INTERNAL_KEY = 0x05
+const OUT_TAP_BIP32_DERIVATION = 0x07
 
 const HARDENED = 0x80000000
 
@@ -185,7 +221,7 @@ type ParsedTransaction = RawTransaction & {
 }
 
 /** A transaction in the wire format, with or without witnesses (BIP-144). */
-const parseTransaction = (data: Uint8Array): ParsedTransaction => {
+export const parseTransaction = (data: Uint8Array): ParsedTransaction => {
   const reader: Reader = {data, offset: 0}
   const version = readU32(reader)
   let count = readCompactSize(reader)
@@ -342,30 +378,112 @@ const derivations = (entries: readonly KeyValue[], type: number): BitcoinKeyOrig
     .filter(entry => entry.key[0] === type && entry.key.length > 1)
     .map(({key, value}) => {
       const publicKey = key.subarray(1)
+      const message = 'A BIP-32 derivation is a public key, a fingerprint and a path.'
 
-      if (!isPublicKey(publicKey) || value.length < 4 || value.length % 4 !== 0 || value.length > 4 * 256) {
-        throw invalid('A BIP-32 derivation is a public key, a fingerprint and a path.')
+      if (!isPublicKey(publicKey)) {
+        throw invalid(message)
       }
 
-      const view = new DataView(value.slice().buffer)
-      const path = Array.from({length: value.length / 4 - 1}, (_, index) => view.getUint32(4 + index * 4, true))
-
-      return Object.freeze({
-        fingerprint: view.getUint32(0, false),
-        path: formatPath(path),
-        publicKey: publicKey.slice(),
-      })
+      return Object.freeze({...readOrigin(value, message), publicKey: publicKey.slice()})
     })
 
-const derivationEntry = (type: number, origin: BitcoinKeyOrigin): KeyValue => {
+/** A key origin's value: the fingerprint (big-endian, as BIP-32 prints it), then each step of the path. */
+const originValue = (origin: {readonly fingerprint: number; readonly path: string}) => {
   const path = parsePath(origin.path)
   const value = new Uint8Array(4 + path.length * 4)
   const view = new DataView(value.buffer)
   view.setUint32(0, origin.fingerprint >>> 0, false)
   path.forEach((index, position) => view.setUint32(4 + position * 4, index, true))
 
-  return {key: bytes.concat(Uint8Array.of(type), origin.publicKey), value}
+  return value
 }
+
+const readOrigin = (value: Uint8Array, message: string) => {
+  if (value.length < 4 || value.length % 4 !== 0 || value.length > 4 * 256) {
+    throw invalid(message)
+  }
+
+  const view = new DataView(value.slice().buffer)
+  const path = Array.from({length: value.length / 4 - 1}, (_, index) => view.getUint32(4 + index * 4, true))
+
+  return {fingerprint: view.getUint32(0, false), path: formatPath(path)}
+}
+
+const derivationEntry = (type: number, origin: BitcoinKeyOrigin): KeyValue => ({
+  key: bytes.concat(Uint8Array.of(type), origin.publicKey),
+  value: originValue(origin),
+})
+
+/** BIP-371's derivation of a key that signs the key path: no leaf hashes, then the origin. */
+const taprootDerivationEntry = (type: number, origin: BitcoinKeyOrigin): KeyValue => ({
+  key: bytes.concat(Uint8Array.of(type), origin.publicKey),
+  value: bytes.concat(Uint8Array.of(0), originValue(origin)),
+})
+
+/** BIP-371's derivations: keyed by an x-only key, their leaf hashes, then the origin. */
+const taprootDerivations = (entries: readonly KeyValue[], type: number): BitcoinTaprootKeyOrigin[] =>
+  entries
+    .filter(entry => entry.key[0] === type)
+    .map(({key, value}) => {
+      if (key.length !== 33) {
+        throw invalid('A Taproot BIP-32 derivation is keyed by a 32-byte x-only public key.')
+      }
+
+      const reader: Reader = {data: value, offset: 0}
+      const count = readCompactSize(reader)
+
+      if (count > MAX_ENTRIES) {
+        throw invalid('A Taproot BIP-32 derivation names more leaves than this reads.')
+      }
+
+      const leafHashes = Array.from({length: count}, () => take(reader, 32).slice())
+      const origin = readOrigin(
+        value.subarray(reader.offset),
+        'A Taproot BIP-32 derivation is its leaf hashes, a fingerprint and a path.'
+      )
+
+      return Object.freeze({...origin, leafHashes: Object.freeze(leafHashes), publicKey: key.slice(1)})
+    })
+
+/**
+ * The one entry of `type` whose key is that byte alone, its value of one of `lengths`; `undefined` when there is
+ * none. An entry of the type with key data, or of another length, is malformed.
+ */
+const fixedField = (entries: readonly KeyValue[], type: number, lengths: readonly number[], name: string) => {
+  const matching = entries.filter(entry => entry.key[0] === type)
+  const [entry] = matching
+
+  if (!entry) {
+    return undefined
+  }
+
+  if (matching.length > 1 || entry.key.length !== 1 || !lengths.includes(entry.value.length)) {
+    throw invalid(`A PSBT's ${name} is malformed.`)
+  }
+
+  return entry.value.slice()
+}
+
+/** A Taproot key path signature: 64 bytes, or 65 with a sighash type other than SIGHASH_DEFAULT last. */
+const isTaprootSignature = (signature: Uint8Array) =>
+  signature.length === 64 ||
+  (signature.length === 65 && signature[64] !== SIGHASH_DEFAULT && TAPROOT_SIGHASH_TYPES.includes(signature[64] ?? -1))
+
+const taprootKeySignature = (entries: readonly KeyValue[]) => {
+  const signature = fixedField(entries, IN_TAP_KEY_SIG, [64, 65], 'Taproot key path signature')
+
+  if (signature && !isTaprootSignature(signature)) {
+    throw invalid('A Taproot signature`s 65th byte is a sighash type other than SIGHASH_DEFAULT.')
+  }
+
+  return signature
+}
+
+/** `OP_1 <32 bytes>`: a Taproot output. */
+const isP2tr = (script: Uint8Array) => script.length === 34 && script[0] === 0x51 && script[1] === 32
+
+/** `OP_0 <20 bytes>`: a P2WPKH output. */
+const isP2wpkh = (script: Uint8Array) => script.length === 22 && script[0] === 0x00 && script[1] === 20
 
 const readSpentOutput = (value: Uint8Array): BitcoinSpentOutput => {
   const reader: Reader = {data: value, offset: 0}
@@ -459,19 +577,27 @@ const decode = (data: Uint8Array, network: BitcoinNetwork, sha256: Hash): Decode
       sequence: input.sequence,
       sighashType: sighash ? readU32({data: sighash.value, offset: 0}) : undefined,
       spent,
+      taprootDerivations: Object.freeze(taprootDerivations(entries, IN_TAP_BIP32_DERIVATION)),
+      taprootInternalKey: fixedField(entries, IN_TAP_INTERNAL_KEY, [32], 'Taproot internal key'),
+      taprootKeySignature: taprootKeySignature(entries),
+      taprootMerkleRoot: fixedField(entries, IN_TAP_MERKLE_ROOT, [32], 'Taproot merkle root'),
       txid: hex.encode(input.txid.slice().reverse()),
       verifiedValue: verified,
       vout: input.vout,
     })
   })
-  const outputs = tx.outputs.map((output, index) =>
-    Object.freeze({
+  const outputs = tx.outputs.map((output, index) => {
+    const entries = maps.outputs[index] ?? []
+
+    return Object.freeze({
       address: addressFromScript(output.scriptPubKey, network, sha256),
-      derivations: Object.freeze(derivations(maps.outputs[index] ?? [], OUT_BIP32_DERIVATION)),
+      derivations: Object.freeze(derivations(entries, OUT_BIP32_DERIVATION)),
       scriptPubKey: output.scriptPubKey,
+      taprootDerivations: Object.freeze(taprootDerivations(entries, OUT_TAP_BIP32_DERIVATION)),
+      taprootInternalKey: fixedField(entries, OUT_TAP_INTERNAL_KEY, [32], 'Taproot internal key'),
       value: output.value,
     })
-  )
+  })
   const values = inputs.map(input => input.spent?.value)
   const total = (items: readonly bigint[]) => items.reduce((sum, value) => sum + value, 0n)
   const fee = values.every(value => value !== undefined)
@@ -513,8 +639,10 @@ const serializeUnsigned = (tx: RawTransaction) =>
     u32(tx.locktime)
   )
 
-/** What a PSBT for an account says about it: its key and where the key came from. */
+/** What a PSBT for an account says about it: its type, its key and where the key came from. */
 export type PsbtSigner = {
+  readonly type: BitcoinAccountType
+  /** Compressed, 33 bytes; a Taproot account's PSBT names its x-only half. */
   readonly publicKey: Uint8Array
   readonly scriptPubKey: Uint8Array
   readonly fingerprint: number
@@ -524,7 +652,8 @@ export type PsbtSigner = {
 /**
  * A PSBT of the payment `plan` describes, for a signer to sign: the unsigned transaction (version 2, lock time 0,
  * replaceable inputs), each input's witness UTXO and the key that spends it with its origin, and the same origin on
- * every output that pays the account back (its change). `previousTransactions`, by txid, adds each coin's whole
+ * every output that pays the account back (its change). A P2WPKH account's key is a BIP-32 derivation; a Taproot
+ * account's, BIP-371's internal key and Taproot derivation. `previousTransactions`, by txid, adds each coin's whole
  * previous transaction, which lets a signer check the values it signs.
  */
 export const createPsbt = (
@@ -534,7 +663,13 @@ export const createPsbt = (
   previousTransactions: Readonly<Record<string, Uint8Array | string>> = {}
 ): Uint8Array => {
   const {tx} = unsignedTransaction(plan, context)
-  const origin: BitcoinKeyOrigin = {fingerprint: signer.fingerprint, path: signer.path, publicKey: signer.publicKey}
+  const taproot = signer.type === 'p2tr'
+  const internalKey = signer.publicKey.subarray(1)
+  const origin: BitcoinKeyOrigin = {
+    fingerprint: signer.fingerprint,
+    path: signer.path,
+    publicKey: taproot ? internalKey : signer.publicKey,
+  }
   const inputs = tx.inputs.map(input => {
     const txid = hex.encode(input.txid.slice().reverse())
     const previous = previousTransactions[txid]
@@ -557,19 +692,34 @@ export const createPsbt = (
       entries.push({key: Uint8Array.of(IN_NON_WITNESS_UTXO), value: raw.slice()})
     }
 
-    entries.push(
-      {
-        key: Uint8Array.of(IN_WITNESS_UTXO),
-        value: writeSpentOutput({scriptPubKey: signer.scriptPubKey, value: input.value}),
-      },
-      derivationEntry(IN_BIP32_DERIVATION, origin)
-    )
+    entries.push({
+      key: Uint8Array.of(IN_WITNESS_UTXO),
+      value: writeSpentOutput({scriptPubKey: signer.scriptPubKey, value: input.value}),
+    })
+
+    if (taproot) {
+      entries.push(taprootDerivationEntry(IN_TAP_BIP32_DERIVATION, origin), {
+        key: Uint8Array.of(IN_TAP_INTERNAL_KEY),
+        value: internalKey.slice(),
+      })
+    } else {
+      entries.push(derivationEntry(IN_BIP32_DERIVATION, origin))
+    }
 
     return entries
   })
-  const outputs = tx.outputs.map(output =>
-    bytes.equal(output.scriptPubKey, signer.scriptPubKey) ? [derivationEntry(OUT_BIP32_DERIVATION, origin)] : []
-  )
+  const outputs = tx.outputs.map(output => {
+    if (!bytes.equal(output.scriptPubKey, signer.scriptPubKey)) {
+      return []
+    }
+
+    return taproot
+      ? [
+          {key: Uint8Array.of(OUT_TAP_INTERNAL_KEY), value: internalKey.slice()},
+          taprootDerivationEntry(OUT_TAP_BIP32_DERIVATION, origin),
+        ]
+      : [derivationEntry(OUT_BIP32_DERIVATION, origin)]
+  })
 
   return serializeMaps({
     global: [{key: Uint8Array.of(GLOBAL_UNSIGNED_TX), value: serializeUnsigned(tx)}],
@@ -584,6 +734,21 @@ const withValues = (tx: RawTransaction, psbt: BitcoinPsbt): RawTransaction => ({
   inputs: tx.inputs.map((input, index) => ({...input, value: psbt.inputs[index]?.spent?.value ?? 0n})),
 })
 
+/**
+ * Every input's coin script, which a Taproot signature commits to (with every value): `INVALID_ARGUMENT` when an
+ * input does not say which coin it spends.
+ */
+const spentScripts = (psbt: BitcoinPsbt): Uint8Array[] =>
+  psbt.inputs.map((input, index) => {
+    if (!input.spent) {
+      throw invalid(
+        `A Taproot signature commits to every coin the transaction spends, and input ${index} does not say which.`
+      )
+    }
+
+    return input.spent.scriptPubKey
+  })
+
 export type SignedPsbt = {
   /** The PSBT with this account's partial signatures added. */
   readonly psbt: Uint8Array
@@ -591,23 +756,21 @@ export type SignedPsbt = {
   readonly signedInputs: readonly number[]
 }
 
-/**
- * Signs every input of a PSBT that spends a coin of `signer` (a P2WPKH output to its key), with SIGHASH_ALL, and
- * adds the signatures as partial signatures. Inputs of other scripts are left alone. Refused (`INVALID_ARGUMENT`):
- * a PSBT with nothing for this signer, an input of its own that asks for another sighash type, and a previous
- * transaction that does not match its input. Whether to sign at all is the caller's question, asked with what
- * `decodePsbt` shows.
- */
-export const signPsbt = (data: Uint8Array, signer: P2wpkhSigner, context: TransactionContext): SignedPsbt => {
-  const {maps, psbt, tx} = decode(data, context.network, context.sha256)
-  const raw = withValues(tx, psbt)
-  const scriptCode = p2wpkhScriptCode(signer.scriptPubKey.subarray(2))
-  const signedInputs: number[] = []
-  const inputs = maps.inputs.map((entries, index) => {
-    const input = psbt.inputs[index]
+export type SignPsbtContext = TransactionContext & {
+  /** The engine's BIP-341 tweak: for a Taproot coin of the account's key under a script tree the PSBT names. */
+  readonly tweak: TaprootTweak
+}
 
-    if (!input?.spent || input.finalized || !bytes.equal(input.spent.scriptPubKey, signer.scriptPubKey)) {
-      return entries
+/** One input's signature entry, or `undefined` when the input is not the signer's. */
+type InputSigner = (input: BitcoinPsbtInput, index: number) => KeyValue | undefined
+
+const p2wpkhInputSigner = (raw: RawTransaction, signer: AccountSigner, context: SignPsbtContext): InputSigner => {
+  const scriptCode = p2wpkhScriptCode(signer.scriptPubKey.subarray(2))
+  const key = bytes.concat(Uint8Array.of(IN_PARTIAL_SIG), signer.publicKey)
+
+  return (input, index) => {
+    if (!input.spent || !bytes.equal(input.spent.scriptPubKey, signer.scriptPubKey)) {
+      return undefined
     }
 
     if (input.sighashType !== undefined && input.sighashType !== SIGHASH_ALL) {
@@ -615,13 +778,87 @@ export const signPsbt = (data: Uint8Array, signer: P2wpkhSigner, context: Transa
     }
 
     const {signature} = signer.key.sign(bip143Digest(raw, index, scriptCode, context.sha256))
-    const key = bytes.concat(Uint8Array.of(IN_PARTIAL_SIG), signer.publicKey)
+
+    return {key, value: bytes.concat(encodeDerSignature(signature), Uint8Array.of(SIGHASH_ALL))}
+  }
+}
+
+/**
+ * A Taproot account signs the key path of its own BIP-86 coins, and of coins whose internal key is its key under a
+ * script tree whose merkle root the PSBT gives (`PSBT_IN_TAP_MERKLE_ROOT`), when the tweaked key is the coin's.
+ */
+const taprootInputSigner = (
+  psbt: BitcoinPsbt,
+  raw: RawTransaction,
+  signer: AccountSigner,
+  context: SignPsbtContext
+): InputSigner => {
+  const internalKey = signer.publicKey.subarray(1)
+  let scripts: Uint8Array[] | undefined
+
+  return (input, index) => {
+    const script = input.spent?.scriptPubKey
+    const merkleRoot = input.taprootMerkleRoot
+
+    if (!script || !isP2tr(script)) {
+      return undefined
+    }
+
+    if (merkleRoot === undefined) {
+      if (!bytes.equal(script, signer.scriptPubKey)) {
+        return undefined
+      }
+    } else if (
+      (input.taprootInternalKey && !bytes.equal(input.taprootInternalKey, internalKey)) ||
+      !bytes.equal(context.tweak(internalKey, merkleRoot).publicKey, script.subarray(2))
+    ) {
+      return undefined
+    }
+
+    const hashType = input.sighashType ?? SIGHASH_DEFAULT
+
+    if (hashType !== SIGHASH_DEFAULT && hashType !== SIGHASH_ALL) {
+      throw invalid(
+        `Input ${index} asks for sighash type ${hashType}; this account signs only SIGHASH_DEFAULT and SIGHASH_ALL.`
+      )
+    }
+
+    scripts ??= spentScripts(psbt)
+    const signature = signer.key.signTaproot(taprootSighash(raw, index, scripts, hashType, context.sha256), merkleRoot)
+
+    return {
+      key: Uint8Array.of(IN_TAP_KEY_SIG),
+      value: hashType === SIGHASH_DEFAULT ? signature : bytes.concat(signature, Uint8Array.of(hashType)),
+    }
+  }
+}
+
+/**
+ * Signs every input of a PSBT that spends a coin of `signer` and adds the signatures: a P2WPKH account's as partial
+ * signatures (SIGHASH_ALL), a Taproot account's as key path signatures (BIP-371's `PSBT_IN_TAP_KEY_SIG`, with
+ * SIGHASH_DEFAULT or SIGHASH_ALL), so a PSBT that spends coins of several accounts, of either type, is signed by each
+ * in turn. Inputs of other scripts are left alone. Refused (`INVALID_ARGUMENT`): a PSBT with nothing for this
+ * signer, an input of its own that asks for another sighash type, a Taproot input in a PSBT that does not say every
+ * coin it spends, and a previous transaction that does not match its input. Whether to sign at all is the caller's
+ * question, asked with what `decodePsbt` shows.
+ */
+export const signPsbt = (data: Uint8Array, signer: AccountSigner, context: SignPsbtContext): SignedPsbt => {
+  const {maps, psbt, tx} = decode(data, context.network, context.sha256)
+  const raw = withValues(tx, psbt)
+  const sign =
+    signer.type === 'p2tr' ? taprootInputSigner(psbt, raw, signer, context) : p2wpkhInputSigner(raw, signer, context)
+  const signedInputs: number[] = []
+  const inputs = maps.inputs.map((entries, index) => {
+    const input = psbt.inputs[index]
+    const entry = input && !input.finalized ? sign(input, index) : undefined
+
+    if (!entry) {
+      return entries
+    }
+
     signedInputs.push(index)
 
-    return [
-      ...entries.filter(entry => !bytes.equal(entry.key, key)),
-      {key, value: bytes.concat(encodeDerSignature(signature), Uint8Array.of(SIGHASH_ALL))},
-    ]
+    return [...entries.filter(other => !bytes.equal(other.key, entry.key)), entry]
   })
 
   if (signedInputs.length === 0) {
@@ -635,52 +872,166 @@ export type FinalizeContext = TransactionContext & {
   readonly ripemd160: Hash
   /** Whether a 64-byte `r || s` signature by `publicKey` verifies over `digest`: the engine's secp256k1 `verify`. */
   readonly verify: (publicKey: Uint8Array, digest: Uint8Array, signature: Uint8Array) => boolean
+  /** Whether a BIP-340 signature by a 32-byte x-only key verifies: the engine's `schnorr.verify`, for Taproot coins. */
+  readonly verifySchnorr: (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) => boolean
+}
+
+/** A final script witness, item by item. */
+const readWitness = (value: Uint8Array): Uint8Array[] => {
+  const reader: Reader = {data: value, offset: 0}
+  const count = readCompactSize(reader)
+
+  if (count > MAX_ENTRIES) {
+    throw invalid('A final script witness has more items than this reads.')
+  }
+
+  const items = Array.from({length: count}, () => readBytes(reader).slice())
+
+  if (reader.offset !== value.length) {
+    throw invalid('A final script witness has bytes after its last item.')
+  }
+
+  return items
+}
+
+const failed = (index: number) =>
+  new CryptoError('INVALID_SIGNATURE', `Input ${index}'s signature does not verify for this transaction.`)
+
+/** A P2WPKH input's witness, `[signature, key]`: from its partial signatures, or the final witness its signer wrote. */
+const p2wpkhWitness = (
+  input: BitcoinPsbtInput,
+  index: number,
+  program: Uint8Array,
+  final: readonly Uint8Array[] | undefined,
+  raw: RawTransaction,
+  context: FinalizeContext
+): Uint8Array[] => {
+  const pays = (publicKey: Uint8Array) =>
+    publicKey.length === 33 && bytes.equal(hash160(publicKey, context.sha256, context.ripemd160), program)
+  let entry: {readonly publicKey: Uint8Array; readonly signature: Uint8Array} | undefined
+
+  if (final) {
+    const [signature, publicKey] = final
+
+    if (final.length !== 2 || !signature || !publicKey) {
+      throw invalid(`Input ${index} was finalized with a witness that is not a P2WPKH signature and key.`)
+    }
+
+    entry = {publicKey, signature}
+
+    if (!pays(publicKey)) {
+      throw failed(index)
+    }
+  } else {
+    const candidates = input.partialSignatures.filter(({publicKey}) => pays(publicKey))
+    entry = candidates.length === 1 ? candidates[0] : undefined
+
+    if (!entry) {
+      throw invalid(`Input ${index} has no signature by the key its coin pays.`)
+    }
+  }
+
+  const compact = decodeDerSignature(entry.signature.subarray(0, -1))
+  const digest = bip143Digest(raw, index, p2wpkhScriptCode(program), context.sha256)
+
+  if (
+    entry.signature[entry.signature.length - 1] !== SIGHASH_ALL ||
+    !compact ||
+    !context.verify(entry.publicKey, digest, compact)
+  ) {
+    throw failed(index)
+  }
+
+  return [entry.signature.slice(), entry.publicKey.slice()]
 }
 
 /**
- * The broadcastable transaction of a PSBT whose every input is a P2WPKH coin with its signature: each signature is
- * checked (strict DER, SIGHASH_ALL, lower S, made by the key the coin pays, over this transaction) before it becomes
- * a witness. Throws `INVALID_SIGNATURE` for one that fails, and `INVALID_ARGUMENT` for an input it cannot finalize.
+ * A Taproot input's witness, `[signature]`: its key path signature, or the final witness its signer wrote, verified
+ * under the output key the coin pays, with the sighash type the signature says (and the PSBT asks for, if it asks).
+ */
+const taprootWitness = (
+  input: BitcoinPsbtInput,
+  index: number,
+  outputKey: Uint8Array,
+  final: readonly Uint8Array[] | undefined,
+  raw: RawTransaction,
+  scripts: readonly Uint8Array[],
+  context: FinalizeContext
+): Uint8Array[] => {
+  if (final && final.length !== 1) {
+    throw invalid(`Input ${index} was finalized with a witness this cannot check: a script path, or an annex.`)
+  }
+
+  const signature = final ? final[0] : input.taprootKeySignature
+
+  if (!signature) {
+    throw invalid(`Input ${index} has no Taproot key path signature (script path spends are not finalized here).`)
+  }
+
+  const hashType = signature.length === 65 ? (signature[64] ?? -1) : SIGHASH_DEFAULT
+
+  if (!isTaprootSignature(signature) || (input.sighashType !== undefined && input.sighashType !== hashType)) {
+    throw failed(index)
+  }
+
+  let verified: boolean
+
+  try {
+    const sighash = taprootSighash(raw, index, scripts, hashType, context.sha256)
+    verified = context.verifySchnorr(outputKey, sighash, signature.subarray(0, 64))
+  } catch (error) {
+    // SIGHASH_SINGLE with no output to sign, or an output key that is no point: nothing verifies.
+    if (isCryptoError(error, 'INVALID_ARGUMENT') || isCryptoError(error, 'INVALID_PUBLIC_KEY')) {
+      throw failed(index)
+    }
+
+    throw error
+  }
+
+  if (!verified) {
+    throw failed(index)
+  }
+
+  return [signature.slice()]
+}
+
+/**
+ * The broadcastable transaction of a PSBT whose every input is a P2WPKH or Taproot coin with its signature, or
+ * already finalized by its signer. Each signature is checked before it becomes a witness: P2WPKH's strict DER,
+ * SIGHASH_ALL, lower S, by the key the coin pays; a Taproot key path's BIP-340 signature under the coin's output key,
+ * for the sighash type it carries. Throws `INVALID_SIGNATURE` for one that fails, and `INVALID_ARGUMENT` for an input
+ * it cannot finalize (another script, a Taproot script path).
  */
 export const finalizePsbt = (data: Uint8Array, context: FinalizeContext): SignedBitcoinTransaction => {
-  const {psbt, tx} = decode(data, context.network, context.sha256)
+  const {maps, psbt, tx} = decode(data, context.network, context.sha256)
   const raw = withValues(tx, psbt)
 
   if (psbt.fee === undefined) {
     throw invalid('Every input needs its coin`s value to be finalized.')
   }
 
+  const scripts = spentScripts(psbt)
   const witnesses = psbt.inputs.map((input, index) => {
-    const script = input.spent?.scriptPubKey
+    const script = scripts[index] ?? new Uint8Array(0)
+    const entries = maps.inputs[index] ?? []
+    const finalScript = field(entries, IN_FINAL_SCRIPTSIG)
+    const finalWitness = field(entries, IN_FINAL_SCRIPTWITNESS)
 
-    if (!script || script.length !== 22 || script[0] !== 0x00 || script[1] !== 20) {
-      throw invalid(`Input ${index} is not a P2WPKH coin, the only kind this finalizes.`)
+    if (finalScript && finalScript.value.length > 0) {
+      throw invalid(`Input ${index} was finalized with a script; native SegWit coins have none.`)
     }
 
-    const program = script.subarray(2)
-    const candidates = input.partialSignatures.filter(
-      ({publicKey}) =>
-        publicKey.length === 33 && bytes.equal(hash160(publicKey, context.sha256, context.ripemd160), program)
-    )
-    const [entry] = candidates
+    const final = finalWitness ? readWitness(finalWitness.value) : undefined
 
-    if (!entry || candidates.length !== 1) {
-      throw invalid(`Input ${index} has no signature by the key its coin pays.`)
+    if (isP2wpkh(script)) {
+      return p2wpkhWitness(input, index, script.subarray(2), final, raw, context)
     }
 
-    const der = entry.signature.subarray(0, -1)
-    const compact = decodeDerSignature(der)
-    const digest = bip143Digest(raw, index, p2wpkhScriptCode(program), context.sha256)
-
-    if (
-      entry.signature[entry.signature.length - 1] !== SIGHASH_ALL ||
-      !compact ||
-      !context.verify(entry.publicKey, digest, compact)
-    ) {
-      throw new CryptoError('INVALID_SIGNATURE', `Input ${index}'s signature does not verify for this transaction.`)
+    if (isP2tr(script)) {
+      return taprootWitness(input, index, script.subarray(2), final, raw, scripts, context)
     }
 
-    return [entry.signature.slice(), entry.publicKey.slice()]
+    throw invalid(`Input ${index} is not a P2WPKH or P2TR coin, the kinds this finalizes.`)
   })
 
   return signedTransaction(tx, witnesses, psbt.fee, context.sha256)

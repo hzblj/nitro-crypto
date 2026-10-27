@@ -45,4 +45,5 @@ the backup and back out of it.
   ADR 0005): the facade asks for a long one and turns it into bytes it overwrites. Argon2id makes guessing costly, not
   impossible.
 - Passkeys (WebAuthn's PRF) in place of a password, and Shamir shares (SLIP-39), are later formats: the header's key
-  derivation byte and version leave room for them.
+  derivation byte and version leave room for them. (Amended by [0010](0010-key-sealed-backup.md): a passkey's PRF
+  output seals a backup as key derivation 2, HKDF-SHA256, in the same format at version 1.)

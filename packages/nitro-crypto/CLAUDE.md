@@ -12,7 +12,7 @@ Android packaging, and the prebuilt engine. Three entry points:
 | Path | What it is |
 | --- | --- |
 | `src/specs/nitro-crypto.nitro.ts` | The Nitro spec: `NitroCrypto`, `NitroSeed`, `NitroKey`. `yarn codegen` regenerates `nitrogen/generated`, which is checked in. |
-| `cpp/` | The bridge: `HybridNitroCrypto`, `HybridNitroSeed`, `HybridNitroKey`; `EngineBridge.hpp` (views, `check`, `SecretBytes`, enum mappings); `EngineHandle.hpp` (owns one handle); `NitroCryptoInterop.hpp` (header-only, for other native modules: seeds from entropy they hold, as `HybridNitroSeed`, ADR 0008). No cryptography. Exported: CocoaPods public headers, Android prefab `hzblj_nitro-crypto::NitroCrypto`. |
+| `cpp/` | The bridge: `HybridNitroCrypto`, `HybridNitroSeed`, `HybridNitroKey`; `EngineBridge.hpp` (views, `check`, `SecretBytes`, enum mappings); `EngineHandle.hpp` (owns one handle); `NitroCryptoInterop.hpp` (header-only, for other native modules: seeds from entropy they hold, as `HybridNitroSeed`, ADR 0008; that entropy sealed into backups under a password or a 32-byte key, ADR 0009 and 0010). No cryptography. Exported: CocoaPods public headers, Android prefab `hzblj_nitro-crypto::NitroCrypto`. |
 | `src/host/nitro.ts`, `src/host/wasm.ts` | The two hosts: the native module, and the engine compiled to WebAssembly (`wasm-binary.generated.ts`, written by `yarn engine:wasm`). |
 | `src/engine/` | The facade over a host: `info` (ABI check, capabilities), `primitives` (and the verify policy), `keys`, `mnemonic`, `wallet`, `extended-key` (extended public keys and public derivation, ADR 0007), `create-engine`. |
 | `src/adapters/` | `contract.ts` (the types and `defineAdapter`), `registry.ts` (validation, binding, `chains`). |
@@ -20,7 +20,7 @@ Android packaging, and the prebuilt engine. Three entry points:
 | `src/encoding/` | hex, UTF-8, Base58, Base58Check, Bech32/Bech32m. Pure. |
 | `NitroCrypto.podspec` | Vendors `engine/ios/NitroCryptoEngine.xcframework`, adds `engine/include` to header search. |
 | `android/` | Nitro's template library; `CMakeLists.txt` links `engine/android/<abi>/libnitro_crypto.a` and fails by name for an ABI it lacks. |
-| `test/` | node:test on the WebAssembly engine: encodings, primitives against `@noble`, wallets against `@scure`, the registry and its type inference, errors. |
+| `test/` | node:test on the WebAssembly engine: encodings, primitives against `@noble`, Schnorr and Taproot against BIP-340's and BIP-341's vectors (read from the engine's `test/vectors`), wallets against `@scure`, the registry and its type inference, errors. Key-sealed backups and seeds from entropy under a passphrase through the C ABI (`backup.test.ts`, `entropy.test.ts`). `abi.ts` reaches the C ABI itself in an instance of its own, for what the facade does not: the native-only functions and the WebAssembly test hook. |
 
 ## Rules
 
@@ -36,7 +36,9 @@ Android packaging, and the prebuilt engine. Three entry points:
   JS-owned buffer before leaving the JS thread.
 - **Adding to the ABI** means the spec, `yarn codegen`, `cpp/`, `src/host/wasm.ts`, and the facade, in one change.
   The exception is what only native callers may use (`nc_seed_from_entropy`, `nc_mnemonic_to_entropy`,
-  `nc_mnemonic_from_entropy`, ADR 0008): `NitroCryptoInterop.hpp` and the C harness, and never JavaScript.
+  `nc_mnemonic_from_entropy`, ADR 0008; the `nc_backup_*` functions, ADR 0009 and 0010): `NitroCryptoInterop.hpp`
+  and the C harness, and never JavaScript. Their tests through the WebAssembly build reach the C ABI itself
+  (`test/abi.ts`).
 - **The exported headers are an API.** Another module includes `cpp/*.hpp`, the generated specs and the C header
   (`prepareHeaders` in `android/build.gradle`, `public_header_files` in the podspec); keep their includes quoted.
 

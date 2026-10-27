@@ -33,6 +33,18 @@ export interface NitroKey extends HybridObject<Native> {
    * and a lower-S `s`. Ed25519: `data` is the message; returns the 64-byte RFC 8032 signature.
    */
   sign(data: ArrayBuffer): ArrayBuffer
+  /** secp256k1 only: the BIP-340 x-only public key, 32 bytes. */
+  getXOnlyPublicKey(): ArrayBuffer
+  /**
+   * secp256k1 only: a BIP-340 Schnorr signature of `message` (any length), 64 bytes, with fresh auxiliary randomness
+   * from the OS.
+   */
+  signSchnorr(message: ArrayBuffer): ArrayBuffer
+  /**
+   * secp256k1 only: BIP-341's key path, a Schnorr signature of the 32-byte sighash `message` by the key tweaked with
+   * `merkleRoot` (32 bytes), or with no script tree when `merkleRoot` is empty (BIP-86).
+   */
+  signTaproot(message: ArrayBuffer, merkleRoot: ArrayBuffer): ArrayBuffer
 }
 
 /** A BIP-39 seed inside the engine. Keys are derived from it; the seed itself never leaves. */
@@ -71,6 +83,16 @@ export interface NitroCrypto extends HybridObject<Native> {
   /** `false` when the signature does not verify; throws when an input is malformed or `s` is in the upper half. */
   secp256k1Verify(publicKey: ArrayBuffer, digest: ArrayBuffer, signature: ArrayBuffer): boolean
   secp256k1Recover(digest: ArrayBuffer, signature: ArrayBuffer, compressed: boolean): ArrayBuffer
+  /**
+   * BIP-340: `false` when the signature does not verify (a malformed one included); throws when the 32-byte x-only key
+   * is not on the curve or a length is wrong.
+   */
+  secp256k1SchnorrVerify(publicKey: ArrayBuffer, message: ArrayBuffer, signature: ArrayBuffer): boolean
+  /**
+   * BIP-341's output key for an internal key (x-only 32 bytes, or SEC1) and the merkle root of its script tree (32
+   * bytes, or empty for none): compressed, 33 bytes, its prefix the parity.
+   */
+  secp256k1TaprootTweak(publicKey: ArrayBuffer, merkleRoot: ArrayBuffer): ArrayBuffer
   /** `false` when the signature does not verify; throws when an input is malformed. */
   ed25519Verify(publicKey: ArrayBuffer, message: ArrayBuffer, signature: ArrayBuffer): boolean
   /** BIP-32 public derivation (non-hardened steps) of a 74-byte extended public key down `path` ("m/0/5"). */

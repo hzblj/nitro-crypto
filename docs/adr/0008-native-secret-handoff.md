@@ -50,4 +50,5 @@ name agree, as nitro-crypto's do (`NitroCrypto`).
 - Another native module in the app can now make seeds: the engine trusts the process it lives in, as before (an
   attacker with code execution in it is out of scope).
 - A passphrase (BIP-39's "25th word") goes through `nc_seed_from_entropy` but not yet through the interop helper,
-  which makes seeds without one. A vault that wants one adds it to what it seals.
+  which makes seeds without one. A vault that wants one adds it to what it seals. (Amended: `interop::seedFromEntropy`
+  now has an overload that takes one, UTF-8 and NFKD-normalized by the caller, as the facade normalizes its own.)

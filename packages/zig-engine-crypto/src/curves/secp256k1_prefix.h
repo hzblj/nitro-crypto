@@ -3,8 +3,8 @@
  * library never clashes with another copy linked into the same app (a wallet SDK, another React Native module).
  * Force-included into every libsecp256k1 translation unit and into the Zig bindings (build.zig).
  *
- * The list is every symbol `nm -g` reports for libsecp256k1 v0.8.0 built with the recovery module, plus the two
- * external default callbacks. scripts/verify-artifacts fails if a built archive still exports a secp256k1_* name.
+ * The list is every symbol `nm -g` reports for libsecp256k1 v0.8.0 built with the recovery, extrakeys and schnorrsig
+ * modules, plus the two external default callbacks. scripts/verify-artifacts fails if a built archive still exports a secp256k1_* name.
  */
 #ifndef NC_SECP256K1_PREFIX_H
 #define NC_SECP256K1_PREFIX_H
@@ -50,11 +50,26 @@
 #define secp256k1_ecdsa_signature_serialize_der nc_secp256k1_ecdsa_signature_serialize_der
 #define secp256k1_ecdsa_verify nc_secp256k1_ecdsa_verify
 #define secp256k1_ecmult_gen_prec_table nc_secp256k1_ecmult_gen_prec_table
+#define secp256k1_keypair_create nc_secp256k1_keypair_create
+#define secp256k1_keypair_pub nc_secp256k1_keypair_pub
+#define secp256k1_keypair_sec nc_secp256k1_keypair_sec
+#define secp256k1_keypair_xonly_pub nc_secp256k1_keypair_xonly_pub
+#define secp256k1_keypair_xonly_tweak_add nc_secp256k1_keypair_xonly_tweak_add
+#define secp256k1_nonce_function_bip340 nc_secp256k1_nonce_function_bip340
 #define secp256k1_nonce_function_default nc_secp256k1_nonce_function_default
 #define secp256k1_nonce_function_rfc6979 nc_secp256k1_nonce_function_rfc6979
 #define secp256k1_pre_g nc_secp256k1_pre_g
 #define secp256k1_pre_g_128 nc_secp256k1_pre_g_128
+#define secp256k1_schnorrsig_sign32 nc_secp256k1_schnorrsig_sign32
+#define secp256k1_schnorrsig_sign_custom nc_secp256k1_schnorrsig_sign_custom
+#define secp256k1_schnorrsig_verify nc_secp256k1_schnorrsig_verify
 #define secp256k1_selftest nc_secp256k1_selftest
 #define secp256k1_tagged_sha256 nc_secp256k1_tagged_sha256
+#define secp256k1_xonly_pubkey_cmp nc_secp256k1_xonly_pubkey_cmp
+#define secp256k1_xonly_pubkey_from_pubkey nc_secp256k1_xonly_pubkey_from_pubkey
+#define secp256k1_xonly_pubkey_parse nc_secp256k1_xonly_pubkey_parse
+#define secp256k1_xonly_pubkey_serialize nc_secp256k1_xonly_pubkey_serialize
+#define secp256k1_xonly_pubkey_tweak_add nc_secp256k1_xonly_pubkey_tweak_add
+#define secp256k1_xonly_pubkey_tweak_add_check nc_secp256k1_xonly_pubkey_tweak_add_check
 
 #endif

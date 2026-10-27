@@ -1,6 +1,6 @@
-import {bytes, CryptoError, hex, type Secp256k1Key} from '@hzblj/nitro-crypto/adapter'
+import {bytes, CryptoError, hex, type Secp256k1Key, utf8} from '@hzblj/nitro-crypto/adapter'
 
-import {type Hash, validateAddress} from './address'
+import {type BitcoinAccountType, type Hash, validateAddress} from './address'
 import {encodeDerSignature} from './der'
 import type {BitcoinNetwork} from './networks'
 
@@ -22,7 +22,10 @@ export type BitcoinOutput = {
 }
 
 export type BitcoinTransactionRequest = {
-  /** The coins it may spend, all paying this account's address. Selection takes the largest first. */
+  /**
+   * The coins it may spend, all paying this account's address (and so all of its type: the fee counts each as a
+   * P2WPKH or a P2TR input). Selection takes the largest first.
+   */
   readonly utxos: readonly BitcoinUtxo[]
   /** Any address of the adapter's network. */
   readonly to: string
@@ -88,11 +91,26 @@ export const TRANSACTION_VERSION = 2
 
 export const SIGHASH_ALL = 1
 
+/** BIP-341's own type, which signs what SIGHASH_ALL signs with a 64-byte signature (no 65th byte saying so). */
+export const SIGHASH_DEFAULT = 0
+
+const SIGHASH_NONE = 2
+
+const SIGHASH_SINGLE = 3
+
+const SIGHASH_ANYONECANPAY = 0x80
+
+/** Every signature hash type BIP-341 defines; any other byte makes a Taproot signature invalid. */
+export const TAPROOT_SIGHASH_TYPES: readonly number[] = Object.freeze([0x00, 0x01, 0x02, 0x03, 0x81, 0x82, 0x83])
+
 /** Version, input and output counts, lock time, and the SegWit marker and flag at a quarter weight. */
 const OVERHEAD_VBYTES = 10.5
 
-/** Outpoint, empty script and sequence (41 bytes), and a witness of a 72-byte signature and a 33-byte key. */
-const P2WPKH_INPUT_VBYTES = 68
+/**
+ * Each input: its outpoint, empty script and sequence (41 bytes), and a witness at a quarter weight. P2WPKH's is a
+ * 72-byte signature and a 33-byte key (68 vB); a Taproot key path's, one 64-byte signature (57.5 vB).
+ */
+const INPUT_VBYTES: Readonly<Record<BitcoinAccountType, number>> = Object.freeze({p2tr: 57.5, p2wpkh: 68})
 
 const invalid = (message: string) => new CryptoError('INVALID_ARGUMENT', message)
 
@@ -126,10 +144,17 @@ export const varint = (value: number) => {
 
 const outputSize = (scriptPubKey: Uint8Array) => 8 + varintLength(scriptPubKey.length) + scriptPubKey.length
 
-/** The virtual size of a transaction spending `inputs` P2WPKH coins to outputs with these scripts, rounded up. */
-export const estimateVsize = (inputs: number, scripts: readonly Uint8Array[]): number =>
+/**
+ * The virtual size of a transaction spending `inputs` coins of one type (P2WPKH unless stated) to outputs with these
+ * scripts, rounded up.
+ */
+export const estimateVsize = (
+  inputs: number,
+  scripts: readonly Uint8Array[],
+  type: BitcoinAccountType = 'p2wpkh'
+): number =>
   Math.ceil(
-    OVERHEAD_VBYTES + P2WPKH_INPUT_VBYTES * inputs + scripts.reduce((size, script) => size + outputSize(script), 0)
+    OVERHEAD_VBYTES + INPUT_VBYTES[type] * inputs + scripts.reduce((size, script) => size + outputSize(script), 0)
   )
 
 const isWitnessProgram = (script: Uint8Array) => {
@@ -217,14 +242,17 @@ const freezePlan = (plan: BitcoinTransactionPlan): BitcoinTransactionPlan =>
   })
 
 /**
- * Selects coins and computes the fee for a payment from a P2WPKH account: largest coins first, until they cover the
- * amount and the fee. Change at or above the dust threshold gets an output; below it, it joins the fee.
+ * Selects coins and computes the fee for a payment from an account whose coins are all of `type`: largest coins first,
+ * until they cover the amount and the fee. Change at or above the dust threshold gets an output; below it, it joins
+ * the fee.
  */
 export const planTransaction = (
   request: BitcoinTransactionRequest,
   ownAddress: string,
-  context: TransactionContext
+  context: TransactionContext,
+  type: BitcoinAccountType = 'p2wpkh'
 ): BitcoinTransactionPlan => {
+  const vsizeOf = (inputs: number, scripts: readonly Uint8Array[]) => estimateVsize(inputs, scripts, type)
   const recipient = resolve(request.to, context)
   const change = resolve(request.changeAddress ?? ownAddress, context)
   checkFeeRate(request.feeRate)
@@ -235,7 +263,7 @@ export const planTransaction = (
 
   if (request.amount === 'max') {
     const total = sum(utxos.map(utxo => utxo.value))
-    const vsize = estimateVsize(utxos.length, [recipient.scriptPubKey])
+    const vsize = vsizeOf(utxos.length, [recipient.scriptPubKey])
     const fee = feeFor(vsize, request.feeRate)
     const amount = total - fee
 
@@ -267,7 +295,7 @@ export const planTransaction = (
   for (const utxo of utxos) {
     selected.push(utxo)
     total += utxo.value
-    const withChange = estimateVsize(selected.length, [recipient.scriptPubKey, change.scriptPubKey])
+    const withChange = vsizeOf(selected.length, [recipient.scriptPubKey, change.scriptPubKey])
     const changeValue = total - amount - feeFor(withChange, request.feeRate)
 
     if (changeValue >= changeDust) {
@@ -284,7 +312,7 @@ export const planTransaction = (
       })
     }
 
-    const withoutChange = estimateVsize(selected.length, [recipient.scriptPubKey])
+    const withoutChange = vsizeOf(selected.length, [recipient.scriptPubKey])
 
     if (total >= amount + feeFor(withoutChange, request.feeRate)) {
       return freezePlan({
@@ -298,7 +326,7 @@ export const planTransaction = (
     }
   }
 
-  const fee = feeFor(estimateVsize(utxos.length, [recipient.scriptPubKey]), request.feeRate)
+  const fee = feeFor(vsizeOf(utxos.length, [recipient.scriptPubKey]), request.feeRate)
   const needed = amount + fee
 
   throw invalid(
@@ -307,6 +335,13 @@ export const planTransaction = (
 }
 
 export const hash256 = (data: Uint8Array, sha256: Hash) => sha256(sha256(data))
+
+/** BIP-340's tagged hash: SHA-256 of the tag's SHA-256 twice, then `data`. */
+export const taggedHash = (tag: string, data: Uint8Array, sha256: Hash): Uint8Array => {
+  const prefix = sha256(utf8.encode(tag))
+
+  return sha256(bytes.concat(prefix, prefix, data))
+}
 
 const outpoint = (input: RawInput) => bytes.concat(input.txid, u32(input.vout))
 
@@ -342,6 +377,82 @@ export const bip143Digest = (tx: RawTransaction, index: number, scriptCode: Uint
   )
 }
 
+/**
+ * BIP-341's signature message for a key path spend of input `index`, its epoch byte (0) first: what `taprootSighash`
+ * hashes. A Taproot signature commits to every coin the transaction spends, so `scripts` holds each input's output
+ * script, in order, and each input of `tx` carries its coin's value. Every hash type BIP-341 defines is computed; any
+ * other is `INVALID_ARGUMENT`, as is SIGHASH_SINGLE for an input with no output at its index.
+ */
+export const taprootSigMsg = (
+  tx: RawTransaction,
+  index: number,
+  scripts: readonly Uint8Array[],
+  hashType: number,
+  sha256: Hash
+): Uint8Array => {
+  const input = tx.inputs[index]
+  const script = scripts[index]
+
+  if (!input || !script) {
+    throw invalid('No input at that index.')
+  }
+
+  if (!TAPROOT_SIGHASH_TYPES.includes(hashType)) {
+    throw invalid(`${hashType} is not a Taproot signature hash type.`)
+  }
+
+  if (scripts.length !== tx.inputs.length) {
+    throw invalid('A Taproot signature commits to the script of every coin the transaction spends.')
+  }
+
+  const anyoneCanPay = (hashType & SIGHASH_ANYONECANPAY) !== 0
+  const outputs = hashType & 3
+  const parts: Uint8Array[] = [Uint8Array.of(0, hashType), u32(tx.version), u32(tx.locktime)]
+
+  if (!anyoneCanPay) {
+    parts.push(
+      sha256(bytes.concat(...tx.inputs.map(outpoint))),
+      sha256(bytes.concat(...tx.inputs.map(item => u64(item.value)))),
+      sha256(bytes.concat(...scripts.map(item => bytes.concat(varint(item.length), item)))),
+      sha256(bytes.concat(...tx.inputs.map(item => u32(item.sequence))))
+    )
+  }
+
+  if (outputs !== SIGHASH_NONE && outputs !== SIGHASH_SINGLE) {
+    parts.push(sha256(bytes.concat(...tx.outputs.map(serializeOutput))))
+  }
+
+  // The spend type: a key path, with no annex.
+  parts.push(Uint8Array.of(0))
+
+  if (anyoneCanPay) {
+    parts.push(outpoint(input), u64(input.value), varint(script.length), script, u32(input.sequence))
+  } else {
+    parts.push(u32(index))
+  }
+
+  if (outputs === SIGHASH_SINGLE) {
+    const output = tx.outputs[index]
+
+    if (!output) {
+      throw invalid('SIGHASH_SINGLE signs the output at its input`s index, and there is none.')
+    }
+
+    parts.push(sha256(serializeOutput(output)))
+  }
+
+  return bytes.concat(...parts)
+}
+
+/** BIP-341: the 32 bytes a key path signature of input `index` signs, the tagged hash `TapSighash` of its message. */
+export const taprootSighash = (
+  tx: RawTransaction,
+  index: number,
+  scripts: readonly Uint8Array[],
+  hashType: number,
+  sha256: Hash
+): Uint8Array => taggedHash('TapSighash', taprootSigMsg(tx, index, scripts, hashType, sha256), sha256)
+
 /** The wire format; with `witnesses`, BIP-144's, marker and flag included. */
 export const serializeTransaction = (tx: RawTransaction, witnesses?: readonly (readonly Uint8Array[])[]): Uint8Array =>
   bytes.concat(
@@ -375,8 +486,12 @@ const checkOutputs = (plan: BitcoinTransactionPlan, context: TransactionContext)
   })
 }
 
-/** What signs: the account's key, its compressed public key, and the P2WPKH script its coins are locked to. */
-export type P2wpkhSigner = {
+/**
+ * What signs for an account: its type, its key, its compressed public key, and the script its coins are locked to
+ * (P2WPKH, or the BIP-86 Taproot output of the key).
+ */
+export type AccountSigner = {
+  readonly type: BitcoinAccountType
   readonly key: Secp256k1Key
   readonly publicKey: Uint8Array
   readonly scriptPubKey: Uint8Array
@@ -439,17 +554,27 @@ export const signedTransaction = (
 }
 
 /**
- * Signs every input of `plan` as a P2WPKH input of `signer` (BIP-143, SIGHASH_ALL), in a version 2 transaction with
- * lock time 0 and replaceable inputs. The plan is checked first: its outputs must pay their addresses on the
- * network, and its fee must be its inputs less its outputs. An input that does not pay the signer gets a signature no
- * node accepts.
+ * Signs every input of `plan` as an input of `signer`, in a version 2 transaction with lock time 0 and replaceable
+ * inputs: P2WPKH with BIP-143 and SIGHASH_ALL, Taproot with BIP-341 and SIGHASH_DEFAULT, by the key tweaked inside
+ * the engine (BIP-86). The plan is checked first: its outputs must pay their addresses on the network, and its fee
+ * must be its inputs less its outputs. An input that does not pay the signer gets a signature no node accepts.
  */
 export const signTransaction = (
   plan: BitcoinTransactionPlan,
-  signer: P2wpkhSigner,
+  signer: AccountSigner,
   context: TransactionContext
 ): SignedBitcoinTransaction => {
   const {fee, tx} = unsignedTransaction(plan, context)
+
+  if (signer.type === 'p2tr') {
+    const scripts = tx.inputs.map(() => signer.scriptPubKey)
+    const witnesses = tx.inputs.map((_, index) => [
+      signer.key.signTaproot(taprootSighash(tx, index, scripts, SIGHASH_DEFAULT, context.sha256)),
+    ])
+
+    return signedTransaction(tx, witnesses, fee, context.sha256)
+  }
+
   const scriptCode = p2wpkhScriptCode(signer.scriptPubKey.subarray(2))
   const witnesses = tx.inputs.map((_, index) => {
     const {signature} = signer.key.sign(bip143Digest(tx, index, scriptCode, context.sha256))

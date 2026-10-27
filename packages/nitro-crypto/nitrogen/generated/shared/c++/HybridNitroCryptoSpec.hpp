@@ -77,6 +77,8 @@ namespace margelo::nitro::nitrocrypto {
       virtual std::shared_ptr<ArrayBuffer> secp256k1ConvertPublicKey(const std::shared_ptr<ArrayBuffer>& publicKey, bool compressed) = 0;
       virtual bool secp256k1Verify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& digest, const std::shared_ptr<ArrayBuffer>& signature) = 0;
       virtual std::shared_ptr<ArrayBuffer> secp256k1Recover(const std::shared_ptr<ArrayBuffer>& digest, const std::shared_ptr<ArrayBuffer>& signature, bool compressed) = 0;
+      virtual bool secp256k1SchnorrVerify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& message, const std::shared_ptr<ArrayBuffer>& signature) = 0;
+      virtual std::shared_ptr<ArrayBuffer> secp256k1TaprootTweak(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& merkleRoot) = 0;
       virtual bool ed25519Verify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& message, const std::shared_ptr<ArrayBuffer>& signature) = 0;
       virtual std::shared_ptr<ArrayBuffer> bip32DerivePublic(const std::shared_ptr<ArrayBuffer>& extendedPublicKey, const std::string& path) = 0;
       virtual void validateMnemonic(const std::shared_ptr<ArrayBuffer>& mnemonic) = 0;

@@ -13,7 +13,8 @@ signatures, never key bytes. Chains are separate packages that plug into a typed
 </p>
 
 - SHA-256, SHA-512, Keccak-256, RIPEMD-160, HMAC, and OS randomness that fails closed
-- secp256k1 from Bitcoin Core's libsecp256k1: RFC 6979, lower S, public key recovery
+- secp256k1 from Bitcoin Core's libsecp256k1: RFC 6979, lower S, public key recovery, BIP-340 Schnorr signatures
+  and BIP-341 Taproot tweaks
 - Ed25519 (RFC 8032), strict verification
 - BIP-39 seeds, BIP-32 and SLIP-0010 derivation, all inside the engine
 - Chain adapters: [Ethereum](https://www.npmjs.com/package/@hzblj/crypto-ethereum), [Bitcoin](https://www.npmjs.com/package/@hzblj/crypto-bitcoin),
@@ -69,11 +70,18 @@ crypto.random(32)
 
 crypto.secp256k1.verify(publicKey, digest, signature) // false for a mismatch or an upper-S signature
 crypto.secp256k1.recover(digest, {signature, recovery})
+crypto.schnorr.verify(xOnlyPublicKey, message, signature) // BIP-340
+crypto.schnorr.taprootTweak(internalKey, merkleRoot) // BIP-341: {publicKey, parity}; no merkle root for BIP-86
 crypto.ed25519.verify(publicKey, message, signature)
 
 const key = crypto.keys.generate('ed25519') // held by the engine
 key.sign(message)
 key.dispose()
+
+const secp = crypto.keys.generate('secp256k1')
+secp.xOnlyPublicKey() // 32 bytes
+secp.signSchnorr(message) // BIP-340, with fresh auxiliary randomness
+secp.signTaproot(sighash, merkleRoot) // BIP-341 key path: tweaked inside the engine
 ```
 
 Inputs and outputs are `Uint8Array`. `hex`, `utf8`, `base58`, `base58check` and `bech32` are exported for the text
@@ -100,10 +108,14 @@ Nothing is persisted: a reload or a restart loses every wallet. A wallet the use
 behind biometrics), and restore with `createEphemeralWallet({mnemonic})`. The engine hands out no other secret, and
 cannot read a mnemonic back from a seed.
 
-A vault does better: it keeps the wallet's BIP-39 entropy sealed by the Secure Enclave or StrongBox and hands the
-engine a seed natively, through `cpp/NitroCryptoInterop.hpp` (`<NitroCrypto/NitroCryptoInterop.hpp>` on iOS, the
-prefab `hzblj_nitro-crypto::NitroCrypto` on Android), so neither the words nor the entropy pass through JavaScript;
-the facade takes the seed over with `createEphemeralWallet({seed, words})` (docs/adr/0008).
+A vault does better: it keeps the wallet's BIP-39 entropy sealed by the Secure Enclave or StrongBox and hands the engine
+a seed natively (under a BIP-39 passphrase too, NFKD-normalized by the vault, if the wallet has one), through
+`cpp/NitroCryptoInterop.hpp` (`<NitroCrypto/NitroCryptoInterop.hpp>` on iOS, the prefab
+`hzblj_nitro-crypto::NitroCrypto` on Android), so neither the words nor the entropy pass through JavaScript; the facade
+takes the seed over with `createEphemeralWallet({seed, words})` (docs/adr/0008). The same header seals that entropy into
+a backup that may leave the device, under a password (`backupSeal`, Argon2id) or under the 32 bytes a passkey's PRF
+extension returns (`backupSealWithKey`, HKDF-SHA256), with nothing for the user to remember, and opens it again;
+`backupKeyDerivation` says which a backup needs (docs/adr/0009, docs/adr/0010).
 
 ```ts
 const mnemonic = crypto.mnemonic.generate(12) // show once, for the user to write down
@@ -151,6 +163,7 @@ A chain whose curves and hashes the engine has is one adapter, written against `
 | Keccak-256 | Keccak (Ethereum) | Zig standard library |
 | RIPEMD-160 | RIPEMD-160 | This package, against the reference vectors |
 | secp256k1 ECDSA, recovery | SEC 2, RFC 6979 | libsecp256k1 0.8.0 |
+| secp256k1 Schnorr, Taproot tweak | BIP-340, BIP-341 (key path, BIP-86) | libsecp256k1 0.8.0 |
 | Ed25519 | RFC 8032 | Zig standard library |
 | Mnemonics, seeds | BIP-39 (English) | This package |
 | HD keys | BIP-32 (secp256k1, and public derivation), SLIP-0010 (Ed25519) | This package |

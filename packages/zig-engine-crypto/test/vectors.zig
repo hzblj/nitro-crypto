@@ -5,6 +5,10 @@
 //!   bip32.json    BIP-32 test vectors 1 to 4, extended keys decoded from their xprv
 //!   slip10.json   SLIP-0010 test vectors 1 and 2, for secp256k1 and Ed25519
 //!   rfc8032.json  RFC 8032 section 7.1, Ed25519
+//!   bip340.csv    BIP-340's test-vectors.csv, Schnorr signatures (verbatim)
+//!   bip341.json   BIP-341's wallet-test-vectors.json, Taproot output keys and key path signatures (verbatim)
+//!
+//! And two parity checks against an independent implementation: backup.json and backup_key.json (README there).
 
 const std = @import("std");
 const engine = @import("engine");
@@ -253,6 +257,159 @@ test "RFC 8032: public keys, deterministic signatures and verification" {
     }
 }
 
+// --- BIP-340 and BIP-341 ---------------------------------------------------------------------------------
+
+/// A row of BIP-340's test-vectors.csv: index, secret key, public key, aux_rand, message, signature, verification
+/// result, comment. The file is the BIP's (whose CRLF line endings Git may have turned into LF; either reads), and
+/// no comment holds a comma.
+const Bip340 = struct {
+    index: []const u8,
+    secret: []const u8,
+    public: []const u8,
+    aux: []const u8,
+    message: []const u8,
+    signature: []const u8,
+    valid: bool,
+    comment: []const u8,
+};
+
+fn bip340Rows(rows: *[32]Bip340) ![]const Bip340 {
+    var lines = std.mem.tokenizeAny(u8, @embedFile("vectors/bip340.csv"), "\r\n");
+    _ = lines.next(); // the header
+    var count: usize = 0;
+    while (lines.next()) |line| : (count += 1) {
+        var fields = std.mem.splitScalar(u8, line, ',');
+        var values: [8][]const u8 = undefined;
+        for (&values) |*value| value.* = fields.next() orelse return error.TestUnexpectedResult;
+        if (fields.next() != null) return error.TestUnexpectedResult;
+        rows[count] = .{
+            .index = values[0],
+            .secret = values[1],
+            .public = values[2],
+            .aux = values[3],
+            .message = values[4],
+            .signature = values[5],
+            .valid = std.mem.eql(u8, values[6], "TRUE"),
+            .comment = values[7],
+        };
+    }
+    return rows[0..count];
+}
+
+test "BIP-340: every published vector, signed with its aux_rand through a handle, and verified" {
+    var buffer: [32]Bip340 = undefined;
+    const rows = try bip340Rows(&buffer);
+    try testing.expectEqual(@as(usize, 19), rows.len);
+    var vault: engine.keys.Vault = .{};
+    var signed: usize = 0;
+
+    for (rows) |row| {
+        const public_key = try bytes(32, row.public);
+        const signature = try bytes(64, row.signature);
+        const message = try hexAlloc(row.message);
+        defer testing.allocator.free(message);
+
+        if (row.secret.len > 0) {
+            const key = try engine.keys.import(&vault, .secp256k1, &try bytes(32, row.secret));
+            defer vault.destroy(key) catch unreachable;
+            var out: [64]u8 = undefined;
+            _ = try engine.keys.xOnlyPublicKey(&vault, key, &out);
+            try testing.expectEqualSlices(u8, &public_key, out[0..32]);
+            _ = try engine.keys.signSchnorrWith(&vault, key, message, .none, &try bytes(32, row.aux), &out);
+            try testing.expectEqualSlices(u8, &signature, &out);
+            signed += 1;
+        }
+
+        const result = engine.secp256k1.verifySchnorr(&public_key, message, &signature);
+        if (row.valid) {
+            result catch |err| {
+                std.debug.print("BIP-340 vector {s}: {s}\n", .{ row.index, @errorName(err) });
+                return err;
+            };
+        } else if (std.mem.startsWith(u8, row.comment, "public key")) {
+            try testing.expectError(error.InvalidPublicKey, result);
+        } else {
+            try testing.expectError(error.VerificationFailed, result);
+        }
+    }
+    try testing.expectEqual(@as(usize, 8), signed);
+    try testing.expectEqual(@as(u32, 0), vault.count());
+}
+
+const Bip341 = struct {
+    scriptPubKey: []const struct {
+        given: struct { internalPubkey: []const u8 },
+        intermediary: struct { merkleRoot: ?[]const u8, tweakedPubkey: []const u8 },
+        expected: struct { scriptPubKey: []const u8, scriptPathControlBlocks: ?[]const []const u8 = null },
+    },
+    keyPathSpending: []const struct {
+        inputSpending: []const struct {
+            given: struct { internalPrivkey: []const u8, merkleRoot: ?[]const u8 },
+            intermediary: struct { internalPubkey: []const u8, tweakedPrivkey: []const u8, sigHash: []const u8 },
+            expected: struct { witness: []const []const u8 },
+        },
+    },
+};
+
+fn merkleRoot(hex: ?[]const u8) !?[32]u8 {
+    return if (hex) |root| try bytes(32, root) else null;
+}
+
+test "BIP-341: output keys and their parity from every scriptPubKey vector" {
+    const parsed = try load(Bip341, "bip341.json");
+    defer parsed.deinit();
+    try testing.expectEqual(@as(usize, 7), parsed.value.scriptPubKey.len);
+
+    for (parsed.value.scriptPubKey) |vector| {
+        const root = try merkleRoot(vector.intermediary.merkleRoot);
+        const output = try engine.secp256k1.taprootTweak(&try bytes(32, vector.given.internalPubkey), if (root) |*r| r else null);
+        try testing.expectEqualSlices(u8, &try bytes(32, vector.intermediary.tweakedPubkey), output[1..33]);
+        // A P2TR scriptPubKey is OP_1 OP_PUSHBYTES_32 and the output key.
+        try testing.expectEqualSlices(u8, &try bytes(34, vector.expected.scriptPubKey), &([_]u8{ 0x51, 0x20 } ++ output[1..33].*));
+        // A control block's first byte is the leaf version with the output key's parity in its low bit.
+        for (vector.expected.scriptPathControlBlocks orelse &.{}) |block| {
+            const first = try bytes(1, block[0..2]);
+            try testing.expectEqual(output[0] - 2, first[0] & 1);
+        }
+    }
+}
+
+test "BIP-341: every key path signature, through a handle tweaked inside the engine" {
+    const parsed = try load(Bip341, "bip341.json");
+    defer parsed.deinit();
+    var vault: engine.keys.Vault = .{};
+    var inputs: usize = 0;
+    // The vectors are signed with aux_rand all zero.
+    const aux: [32]u8 = @splat(0);
+
+    for (parsed.value.keyPathSpending) |spending| {
+        for (spending.inputSpending) |input| {
+            const root = try merkleRoot(input.given.merkleRoot);
+            const root_pointer: ?*const [32]u8 = if (root) |*r| r else null;
+            const internal = try bytes(32, input.intermediary.internalPubkey);
+            const sighash = try bytes(32, input.intermediary.sigHash);
+            const output = try engine.secp256k1.taprootTweak(&internal, root_pointer);
+
+            const key = try engine.keys.import(&vault, .secp256k1, &try bytes(32, input.given.internalPrivkey));
+            defer vault.destroy(key) catch unreachable;
+            var out: [64]u8 = undefined;
+            _ = try engine.keys.xOnlyPublicKey(&vault, key, &out);
+            try testing.expectEqualSlices(u8, &internal, out[0..32]);
+            _ = try engine.keys.signSchnorrWith(&vault, key, &sighash, .{ .taproot = root_pointer }, &aux, &out);
+            // The witness is the signature, with the sighash type appended when it is not SIGHASH_DEFAULT.
+            try testing.expectEqualSlices(u8, &try bytes(64, input.expected.witness[0][0..128]), &out);
+            try engine.secp256k1.verifySchnorr(output[1..33], &sighash, &out);
+
+            // The tweaked private key BIP-341 lists is the key of the output key.
+            const tweaked = try engine.secp256k1.xOnlyFromPrivate(&try bytes(32, input.intermediary.tweakedPrivkey));
+            try testing.expectEqualSlices(u8, output[1..33], &tweaked);
+            inputs += 1;
+        }
+    }
+    try testing.expectEqual(@as(usize, 7), inputs);
+    try testing.expectEqual(@as(u32, 0), vault.count());
+}
+
 // --- the vault, end to end -------------------------------------------------------------------------------
 
 test "the vault reproduces the vectors through handles" {
@@ -409,6 +566,33 @@ test "backups: the engine seals and opens what an independent implementation doe
 
         var opened: [engine.backup.max_entropy_length]u8 = undefined;
         const length = try engine.backup.open(expected, vector.password, &opened);
+        try testing.expectEqualSlices(u8, entropy, opened[0..length]);
+    }
+}
+
+const BackupKey = struct {
+    vectors: []const struct { backup: []const u8, entropy: []const u8, key: []const u8, nonce: []const u8, salt: []const u8 },
+};
+
+test "key-sealed backups: the engine seals and opens what an independent implementation does, byte for byte" {
+    const parsed = try load(BackupKey, "backup_key.json");
+    defer parsed.deinit();
+    try testing.expectEqual(@as(usize, 3), parsed.value.vectors.len);
+
+    for (parsed.value.vectors) |vector| {
+        const entropy = try hexAlloc(vector.entropy);
+        defer testing.allocator.free(entropy);
+        const expected = try hexAlloc(vector.backup);
+        defer testing.allocator.free(expected);
+        const key = try bytes(32, vector.key);
+
+        var sealed: [engine.backup.max_length]u8 = undefined;
+        const written = try engine.backup.sealWithKeyWith(entropy, &key, &try bytes(16, vector.salt), &try bytes(24, vector.nonce), &sealed);
+        try testing.expectEqualSlices(u8, expected, sealed[0..written]);
+        try testing.expectEqual(engine.backup.kdf_key, try engine.backup.keyDerivation(expected));
+
+        var opened: [engine.backup.max_entropy_length]u8 = undefined;
+        const length = try engine.backup.openWithKey(expected, &key, &opened);
         try testing.expectEqualSlices(u8, entropy, opened[0..length]);
     }
 }

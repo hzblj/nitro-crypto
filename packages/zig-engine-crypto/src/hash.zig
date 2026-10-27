@@ -10,7 +10,8 @@ const sha2 = @import("hash/sha2.zig");
 const Sha256 = sha2.Sha256;
 const Sha512 = sha2.Sha512;
 const Keccak256 = std.crypto.hash.sha3.Keccak256;
-const HmacSha256 = std.crypto.auth.hmac.Hmac(Sha256);
+/// What a key-sealed backup's HKDF builds on (backup/backup.zig).
+pub const HmacSha256 = std.crypto.auth.hmac.Hmac(Sha256);
 
 /// What BIP-32, SLIP-0010 and BIP-39's PBKDF2 build on.
 pub const HmacSha512 = std.crypto.auth.hmac.Hmac(Sha512);

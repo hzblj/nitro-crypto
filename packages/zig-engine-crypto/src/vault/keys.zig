@@ -1,5 +1,5 @@
 //! What can be done with secrets behind handles: seeds from mnemonics, keys derived, generated or imported,
-//! their public keys, and signatures. Each operation copies the one secret it needs out of the vault, works on
+//! their public keys, and signatures (ECDSA, Ed25519, and BIP-340 Schnorr with BIP-341's Taproot tweak). Each operation copies the one secret it needs out of the vault, works on
 //! the copy, and zeroes it before returning.
 
 const std = @import("std");
@@ -226,6 +226,41 @@ pub fn sign(vault: *Vault, key_handle: Handle, data: []const u8, out: []u8) Erro
     }
 }
 
+/// The BIP-340 x-only public key of a secp256k1 key: 32 bytes.
+pub fn xOnlyPublicKey(vault: *Vault, key_handle: Handle, out: []u8) Error!usize {
+    if (out.len < secp256k1.x_only_length) return error.BufferTooSmall;
+    var secret = try Secret.loadKind(vault, key_handle, .secp256k1_key);
+    defer secret.zero();
+    out[0..secp256k1.x_only_length].* = try secp256k1.xOnlyFromPrivate(secret.as(secp256k1.PrivateKey));
+    return secp256k1.x_only_length;
+}
+
+/// A BIP-340 Schnorr signature by a secp256k1 key, 64 bytes, with 32 bytes of fresh OS randomness as its auxiliary
+/// data: two signatures of one message differ, and both verify. `message` is any length, or the 32-byte sighash a
+/// Taproot key path signs (`tweak` is `.taproot`; another length is `InvalidLength`).
+pub fn signSchnorr(vault: *Vault, key_handle: Handle, message: []const u8, tweak: secp256k1.Tweak, out: []u8) Error!usize {
+    try checkSchnorr(message, tweak, out);
+    var aux: [32]u8 = undefined;
+    defer secure.zero(&aux);
+    try entropy.fill(&aux);
+    return signSchnorrWith(vault, key_handle, message, tweak, &aux, out);
+}
+
+/// `signSchnorr` with the auxiliary randomness given: what reproduces BIP-340's and BIP-341's published signatures.
+/// The C ABI signs with OS randomness only; the WebAssembly build's test hook and the vector tests come here.
+pub fn signSchnorrWith(vault: *Vault, key_handle: Handle, message: []const u8, tweak: secp256k1.Tweak, aux: *const [32]u8, out: []u8) Error!usize {
+    try checkSchnorr(message, tweak, out);
+    var secret = try Secret.loadKind(vault, key_handle, .secp256k1_key);
+    defer secret.zero();
+    out[0..secp256k1.schnorr_signature_length].* = try secp256k1.signSchnorr(secret.as(secp256k1.PrivateKey), message, aux, tweak);
+    return secp256k1.schnorr_signature_length;
+}
+
+fn checkSchnorr(message: []const u8, tweak: secp256k1.Tweak, out: []u8) Error!void {
+    if (tweak == .taproot and message.len != secp256k1.digest_length) return error.InvalidLength;
+    if (out.len < secp256k1.schnorr_signature_length) return error.BufferTooSmall;
+}
+
 const testing = std.testing;
 
 const abandon = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -314,5 +349,33 @@ test "generate produces distinct valid keys on both curves" {
         const length = try publicKey(&vault, a, true, &first);
         _ = try publicKey(&vault, b, true, &second);
         try testing.expect(!std.mem.eql(u8, first[0..length], second[0..length]));
+    }
+}
+
+test "Schnorr through a handle: x-only key, plain and Taproot signatures, and what is refused" {
+    var vault: Vault = .{};
+    var one: [32]u8 = @splat(0);
+    one[31] = 3;
+    const key = try import(&vault, .secp256k1, &one);
+    var public_key: [32]u8 = undefined;
+    try testing.expectEqual(@as(usize, 32), try xOnlyPublicKey(&vault, key, &public_key));
+    var compressed: [33]u8 = undefined;
+    _ = try publicKey(&vault, key, true, &compressed);
+    try testing.expectEqualSlices(u8, compressed[1..], &public_key);
+
+    var signature: [64]u8 = undefined;
+    try testing.expectEqual(@as(usize, 64), try signSchnorr(&vault, key, "any length", .none, &signature));
+    try secp256k1.verifySchnorr(&public_key, "any length", &signature);
+    const digest: [32]u8 = @splat(1);
+    _ = try signSchnorr(&vault, key, &digest, .{ .taproot = null }, &signature);
+    try secp256k1.verifySchnorr((try secp256k1.taprootTweak(&public_key, null))[1..33], &digest, &signature);
+
+    try testing.expectError(error.InvalidLength, signSchnorr(&vault, key, "not a sighash", .{ .taproot = null }, &signature));
+    try testing.expectError(error.BufferTooSmall, signSchnorr(&vault, key, "x", .none, signature[0..63]));
+    const ed25519_key = try generate(&vault, .ed25519);
+    const seed = try seedFromMnemonic(&vault, abandon, "");
+    for ([_]Handle{ ed25519_key, seed }) |handle| {
+        try testing.expectError(error.InvalidHandle, signSchnorr(&vault, handle, "x", .none, &signature));
+        try testing.expectError(error.InvalidHandle, xOnlyPublicKey(&vault, handle, &public_key));
     }
 }

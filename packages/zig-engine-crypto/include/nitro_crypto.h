@@ -1,9 +1,9 @@
 /*
  * nitro_crypto.h: the C ABI of the nitro-crypto engine.
  *
- * Chain-agnostic cryptography: random bytes, hashes, HMAC, secp256k1 ECDSA, Ed25519, BIP-39 seeds and
- * hierarchical key derivation (BIP-32 for secp256k1, SLIP-0010 for Ed25519). Nothing here knows about a
- * blockchain; addresses, message formats and networks belong to the adapters above it.
+ * Chain-agnostic cryptography: random bytes, hashes, HMAC, secp256k1 ECDSA, BIP-340 Schnorr signatures and BIP-341
+ * key tweaks, Ed25519, BIP-39 seeds and hierarchical key derivation (BIP-32 for secp256k1, SLIP-0010 for Ed25519).
+ * Nothing here knows about a blockchain; addresses, message formats and networks belong to the adapters above it.
  *
  * Compatibility policy
  *   NC_ABI_VERSION changes whenever a function, a constant or a struct here changes meaning or signature. A
@@ -60,7 +60,7 @@ typedef int32_t nc_status;
 #define NC_ERR_INVALID_HANDLE -11       /* never issued, already destroyed, or of the wrong kind */
 #define NC_ERR_HANDLE_LIMIT -12         /* NC_HANDLE_CAPACITY handles are alive */
 #define NC_ERR_ENTROPY_UNAVAILABLE -13  /* the operating system did not provide random bytes; nothing was produced */
-#define NC_ERR_DERIVATION_FAILED -14    /* BIP-32 produced an invalid child key (probability about 2^-127) */
+#define NC_ERR_DERIVATION_FAILED -14    /* BIP-32 made an invalid child, or BIP-341 an invalid tweak (about 2^-127) */
 #define NC_ERR_INTERNAL -15
 
 /** A stable identifier for a status ("NC_ERR_INVALID_LENGTH"), or "NC_ERR_UNKNOWN". Static storage. */
@@ -95,6 +95,9 @@ const char *nc_build_info(void);
 #define NC_CAP_BIP32_PUBLIC_DERIVATION (1ull << 15)
 #define NC_CAP_BIP39_ENTROPY (1ull << 16)
 #define NC_CAP_BACKUP_ARGON2ID (1ull << 17)
+#define NC_CAP_SECP256K1_SCHNORR (1ull << 18)  /* BIP-340: Schnorr verification, x-only keys, nc_key_sign_schnorr */
+#define NC_CAP_TAPROOT_TWEAK (1ull << 19)      /* BIP-341: nc_secp256k1_taproot_tweak, nc_key_sign_taproot */
+#define NC_CAP_BACKUP_HKDF_SHA256 (1ull << 20) /* nc_backup_seal_with_key, nc_backup_open_with_key, nc_backup_kdf */
 
 /** Every capability this build provides, as NC_CAP_* bits. */
 uint64_t nc_capabilities(void);
@@ -132,6 +135,9 @@ nc_status nc_hmac(uint32_t algorithm, const uint8_t *key, size_t key_len, const 
 #define NC_SECP256K1_DIGEST_LENGTH 32
 #define NC_SECP256K1_SIGNATURE_LENGTH 64            /* r || s, big-endian, S in the lower half */
 #define NC_SECP256K1_RECOVERABLE_SIGNATURE_LENGTH 65 /* r || s || recovery id (0 to 3) */
+#define NC_SECP256K1_XONLY_LENGTH 32                 /* BIP-340's public key: x of the point with even y */
+#define NC_SECP256K1_SCHNORR_SIGNATURE_LENGTH 64     /* BIP-340: x(R) || s */
+#define NC_TAPROOT_MERKLE_ROOT_LENGTH 32             /* BIP-341: the root of a script tree */
 
 /**
  * Re-encodes a SEC1 public key (33 or 65 bytes) compressed (33) or uncompressed (65), validating it.
@@ -151,6 +157,25 @@ nc_status nc_secp256k1_verify(const uint8_t *public_key, size_t public_key_len, 
 nc_status nc_secp256k1_recover(const uint8_t *digest, size_t digest_len, const uint8_t *signature,
                                size_t signature_len, int32_t compressed, uint8_t *out, size_t out_len,
                                size_t *written);
+
+/**
+ * BIP-340 verification of a 64-byte Schnorr signature over `message`, of any length (NULL when 0), under a 32-byte
+ * x-only public key. NC_OK when it verifies; NC_ERR_VERIFICATION_FAILED when it does not, a malformed signature (x(R)
+ * not below p, s not below n) included; NC_ERR_INVALID_PUBLIC_KEY when the key is the x coordinate of no point.
+ */
+nc_status nc_secp256k1_schnorr_verify(const uint8_t *public_key, size_t public_key_len, const uint8_t *message,
+                                      size_t message_len, const uint8_t *signature, size_t signature_len);
+
+/**
+ * BIP-341's output key Q = P + tG, with t the tagged hash "TapTweak" of x(P) followed by `merkle_root`: the key a P2TR
+ * output commits to. `public_key` is the internal key P, x-only (32 bytes) or SEC1 (33 or 65, whose y parity BIP-341
+ * drops); `merkle_root` is the root of its script tree (32 bytes), or NULL with length 0 for a key with none (BIP-86).
+ * Writes Q compressed, 33 bytes, through `written`: its x coordinate is the 32-byte output key, its prefix (0x02 even,
+ * 0x03 odd) the parity a script path's control block carries. Public data only. NC_ERR_DERIVATION_FAILED when t is
+ * not below the group order (probability about 2^-128).
+ */
+nc_status nc_secp256k1_taproot_tweak(const uint8_t *public_key, size_t public_key_len, const uint8_t *merkle_root,
+                                     size_t merkle_root_len, uint8_t *out, size_t out_len, size_t *written);
 
 /* ----------------------------------------------------------------------------------------------- ed25519 */
 
@@ -219,8 +244,9 @@ nc_status nc_seed_from_mnemonic(const char *mnemonic, size_t mnemonic_len, const
 #define NC_ENTROPY_MAX_LENGTH 32
 
 /**
- * Stores the BIP-39 seed of the mnemonic `entropy` encodes (16, 20, 24, 28 or 32 bytes), under `passphrase`, as a
- * seed handle: the seed a wallet restored from those words would have. The mnemonic exists only on this call's
+ * Stores the BIP-39 seed of the mnemonic `entropy` encodes (16, 20, 24, 28 or 32 bytes), under `passphrase` (UTF-8,
+ * NFKD-normalized by the caller, at most 1024 bytes), as a seed handle: the seed a wallet restored from those words
+ * would have. The mnemonic exists only on this call's
  * stack. For a vault that keeps the entropy, sealed by hardware, rather than the words (ADR 0008); any other
  * NC_ERR_INVALID_LENGTH.
  */
@@ -245,9 +271,20 @@ nc_status nc_mnemonic_to_entropy(const char *mnemonic, size_t mnemonic_len, uint
 
 /* ------------------------------------------------------------------------------------------------- backup */
 
-/** A sealed backup's header: magic, version, key derivation, memory, passes, lanes, salt and nonce (ADR 0009). */
+/** The key derivations a backup names in its sixth byte, after the magic "ncbk" and the version, 1. */
+#define NC_BACKUP_KDF_ARGON2ID 1 /* a password, through Argon2id (ADR 0009): nc_backup_seal and nc_backup_open */
+#define NC_BACKUP_KDF_KEY 2      /* a 32-byte key, through HKDF-SHA256 (ADR 0010): the _with_key pair */
+
+/** A password-sealed backup's header: magic, version, key derivation, memory, passes, lanes, salt, nonce (ADR 0009). */
 #define NC_BACKUP_HEADER_LENGTH 55
-/** The longest sealed backup: the header, 32 bytes of entropy and the 16-byte tag. A buffer this size fits any. */
+/** A key-sealed backup's header: magic, version, key derivation, salt and nonce (ADR 0010). */
+#define NC_BACKUP_KEY_HEADER_LENGTH 46
+/** The key nc_backup_seal_with_key seals under: 32 bytes, such as a passkey's PRF output. */
+#define NC_BACKUP_KEY_LENGTH 32
+/**
+ * The longest sealed backup of either kind: a password-sealed one's header, 32 bytes of entropy and the 16-byte tag. A
+ * buffer this size fits any.
+ */
 #define NC_BACKUP_MAX_LENGTH (NC_BACKUP_HEADER_LENGTH + 32 + 16)
 
 /**
@@ -263,11 +300,40 @@ nc_status nc_backup_seal(const uint8_t *entropy, size_t entropy_len, const char 
 /**
  * The entropy a backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes), its length through `written`.
  * NC_ERR_VERIFICATION_FAILED for a wrong password and for any change to the backup alike; NC_ERR_INVALID_ARGUMENT for
- * a header this engine does not read (or parameters out of the bounds it accepts: 19 to 256 MiB, 1 to 10 passes).
+ * a header this engine does not read (or parameters out of the bounds it accepts: 19 to 256 MiB, 1 to 10 passes), and
+ * for a backup sealed under a key rather than a password (nc_backup_kdf tells them apart).
  * The caller should zero `out` when done.
  */
 nc_status nc_backup_open(const uint8_t *backup, size_t backup_len, const char *password, size_t password_len,
                          uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * Seals BIP-39 `entropy` (16 to 32 bytes) under a 32-byte `key` rather than a password: the output of a passkey's PRF
+ * extension, or any key as random. HKDF-SHA256 extracts a sealing key from it with a fresh 16-byte salt (no stretching:
+ * the key is uniformly random already), then XChaCha20-Poly1305 with a fresh nonce, the header as associated data.
+ * Writes the backup, NC_BACKUP_KEY_HEADER_LENGTH + entropy_len + 16 bytes, through `written`. A key of 32 zero bytes,
+ * what a buffer nobody filled holds, is NC_ERR_INVALID_ARGUMENT; any other length NC_ERR_INVALID_LENGTH. For native
+ * callers that hold the entropy and the key, such as a vault (ADR 0010); quick enough for any thread but JavaScript's,
+ * where the key must never be.
+ */
+nc_status nc_backup_seal_with_key(const uint8_t *entropy, size_t entropy_len, const uint8_t *key, size_t key_len,
+                                  uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * The entropy a key-sealed backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes), its length through
+ * `written`. NC_ERR_VERIFICATION_FAILED for a wrong key and for any change to the backup alike; NC_ERR_INVALID_ARGUMENT
+ * for a header this engine does not read, and for a backup sealed under a password. The caller should zero `out`.
+ */
+nc_status nc_backup_open_with_key(const uint8_t *backup, size_t backup_len, const uint8_t *key, size_t key_len,
+                                  uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * The key derivation a backup names (NC_BACKUP_KDF_ARGON2ID or NC_BACKUP_KDF_KEY), through `kdf`, without opening it:
+ * whether to ask for the password or the passkey. NC_ERR_INVALID_ARGUMENT for a header this engine does not read (a
+ * later version, another key derivation, not a backup); NC_ERR_INVALID_LENGTH for a length no backup of that kind has.
+ * Says nothing of whether the backup opens.
+ */
+nc_status nc_backup_kdf(const uint8_t *backup, size_t backup_len, uint32_t *kdf);
 
 /** The BIP-32 fingerprint of the seed's secp256k1 master key (HASH160 of its public key, first 4 bytes, big-endian). */
 nc_status nc_seed_fingerprint(nc_handle seed, uint32_t *out);
@@ -336,6 +402,28 @@ nc_status nc_key_public(nc_handle key, int32_t compressed, uint8_t *out, size_t 
  */
 nc_status nc_key_sign(nc_handle key, const uint8_t *data, size_t data_len, uint8_t *out, size_t out_len,
                       size_t *written);
+
+/** The BIP-340 x-only public key of a secp256k1 key handle: 32 bytes. NC_ERR_INVALID_HANDLE for any other handle. */
+nc_status nc_key_public_xonly(nc_handle key, uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * A BIP-340 Schnorr signature by a secp256k1 key handle over `message`, of any length (NULL when 0): 64 bytes. The
+ * auxiliary randomness is 32 fresh bytes from the OS CSPRNG, so two signatures of one message differ (both verify);
+ * the signature is verified before it is written, as BIP-340's signing ends. NC_ERR_INVALID_HANDLE for any other
+ * handle.
+ */
+nc_status nc_key_sign_schnorr(nc_handle key, const uint8_t *message, size_t message_len, uint8_t *out, size_t out_len,
+                              size_t *written);
+
+/**
+ * BIP-341's key path: nc_key_sign_schnorr by the key tweaked inside the engine, d + t with t as
+ * nc_secp256k1_taproot_tweak computes it from this key's x-only public key and `merkle_root` (d negated first when dG
+ * has an odd y). `message` is the 32-byte signature hash (NC_ERR_INVALID_LENGTH otherwise); `merkle_root` is 32 bytes,
+ * or NULL with length 0 for a key with no script tree (BIP-86). The signature verifies under the output key
+ * nc_secp256k1_taproot_tweak gives for this key's public key; the tweaked key exists only on this call's stack.
+ */
+nc_status nc_key_sign_taproot(nc_handle key, const uint8_t *message, size_t message_len, const uint8_t *merkle_root,
+                              size_t merkle_root_len, uint8_t *out, size_t out_len, size_t *written);
 
 #ifdef __cplusplus
 }

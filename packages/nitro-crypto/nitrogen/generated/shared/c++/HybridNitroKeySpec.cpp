@@ -17,6 +17,9 @@ namespace margelo::nitro::nitrocrypto {
       prototype.registerHybridGetter("curve", &HybridNitroKeySpec::getCurve);
       prototype.registerHybridMethod("getPublicKey", &HybridNitroKeySpec::getPublicKey);
       prototype.registerHybridMethod("sign", &HybridNitroKeySpec::sign);
+      prototype.registerHybridMethod("getXOnlyPublicKey", &HybridNitroKeySpec::getXOnlyPublicKey);
+      prototype.registerHybridMethod("signSchnorr", &HybridNitroKeySpec::signSchnorr);
+      prototype.registerHybridMethod("signTaproot", &HybridNitroKeySpec::signTaproot);
     });
   }
 

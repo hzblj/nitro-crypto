@@ -42,6 +42,12 @@ fn exact(comptime length: usize, bytes: []const u8) Error!*const [length]u8 {
     return bytes[0..length];
 }
 
+/// A Taproot merkle root: 32 bytes, or none (length 0) for a key with no script tree.
+fn merkleRoot(pointer: ?[*]const u8, length: usize) Error!?*const secp256k1.MerkleRoot {
+    if (length == 0) return null;
+    return try exact(secp256k1.merkle_root_length, try input(pointer, length));
+}
+
 fn store(comptime T: type, pointer: ?*T, value: T) Error!void {
     (pointer orelse return error.InvalidArgument).* = value;
 }
@@ -171,6 +177,46 @@ fn recover(message_digest: ?[*]const u8, digest_len: usize, signature: ?[*]const
         try exact(secp256k1.recoverable_signature_length, try input(signature, signature_len)),
     );
     try store(usize, written, try secp256k1.serializePublicKey(&public_key, compressed != 0, try output(out, out_len)));
+}
+
+export fn nc_secp256k1_schnorr_verify(
+    public_key: ?[*]const u8,
+    public_key_len: usize,
+    message: ?[*]const u8,
+    message_len: usize,
+    signature: ?[*]const u8,
+    signature_len: usize,
+) i32 {
+    return code(verifySchnorr(public_key, public_key_len, message, message_len, signature, signature_len));
+}
+
+fn verifySchnorr(public_key: ?[*]const u8, public_key_len: usize, message: ?[*]const u8, message_len: usize, signature: ?[*]const u8, signature_len: usize) Error!void {
+    try secp256k1.verifySchnorr(
+        try exact(secp256k1.x_only_length, try input(public_key, public_key_len)),
+        try input(message, message_len),
+        try exact(secp256k1.schnorr_signature_length, try input(signature, signature_len)),
+    );
+}
+
+export fn nc_secp256k1_taproot_tweak(
+    public_key: ?[*]const u8,
+    public_key_len: usize,
+    merkle_root: ?[*]const u8,
+    merkle_root_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(taprootTweak(public_key, public_key_len, merkle_root, merkle_root_len, out, out_len, written));
+}
+
+fn taprootTweak(public_key: ?[*]const u8, public_key_len: usize, merkle_root: ?[*]const u8, merkle_root_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const destination = try output(out, out_len);
+    if (destination.len < secp256k1.compressed_length) return error.BufferTooSmall;
+    const root = try merkleRoot(merkle_root, merkle_root_len);
+    destination[0..secp256k1.compressed_length].* = try secp256k1.taprootTweak(try input(public_key, public_key_len), root);
+    try store(usize, written, secp256k1.compressed_length);
 }
 
 // --- ed25519 ---------------------------------------------------------------------------------------------
@@ -363,6 +409,57 @@ fn backupOpen(sealed: ?[*]const u8, sealed_len: usize, password: ?[*]const u8, p
     try store(usize, written, length);
 }
 
+export fn nc_backup_seal_with_key(
+    entropy_bytes: ?[*]const u8,
+    entropy_len: usize,
+    key: ?[*]const u8,
+    key_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(backupSealWithKey(entropy_bytes, entropy_len, key, key_len, out, out_len, written));
+}
+
+fn backupSealWithKey(entropy_bytes: ?[*]const u8, entropy_len: usize, key: ?[*]const u8, key_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const length = try backup.sealWithKey(try input(entropy_bytes, entropy_len), try input(key, key_len), try output(out, out_len));
+    try store(usize, written, length);
+}
+
+export fn nc_backup_open_with_key(
+    sealed: ?[*]const u8,
+    sealed_len: usize,
+    key: ?[*]const u8,
+    key_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(backupOpenWithKey(sealed, sealed_len, key, key_len, out, out_len, written));
+}
+
+fn backupOpenWithKey(sealed: ?[*]const u8, sealed_len: usize, key: ?[*]const u8, key_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const buffer = try output(out, out_len);
+    if (buffer.len < backup.max_entropy_length) return error.BufferTooSmall;
+
+    var entropy_bytes: [backup.max_entropy_length]u8 = undefined;
+    defer secure.zero(&entropy_bytes);
+    const length = try backup.openWithKey(try input(sealed, sealed_len), try input(key, key_len), &entropy_bytes);
+    @memcpy(buffer[0..length], entropy_bytes[0..length]);
+    try store(usize, written, length);
+}
+
+export fn nc_backup_kdf(sealed: ?[*]const u8, sealed_len: usize, kdf: ?*u32) i32 {
+    return code(backupKdf(sealed, sealed_len, kdf));
+}
+
+fn backupKdf(sealed: ?[*]const u8, sealed_len: usize, kdf: ?*u32) Error!void {
+    if (kdf == null) return error.InvalidArgument;
+    try store(u32, kdf, try backup.keyDerivation(try input(sealed, sealed_len)));
+}
+
 export fn nc_seed_fingerprint(seed: Handle, out: ?*u32) i32 {
     return code(seedFingerprint(seed, out));
 }
@@ -467,6 +564,70 @@ fn keySign(key: Handle, data: ?[*]const u8, data_len: usize, out: ?[*]u8, out_le
     try store(usize, written, try keys.sign(&vault, key, try input(data, data_len), try output(out, out_len)));
 }
 
+export fn nc_key_public_xonly(key: Handle, out: ?[*]u8, out_len: usize, written: ?*usize) i32 {
+    return code(keyPublicXOnly(key, out, out_len, written));
+}
+
+fn keyPublicXOnly(key: Handle, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    try store(usize, written, try keys.xOnlyPublicKey(&vault, key, try output(out, out_len)));
+}
+
+export fn nc_key_sign_schnorr(key: Handle, message: ?[*]const u8, message_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) i32 {
+    return code(keySignSchnorr(key, message, message_len, out, out_len, written));
+}
+
+fn keySignSchnorr(key: Handle, message: ?[*]const u8, message_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    try store(usize, written, try keys.signSchnorr(&vault, key, try input(message, message_len), .none, try output(out, out_len)));
+}
+
+export fn nc_key_sign_taproot(
+    key: Handle,
+    message: ?[*]const u8,
+    message_len: usize,
+    merkle_root: ?[*]const u8,
+    merkle_root_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(keySignTaproot(key, message, message_len, merkle_root, merkle_root_len, out, out_len, written));
+}
+
+fn keySignTaproot(key: Handle, message: ?[*]const u8, message_len: usize, merkle_root: ?[*]const u8, merkle_root_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const tweak: secp256k1.Tweak = .{ .taproot = try merkleRoot(merkle_root, merkle_root_len) };
+    try store(usize, written, try keys.signSchnorr(&vault, key, try input(message, message_len), tweak, try output(out, out_len)));
+}
+
+/// Not exported here: the WebAssembly build's test hook (`nc_wasm_test_sign_schnorr`, src/wasm.zig), which signs as
+/// `nc_key_sign_schnorr` (`taproot` 0) or `nc_key_sign_taproot` (otherwise) with the auxiliary randomness given, so the
+/// TypeScript tests reproduce BIP-340's and BIP-341's published signatures. The native libraries sign with OS
+/// randomness only.
+pub fn signSchnorrWithAux(
+    key: Handle,
+    message: ?[*]const u8,
+    message_len: usize,
+    taproot: i32,
+    merkle_root: ?[*]const u8,
+    merkle_root_len: usize,
+    aux: ?[*]const u8,
+    aux_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(keySignSchnorrWithAux(key, message, message_len, taproot, merkle_root, merkle_root_len, aux, aux_len, out, out_len, written));
+}
+
+fn keySignSchnorrWithAux(key: Handle, message: ?[*]const u8, message_len: usize, taproot: i32, merkle_root: ?[*]const u8, merkle_root_len: usize, aux: ?[*]const u8, aux_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const tweak: secp256k1.Tweak = if (taproot != 0) .{ .taproot = try merkleRoot(merkle_root, merkle_root_len) } else .none;
+    const randomness = try exact(32, try input(aux, aux_len));
+    try store(usize, written, try keys.signSchnorrWith(&vault, key, try input(message, message_len), tweak, randomness, try output(out, out_len)));
+}
+
 const testing = std.testing;
 
 fn fuzzBoundary(_: void, smith: *testing.Smith) anyerror!void {
@@ -479,6 +640,7 @@ fn fuzzBoundary(_: void, smith: *testing.Smith) anyerror!void {
     const out_ptr: ?[*]u8 = if (smith.value(bool)) &out else null;
     const handle: Handle = smith.value(u64);
     const selector = smith.value(u32);
+    var selector_out: u32 = 0;
 
     // Every entry point taking buffers, with random ids, lengths, null pointers and handles: each returns a
     // status the header defines, and none crashes.
@@ -493,6 +655,14 @@ fn fuzzBoundary(_: void, smith: *testing.Smith) anyerror!void {
         nc_mnemonic_generate(selector % 32, out_ptr, out_len, if (smith.value(bool)) &written else null),
         nc_key_public(handle, 1, out_ptr, out_len, &written),
         nc_key_sign(handle, data_ptr, data_len, out_ptr, out_len, &written),
+        nc_key_public_xonly(handle, out_ptr, out_len, &written),
+        nc_key_sign_schnorr(handle, data_ptr, data_len, out_ptr, out_len, &written),
+        nc_key_sign_taproot(handle, data_ptr, @min(data_len, 32), data_ptr, data_len % 33, out_ptr, out_len, &written),
+        nc_secp256k1_schnorr_verify(data_ptr, @min(data_len, 32), data_ptr, data_len, data_ptr, @min(data_len, 64)),
+        nc_secp256k1_taproot_tweak(data_ptr, data_len % 66, data_ptr, data_len % 33, out_ptr, out_len, &written),
+        nc_backup_open_with_key(data_ptr, data_len, data_ptr, @min(data_len, 32), out_ptr, out_len, &written),
+        nc_backup_seal_with_key(data_ptr, data_len % 33, data_ptr, @min(data_len, 32), out_ptr, out_len, &written),
+        nc_backup_kdf(data_ptr, data_len, if (smith.value(bool)) &selector_out else null),
         nc_seed_extended_public(handle, data_ptr, data_len % 40, out_ptr, out_len, &written),
         // An extended key of the right length with a random path, and of a random length with a valid one.
         nc_bip32_public_derive(data_ptr, @min(data_len, 74), data_ptr, data_len % 12, out_ptr, out_len, &written),

@@ -183,23 +183,30 @@ export const app = async () => {
   const wallet = await crypto.createEphemeralWallet()
   const eth = await wallet.deriveAccount({chain: 'ethereum', index: 1})
   const btc = await wallet.deriveAccount({chain: 'bitcoin', change: 1})
+  const taproot = await wallet.deriveAccount({addressType: 'p2tr', chain: 'bitcoin'})
   const sol = await wallet.deriveAccount({account: 2, chain: 'solana'})
   const signature: Hex = await eth.signMessage({message: 'Hello from Expo'})
   const verified: boolean = await eth.verifyMessage({message: 'Hello from Expo', signature})
   const solSignature: Uint8Array = await sol.signMessage({message: new Uint8Array([1, 2, 3])})
+  const btcSignature: string = await taproot.signMessage({message: 'Hello from Expo'})
+  const legacy: string = await btc.signMessage({format: 'legacy', message: 'Hello from Expo'})
+  const btcVerified: boolean = crypto.chains.bitcoin.verifyMessage({address: btc.address, message: 'x', signature: legacy})
   const script: Uint8Array = btc.scriptPubKey
+  const type: 'p2wpkh' | 'p2tr' = taproot.addressType
   const digest: Uint8Array = crypto.hash.keccak256(new Uint8Array())
   const recovered: Uint8Array = crypto.secp256k1.recover(digest, {recovery: 0, signature: new Uint8Array(64)} satisfies RecoverableSignature)
   wallet.dispose()
 
   // @ts-expect-error: no adapter registers this chain
   await wallet.deriveAccount({chain: 'dogecoin'})
-  // @ts-expect-error: Bitcoin accounts sign nothing in this version
-  await btc.signMessage({message: 'x'})
+  // @ts-expect-error: a Bitcoin account is P2WPKH or P2TR, nothing else
+  await wallet.deriveAccount({addressType: 'p2sh', chain: 'bitcoin'})
+  // @ts-expect-error: message signatures are BIP-322 or legacy
+  await btc.signMessage({format: 'eip191', message: 'x'})
   // @ts-expect-error: hashes take bytes, not strings
   crypto.hash.sha256('abc')
 
-  return [verified, solSignature, script, recovered, hex.encode(digest), base58.encode(digest), isCryptoError(null)]
+  return [verified, solSignature, btcSignature, btcVerified, script, type, recovered, hex.encode(digest), base58.encode(digest), isCryptoError(null)]
 }
 
 // Signing elsewhere: what an air-gapped signer's watch-only side and the signer itself use (@hzblj/crypto-airgap-*

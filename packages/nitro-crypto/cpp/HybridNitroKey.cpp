@@ -29,6 +29,32 @@ std::shared_ptr<ArrayBuffer> HybridNitroKey::sign(const std::shared_ptr<ArrayBuf
   return truncated(out, written);
 }
 
+std::shared_ptr<ArrayBuffer> HybridNitroKey::getXOnlyPublicKey() {
+  auto out = allocate(NC_SECP256K1_XONLY_LENGTH);
+  size_t written = 0;
+  check(nc_key_public_xonly(_handle.get(), out->data(), out->size(), &written));
+  return truncated(out, written);
+}
+
+std::shared_ptr<ArrayBuffer> HybridNitroKey::signSchnorr(const std::shared_ptr<ArrayBuffer>& message) {
+  const ByteView input = view(message);
+  auto out = allocate(NC_SECP256K1_SCHNORR_SIGNATURE_LENGTH);
+  size_t written = 0;
+  check(nc_key_sign_schnorr(_handle.get(), input.data, input.size, out->data(), out->size(), &written));
+  return truncated(out, written);
+}
+
+std::shared_ptr<ArrayBuffer> HybridNitroKey::signTaproot(const std::shared_ptr<ArrayBuffer>& message,
+                                                         const std::shared_ptr<ArrayBuffer>& merkleRoot) {
+  const ByteView input = view(message);
+  const ByteView root = view(merkleRoot);
+  auto out = allocate(NC_SECP256K1_SCHNORR_SIGNATURE_LENGTH);
+  size_t written = 0;
+  check(nc_key_sign_taproot(_handle.get(), input.data, input.size, root.data, root.size, out->data(), out->size(),
+                            &written));
+  return truncated(out, written);
+}
+
 void HybridNitroKey::dispose() {
   _handle.release();
 }

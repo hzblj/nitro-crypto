@@ -35,6 +35,10 @@ public:
                        const std::shared_ptr<ArrayBuffer>& signature) override;
   std::shared_ptr<ArrayBuffer> secp256k1Recover(const std::shared_ptr<ArrayBuffer>& digest,
                                                 const std::shared_ptr<ArrayBuffer>& signature, bool compressed) override;
+  bool secp256k1SchnorrVerify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& message,
+                              const std::shared_ptr<ArrayBuffer>& signature) override;
+  std::shared_ptr<ArrayBuffer> secp256k1TaprootTweak(const std::shared_ptr<ArrayBuffer>& publicKey,
+                                                     const std::shared_ptr<ArrayBuffer>& merkleRoot) override;
   bool ed25519Verify(const std::shared_ptr<ArrayBuffer>& publicKey, const std::shared_ptr<ArrayBuffer>& message,
                      const std::shared_ptr<ArrayBuffer>& signature) override;
 
