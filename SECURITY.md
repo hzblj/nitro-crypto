@@ -81,10 +81,10 @@ changelog and a GitHub advisory once a fixed version is published.
 - **Spin lock, not a mutex.** Handle-table operations are microseconds long; under heavy contention a thread spins,
   then yields.
 - **Chains: what is not implemented is refused, not imitated.** The adapters build and sign Ethereum transactions
-  of types 0 (EIP-155), 1, 2 and 4 and EIP-712 typed data, Bitcoin P2WPKH payments and PSBTs, and Solana legacy
-  transactions (SOL and SPL transfers). Bitcoin accounts have no `signMessage`; Ethereum's blob transactions
-  (EIP-4844), Bitcoin's BIP-322, Taproot and PSBT version 2, and Solana's versioned transactions are not
-  implemented.
+  of types 0 (EIP-155), 1, 2 and 4 and EIP-712 typed data, Bitcoin P2WPKH payments and PSBTs, and Solana legacy and v0
+  transactions (SOL and SPL transfers, and a slot of any transaction others sign too) and off-chain messages. Bitcoin
+  accounts have no `signMessage`; Ethereum's blob transactions (EIP-4844), Bitcoin's BIP-322, Taproot and PSBT
+  version 2, and Solana's v1 transactions are not implemented.
 - **Ethereum signs nothing it cannot show.** No account signs a bare hash (`eth_sign`), directly or through the viem
   account. Every transaction, typed data domain and EIP-7702 authorization is bound to the adapter's chain id
   (`CHAIN_MISMATCH` otherwise); a legacy transaction always carries EIP-155 replay protection, and an authorization

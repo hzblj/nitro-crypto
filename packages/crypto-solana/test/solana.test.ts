@@ -110,6 +110,33 @@ describe('messages', () => {
     wallet.dispose()
   })
 
+  test('Sign In With Solana: the message text`s UTF-8 bytes, signed as they are, as kit signs them', async () => {
+    const wallet = await crypto.createEphemeralWallet({mnemonic: ABANDON})
+    const account = await wallet.deriveAccount({chain: 'solana'})
+    const pair = await createKeyPairFromPrivateKeyBytes(slip10Seed(mnemonicToSeedSync(ABANDON), [44, 501, 0, 0]))
+    // The message a dApp builds from its SignInInput (the SIWS spec's ABNF), and passes to the wallet as bytes.
+    const message = [
+      'example.com wants you to sign in with your Solana account:',
+      account.address,
+      '',
+      'Sign in to Example. Ünïcode is fine.',
+      '',
+      'URI: https://example.com/login',
+      'Version: 1',
+      'Chain ID: devnet',
+      'Nonce: 32891756',
+      'Issued At: 2026-10-27T16:25:24Z',
+    ].join('\n')
+    const bytes = utf8.encode(message)
+    const signature = await account.signMessage({message: bytes})
+
+    assert.deepEqual(signature, await account.signMessage({message}))
+    assert.deepEqual(signature, new Uint8Array(await signBytes(pair.privateKey, bytes)))
+    assert.equal(await verifySignature(pair.publicKey, signature as SignatureBytes, bytes), true)
+    assert.equal(solana.verifyMessage({address: account.address, message, signature}), true)
+    wallet.dispose()
+  })
+
   test('an off-curve address verifies nothing; a malformed one throws', () => {
     // 32 bytes whose y-coordinate is no point: an address a program could own, with no key behind it.
     const offCurve = base58.encode(new Uint8Array(32).fill(0xff).map((byte, index) => (index === 31 ? 0x7f : byte)))
@@ -163,8 +190,13 @@ describe('adapter', () => {
   test('describes itself honestly, and refuses unknown clusters', () => {
     const adapter = solanaAdapter()
     assert.equal(adapter.curve, 'ed25519')
-    assert.equal(adapter.features.transactionSigning, true)
-    assert.equal(adapter.features.versionedTransactions, false)
+    assert.deepEqual(adapter.features, {
+      messageSigning: true,
+      offchainMessages: true,
+      splTokens: true,
+      transactionSigning: true,
+      versionedTransactions: true,
+    })
     assert.equal(solanaAdapter({cluster: 'devnet'}).name, 'Solana devnet')
     assert.throws(
       () => solanaAdapter({cluster: 'localnet' as 'devnet'}),
