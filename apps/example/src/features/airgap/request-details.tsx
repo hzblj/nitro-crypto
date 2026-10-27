@@ -1,5 +1,5 @@
 import type {BitcoinSignRequest, BitcoinSignWarning} from '@hzblj/crypto-airgap-bitcoin'
-import type {EthereumSignRequest} from '@hzblj/crypto-airgap-ethereum'
+import type {EthereumSignRequest, EthereumSignWarning} from '@hzblj/crypto-airgap-ethereum'
 import type {SolanaSignRequest, SolanaSignWarning} from '@hzblj/crypto-airgap-solana'
 import type {SolanaInstructionSummary} from '@hzblj/crypto-solana'
 import {Box, Island, LabeledContent, RnText} from '@hzblj/kara-ui'
@@ -19,12 +19,24 @@ const BITCOIN_WARNINGS: Record<BitcoinSignWarning, string> = {
     "Some coins come without their previous transaction: their values, and so the fee, are the requesting wallet's word.",
 }
 
+const ETHEREUM_WARNINGS: Record<EthereumSignWarning, string> = {
+  ALL_CHAINS_DELEGATION: 'A delegation is valid on every chain, not only this one.',
+  CONTRACT_CREATION: 'This deploys a new contract from code this wallet cannot describe.',
+  DELEGATION: 'This lets a contract act for an account. Sign only if you trust that contract.',
+  NO_CHAIN_ID: 'The data names no chain: its signature is valid on every network.',
+}
+
 const SOLANA_WARNINGS: Record<SolanaSignWarning, string> = {
   NOT_FEE_PAYER: 'Another account pays the fee: this wallet only adds its signature.',
   OTHER_SIGNERS: 'Other accounts must sign too, which this wallet cannot do for them.',
   UNKNOWN_INSTRUCTIONS:
     'An instruction calls a program this wallet cannot describe. Sign only if you know what it does.',
+  UNRESOLVED_LOOKUPS: 'Some accounts come from lookup tables this wallet cannot read offline.',
 }
+
+/** Typed data's values as text: bigints as decimal digits, nested structs indented. */
+const typedDataText = (value: unknown) =>
+  JSON.stringify(value, (_, entry) => (typeof entry === 'bigint' ? entry.toString() : entry), 2)
 
 /** The amount a request moves, large, the way the send screen shows its own. */
 const Headline = ({label, value}: {label: string; value: string}) => (
@@ -116,13 +128,33 @@ const EthereumDetails = ({request}: {request: EthereumSignRequest}) => {
     )
   }
 
-  const {erc20Transfer, maxFee, transaction} = request
-  const token = NETWORKS.ethereum.tokens.find(entry => entry.contract?.toLowerCase() === transaction.to.toLowerCase())
+  if (request.kind === 'typed-data') {
+    const {domain, message, primaryType} = request.typedData
+
+    return (
+      <>
+        <Headline label="Sign typed data" value={primaryType} />
+        <Card>
+          {domain?.name ? <Value label="App" value={domain.name} /> : null}
+          {domain?.verifyingContract ? <Value label="Contract" value={domain.verifyingContract} /> : null}
+          <Value label="Chain id" value={domain?.chainId === undefined ? 'None' : String(domain.chainId)} />
+          <Value label="Message" value={typedDataText(message)} />
+        </Card>
+        <EthereumSigner request={request} />
+        <Warnings warnings={request.warnings.map(warning => ETHEREUM_WARNINGS[warning])} />
+      </>
+    )
+  }
+
+  const {authorizations, erc20Transfer, maxFee, transaction} = request
+  const to = transaction.to
+  const token =
+    to === null ? undefined : NETWORKS.ethereum.tokens.find(entry => entry.contract?.toLowerCase() === to.toLowerCase())
 
   return (
     <>
       <Headline
-        label={erc20Transfer ? 'Send tokens' : 'Send'}
+        label={erc20Transfer ? 'Send tokens' : to === null ? 'Deploy a contract' : 'Send'}
         value={
           erc20Transfer
             ? token
@@ -132,10 +164,18 @@ const EthereumDetails = ({request}: {request: EthereumSignRequest}) => {
         }
       />
       <Card>
-        <Value label="To" value={erc20Transfer ? erc20Transfer.recipient : transaction.to} />
-        {erc20Transfer ? (
-          <Value label={token ? `${token.symbol} contract` : 'Token contract'} value={transaction.to} />
+        <Value label="To" value={erc20Transfer ? erc20Transfer.recipient : (to ?? 'A new contract')} />
+        {erc20Transfer && to !== null ? (
+          <Value label={token ? `${token.symbol} contract` : 'Token contract'} value={to} />
         ) : null}
+        {authorizations.map((authorization, index) => (
+          <Value
+            // Authorizations are positional: the index is their identity.
+            key={index}
+            label={`Delegates ${authorization.authority ? shortAddress(authorization.authority) : 'an unknown account'}`}
+            value={authorization.address}
+          />
+        ))}
         {!erc20Transfer && transaction.data !== '0x' ? <Value label="Call data" value={transaction.data} /> : null}
       </Card>
       <Island>
@@ -150,9 +190,10 @@ const EthereumDetails = ({request}: {request: EthereumSignRequest}) => {
         </Rows>
       </Island>
       <EthereumSigner request={request} />
-      {!erc20Transfer && transaction.data !== '0x' ? (
+      {!erc20Transfer && to !== null && transaction.data !== '0x' ? (
         <Notice text="This calls a contract with data this wallet cannot describe." tone="warning" />
       ) : null}
+      <Warnings warnings={request.warnings.map(warning => ETHEREUM_WARNINGS[warning])} />
     </>
   )
 }
@@ -177,6 +218,22 @@ const describeInstruction = (summary: SolanaInstructionSummary): string => {
 const SolanaDetails = ({request}: {request: SolanaSignRequest}) => {
   if (request.kind === 'message') {
     return <MessageDetails message={request.message} text={request.text} />
+  }
+
+  if (request.kind === 'offchain-message') {
+    return (
+      <>
+        <MessageDetails message={request.message} text={request.decoded.text} />
+        <Island>
+          <Rows>
+            <LabeledContent label="Off-chain message" value={`Version ${request.decoded.version}`} />
+            <RowDivider />
+            <LabeledContent label="Signers" value={String(request.decoded.signers.length)} />
+          </Rows>
+        </Island>
+        <Warnings warnings={request.warnings.map(warning => SOLANA_WARNINGS[warning])} />
+      </>
+    )
   }
 
   return (

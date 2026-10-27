@@ -1925,39 +1925,39 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hzblj/crypto-airgap-bitcoin@npm:^0.1.0":
-  version: 0.1.0
-  resolution: "@hzblj/crypto-airgap-bitcoin@npm:0.1.0"
+"@hzblj/crypto-airgap-bitcoin@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@hzblj/crypto-airgap-bitcoin@npm:0.2.0"
   dependencies:
     "@hzblj/crypto-airgap": "npm:^0.1.0"
-    "@hzblj/crypto-bitcoin": "npm:^0.2.0"
+    "@hzblj/crypto-bitcoin": "npm:^0.3.0"
   peerDependencies:
-    "@hzblj/nitro-crypto": ^0.1.2
-  checksum: 10c0/e742fdc9785f9f23ef9ab6c75eeff92beb12972def722fdb02dd90786c94b2e051e406c25355bd62e975be7f3a6b25d0cced1b0e6d35e317485d0e183a363e00
+    "@hzblj/nitro-crypto": ^0.1.5
+  checksum: 10c0/767be6a7ef7263ccfbda9b07da41dbfdbc8a6e00397949a32ed0429dac3c99a03479408e3f28d0e5144a284494fc7b00df501800d25d6b93d2f7293e196f8af2
   languageName: node
   linkType: hard
 
-"@hzblj/crypto-airgap-ethereum@npm:^0.1.0":
-  version: 0.1.0
-  resolution: "@hzblj/crypto-airgap-ethereum@npm:0.1.0"
+"@hzblj/crypto-airgap-ethereum@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@hzblj/crypto-airgap-ethereum@npm:0.2.0"
   dependencies:
     "@hzblj/crypto-airgap": "npm:^0.1.0"
-    "@hzblj/crypto-ethereum": "npm:^0.2.0"
+    "@hzblj/crypto-ethereum": "npm:^0.3.0"
   peerDependencies:
-    "@hzblj/nitro-crypto": ^0.1.2
-  checksum: 10c0/7899c0fbc8d4662e75f4431d69ea1ba8506e092a6e1dca7a52605d8ea51a6904ad38711efead30dad7b0d492564664e68d9a7c5a9a3464ed60f29721cade0aaa
+    "@hzblj/nitro-crypto": ^0.1.5
+  checksum: 10c0/c80cf5c1533091acd3dc6607fb782fe4ad2fb145f8505e9dfa556d48130c8637af175d8a2520c8a7f88ff861c4027320f9c5f7701a702195025d3aaa002770de
   languageName: node
   linkType: hard
 
-"@hzblj/crypto-airgap-solana@npm:^0.1.0":
-  version: 0.1.0
-  resolution: "@hzblj/crypto-airgap-solana@npm:0.1.0"
+"@hzblj/crypto-airgap-solana@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@hzblj/crypto-airgap-solana@npm:0.2.0"
   dependencies:
     "@hzblj/crypto-airgap": "npm:^0.1.0"
-    "@hzblj/crypto-solana": "npm:^0.2.0"
+    "@hzblj/crypto-solana": "npm:^0.3.0"
   peerDependencies:
-    "@hzblj/nitro-crypto": ^0.1.2
-  checksum: 10c0/5cf0bd9bd523e4c4c9537e44a9f3b1e4213a7c7870ea85c60db6f8191284656d1dfde669ced693d1277d1cbe26404c8bb3088845d811746bf7a198fa62bf75ad
+    "@hzblj/nitro-crypto": ^0.1.5
+  checksum: 10c0/e2a478de5c82afda50aea8c9a7b65d3998c336c15d173d26e48de92e4a8a54333dc348c06eb879562131251166f166066d5c7a59460d751d60dc8545da447149
   languageName: node
   linkType: hard
 
@@ -1968,16 +1968,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hzblj/crypto-bitcoin@npm:^0.2.0":
-  version: 0.2.0
-  resolution: "@hzblj/crypto-bitcoin@npm:0.2.0"
-  peerDependencies:
-    "@hzblj/nitro-crypto": ^0.1.2
-  checksum: 10c0/bab9491be717567537543f34f8be885a4711a74235eee3c994ac42a066bb177e1cfbeb4ba37a1e800c8854cafd352d507878451eadcd9bc6f120a0c9b0372cad
-  languageName: node
-  linkType: hard
-
-"@hzblj/crypto-bitcoin@workspace:*, @hzblj/crypto-bitcoin@workspace:packages/crypto-bitcoin":
+"@hzblj/crypto-bitcoin@npm:^0.3.0, @hzblj/crypto-bitcoin@workspace:*, @hzblj/crypto-bitcoin@workspace:packages/crypto-bitcoin":
   version: 0.0.0-use.local
   resolution: "@hzblj/crypto-bitcoin@workspace:packages/crypto-bitcoin"
   dependencies:
@@ -1995,16 +1986,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hzblj/crypto-ethereum@npm:^0.2.0":
-  version: 0.2.0
-  resolution: "@hzblj/crypto-ethereum@npm:0.2.0"
-  peerDependencies:
-    "@hzblj/nitro-crypto": ^0.1.2
-  checksum: 10c0/15778fc2a675461d48116c0a3ecaf10379c7166f370bc20c0a81ebe80d5a790fe20947537ebf5bafce29f863f1048c190dd832c234684993876bacc30715f773
-  languageName: node
-  linkType: hard
-
-"@hzblj/crypto-ethereum@workspace:*, @hzblj/crypto-ethereum@workspace:packages/crypto-ethereum":
+"@hzblj/crypto-ethereum@npm:^0.3.0, @hzblj/crypto-ethereum@workspace:*, @hzblj/crypto-ethereum@workspace:packages/crypto-ethereum":
   version: 0.0.0-use.local
   resolution: "@hzblj/crypto-ethereum@workspace:packages/crypto-ethereum"
   dependencies:
@@ -2022,16 +2004,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hzblj/crypto-solana@npm:^0.2.0":
-  version: 0.2.0
-  resolution: "@hzblj/crypto-solana@npm:0.2.0"
-  peerDependencies:
-    "@hzblj/nitro-crypto": ^0.1.2
-  checksum: 10c0/089b5dbfc5f09b8e7d1c36e5ac3884205913fceb4ca711dd5ac24d7aab8d883cda60d027f6a49c3e5ed9c7af9e2f093c4aca55e5791a3ee518dd9ed49edf751a
-  languageName: node
-  linkType: hard
-
-"@hzblj/crypto-solana@workspace:*, @hzblj/crypto-solana@workspace:packages/crypto-solana":
+"@hzblj/crypto-solana@npm:^0.3.0, @hzblj/crypto-solana@workspace:*, @hzblj/crypto-solana@workspace:packages/crypto-solana":
   version: 0.0.0-use.local
   resolution: "@hzblj/crypto-solana@workspace:packages/crypto-solana"
   dependencies:
@@ -7362,9 +7335,9 @@ __metadata:
     "@babel/core": "npm:^7.29.7"
     "@expo/ui": "npm:~57.0.26"
     "@hzblj/crypto-airgap": "npm:^0.1.0"
-    "@hzblj/crypto-airgap-bitcoin": "npm:^0.1.0"
-    "@hzblj/crypto-airgap-ethereum": "npm:^0.1.0"
-    "@hzblj/crypto-airgap-solana": "npm:^0.1.0"
+    "@hzblj/crypto-airgap-bitcoin": "npm:^0.2.0"
+    "@hzblj/crypto-airgap-ethereum": "npm:^0.2.0"
+    "@hzblj/crypto-airgap-solana": "npm:^0.2.0"
     "@hzblj/crypto-bitcoin": "workspace:*"
     "@hzblj/crypto-ethereum": "workspace:*"
     "@hzblj/crypto-solana": "workspace:*"
