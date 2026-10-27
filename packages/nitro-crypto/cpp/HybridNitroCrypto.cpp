@@ -149,6 +149,25 @@ std::shared_ptr<ArrayBuffer> HybridNitroCrypto::secp256k1Recover(const std::shar
   return truncated(out, written);
 }
 
+bool HybridNitroCrypto::secp256k1SchnorrVerify(const std::shared_ptr<ArrayBuffer>& publicKey,
+                                               const std::shared_ptr<ArrayBuffer>& message,
+                                               const std::shared_ptr<ArrayBuffer>& signature) {
+  const ByteView key = view(publicKey);
+  const ByteView data = view(message);
+  const ByteView sig = view(signature);
+  return verified(nc_secp256k1_schnorr_verify(key.data, key.size, data.data, data.size, sig.data, sig.size));
+}
+
+std::shared_ptr<ArrayBuffer> HybridNitroCrypto::secp256k1TaprootTweak(const std::shared_ptr<ArrayBuffer>& publicKey,
+                                                                      const std::shared_ptr<ArrayBuffer>& merkleRoot) {
+  const ByteView key = view(publicKey);
+  const ByteView root = view(merkleRoot);
+  auto out = allocate(NC_SECP256K1_COMPRESSED_LENGTH);
+  size_t written = 0;
+  check(nc_secp256k1_taproot_tweak(key.data, key.size, root.data, root.size, out->data(), out->size(), &written));
+  return truncated(out, written);
+}
+
 bool HybridNitroCrypto::ed25519Verify(const std::shared_ptr<ArrayBuffer>& publicKey,
                                       const std::shared_ptr<ArrayBuffer>& message,
                                       const std::shared_ptr<ArrayBuffer>& signature) {

@@ -90,11 +90,13 @@ fn engineModule(
     return module;
 }
 
-/// libsecp256k1 with only the recovery module, upstream's signing table (COMB 11/6), our own default callbacks,
-/// and every public symbol renamed `nc_secp256k1_*` by `src/curves/secp256k1_prefix.h`: an app that links another copy
-/// of the library links both without a clash.
+/// libsecp256k1 with the recovery, extrakeys and schnorrsig modules (ECDSA recovery, BIP-340 keys and signatures),
+/// upstream's signing table (COMB 11/6), our own default callbacks, and every public symbol renamed `nc_secp256k1_*` by
+/// `src/curves/secp256k1_prefix.h`: an app that links another copy of the library links both without a clash.
 fn addSecp256k1Sources(b: *std.Build, module: *std.Build.Module, config: Config) void {
     module.addCMacro("ENABLE_MODULE_RECOVERY", "1");
+    module.addCMacro("ENABLE_MODULE_EXTRAKEYS", "1");
+    module.addCMacro("ENABLE_MODULE_SCHNORRSIG", "1");
     module.addCMacro("ECMULT_WINDOW_SIZE", b.fmt("{d}", .{config.ecmult_window}));
     module.addCMacro("COMB_BLOCKS", "11");
     module.addCMacro("COMB_TEETH", "6");

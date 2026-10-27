@@ -43,6 +43,8 @@ type Exports = {
   readonly nc_secp256k1_recover: (
     ...args: [Pointer, number, Pointer, number, number, Pointer, number, Pointer]
   ) => Status
+  readonly nc_secp256k1_schnorr_verify: (...args: [Pointer, number, Pointer, number, Pointer, number]) => Status
+  readonly nc_secp256k1_taproot_tweak: (...args: [Pointer, number, Pointer, number, Pointer, number, Pointer]) => Status
   readonly nc_ed25519_verify: (...args: [Pointer, number, Pointer, number, Pointer, number]) => Status
   readonly nc_mnemonic_validate: (mnemonic: Pointer, length: number) => Status
   readonly nc_mnemonic_generate: (words: number, out: Pointer, length: number, written: Pointer) => Status
@@ -57,6 +59,11 @@ type Exports = {
   readonly nc_key_import: (curve: number, secret: Pointer, length: number, out: Pointer) => Status
   readonly nc_key_public: (key: Handle, compressed: number, out: Pointer, length: number, written: Pointer) => Status
   readonly nc_key_sign: (...args: [Handle, Pointer, number, Pointer, number, Pointer]) => Status
+  readonly nc_key_public_xonly: (key: Handle, out: Pointer, length: number, written: Pointer) => Status
+  readonly nc_key_sign_schnorr: (...args: [Handle, Pointer, number, Pointer, number, Pointer]) => Status
+  readonly nc_key_sign_taproot: (
+    ...args: [Handle, Pointer, number, Pointer, number, Pointer, number, Pointer]
+  ) => Status
 }
 
 // The header's constants (include/nitro_crypto.h).
@@ -263,11 +270,26 @@ export const createWasmHost = (): NitroCrypto => {
           withOutput((_, out, written) =>
             engine.nc_key_public(live(owner), compressed ? 1 : 0, out, MAX_OUTPUT, written)
           ),
+        getXOnlyPublicKey: () =>
+          withOutput((_, out, written) => engine.nc_key_public_xonly(live(owner), out, MAX_OUTPUT, written)),
         sign: (data: ArrayBuffer) =>
           withOutput((frame, out, written) => {
             const [pointer, length] = frame.input(data)
 
             return engine.nc_key_sign(live(owner), pointer, length, out, MAX_OUTPUT, written)
+          }),
+        signSchnorr: (message: ArrayBuffer) =>
+          withOutput((frame, out, written) => {
+            const [pointer, length] = frame.input(message)
+
+            return engine.nc_key_sign_schnorr(live(owner), pointer, length, out, MAX_OUTPUT, written)
+          }),
+        signTaproot: (message: ArrayBuffer, merkleRoot: ArrayBuffer) =>
+          withOutput((frame, out, written) => {
+            const [pointer, length] = frame.input(message)
+            const [root, rootLength] = frame.input(merkleRoot)
+
+            return engine.nc_key_sign_taproot(live(owner), pointer, length, root, rootLength, out, MAX_OUTPUT, written)
           }),
       },
       owner
@@ -434,6 +456,21 @@ export const createWasmHost = (): NitroCrypto => {
           MAX_OUTPUT,
           written
         )
+      }),
+    secp256k1SchnorrVerify: (publicKey, message, signature) =>
+      call((frame, check) => {
+        const [key, keyLength] = frame.input(publicKey)
+        const [data, dataLength] = frame.input(message)
+        const [sig, sigLength] = frame.input(signature)
+
+        return verified(engine.nc_secp256k1_schnorr_verify(key, keyLength, data, dataLength, sig, sigLength), check)
+      }),
+    secp256k1TaprootTweak: (publicKey, merkleRoot) =>
+      withOutput((frame, out, written) => {
+        const [key, keyLength] = frame.input(publicKey)
+        const [root, rootLength] = frame.input(merkleRoot)
+
+        return engine.nc_secp256k1_taproot_tweak(key, keyLength, root, rootLength, out, MAX_OUTPUT, written)
       }),
     secp256k1Verify: (publicKey, digest, signature) =>
       call((frame, check) => {

@@ -42,7 +42,8 @@ reactor. Every artifact is reproducible and checked (`yarn engine`, `yarn engine
 - `NitroCrypto`, the engine: version and capabilities, randomness, hashes, HMAC, the stateless curve operations,
   mnemonic generation and validation, and the factories for seeds and keys.
 - `NitroSeed`, a BIP-39 seed: its fingerprint, and `deriveKey(scheme, path)`.
-- `NitroKey`, a private key: its curve, its public key, `sign`.
+- `NitroKey`, a private key: its curve, its public key, `sign`; for secp256k1, its x-only key and BIP-340 Schnorr
+  signatures, by the key itself or tweaked for a Taproot key path (BIP-341).
 
 It contains no cryptography. Each method views its buffers, calls the ABI, and throws the status name on failure. Seed
 and key objects own their handle (`EngineHandle`) and release it on `dispose()` or destruction. Two methods run on

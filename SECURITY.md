@@ -26,8 +26,10 @@ changelog and a GitHub advisory once a fixed version is published.
   new generation, so a stale handle never reaches another secret.
 - Errors never carrying inputs: native errors are status names (`NC_ERR_INVALID_LENGTH`), and the facade drops any
   other native message rather than pass it on.
-- Signatures that do not leak the key through their nonce (RFC 6979, and libsecp256k1's constant-time signing with
-  blinding), and verification that refuses malleable (upper-S) and non-canonical encodings.
+- Signatures that do not leak the key through their nonce (RFC 6979 for ECDSA, BIP-340's nonce with fresh auxiliary
+  randomness for Schnorr, and libsecp256k1's constant-time signing with blinding), and verification that refuses
+  malleable (upper-S) and non-canonical encodings. A Taproot key is tweaked inside the engine (BIP-341), and the tweaked
+  key never leaves the stack of the call that signs with it.
 - Randomness only from the operating system, failing closed.
 
 **Out of scope:**
@@ -108,7 +110,7 @@ never a private one (docs/adr/0007).
 
 | Primitive | Implementation | Notes |
 | --- | --- | --- |
-| secp256k1 ECDSA, recovery, key tweaks | [bitcoin-core/libsecp256k1](https://github.com/bitcoin-core/secp256k1) v0.8.0, recovery module only | Bitcoin Core's: constant-time signing, context blinding, RFC 6979, lower S. Symbols renamed `nc_secp256k1_*` so an app may link another copy. MIT. |
+| secp256k1 ECDSA, recovery, key tweaks, BIP-340 Schnorr | [bitcoin-core/libsecp256k1](https://github.com/bitcoin-core/secp256k1) v0.8.0, with the recovery, extrakeys and schnorrsig modules | Bitcoin Core's: constant-time signing, context blinding, RFC 6979, lower S; BIP-340 signatures verified before they are returned. Symbols renamed `nc_secp256k1_*` so an app may link another copy. MIT. |
 | Ed25519 | Zig 0.16 standard library | RFC 8032, deterministic; strict verification (rejects non-canonical S, invalid R, small-order keys). MIT. |
 | SHA-256, SHA-512, HMAC, PBKDF2 | Zig 0.16 standard library | MIT. Where the processor has instructions Zig does not use, the next row's. |
 | SHA-256 and SHA-512 on the processor's instructions | This repository (`packages/zig-engine-crypto/src/hash/sha2.zig`, `sha2/armv8.zig`, `sha2/x86.zig`) | Used where Zig's library would hash in software though the processor has the instructions: SHA-256 on Android (ARMv8 SHA-2, x86 SHA extensions), SHA-512 everywhere it has ARMv8.2's. The system is asked once (`getauxval`, `sysctlbyname`, `cpuid`); otherwise Zig's software. SHA-256's sequences are Zig's own; SHA-512's follows the instructions' definitions, as the Linux kernel's does. Branches on lengths only. Checked against the FIPS 180-4 examples and Zig's implementation at every length, split and random input, on a Mac, the Android emulator and QEMU's x86-64. Ed25519 keeps Zig's own SHA-512. |
@@ -132,7 +134,7 @@ JavaScript dependencies of the published packages: none at runtime besides the `
 ## Verification
 
 - Published vectors: FIPS 180-4, RFC 4231, RFC 8032, the RIPEMD-160 reference, BIP-39 (Trezor), BIP-32 vectors 1 to 4,
-  SLIP-0010, BIP-84, BIP-173 and BIP-350.
+  SLIP-0010, BIP-84, BIP-86, BIP-173, BIP-340, BIP-341's wallet vectors and BIP-350.
 - Google's Wycheproof suites for secp256k1 ECDSA and Ed25519 (462 cases).
 - Parity on random inputs with `@noble/hashes`, `@noble/curves`, `@scure/bip32`, `@scure/bip39`, `@scure/btc-signer`,
   viem and `@solana/kit`, run against the engine itself (compiled to WebAssembly).

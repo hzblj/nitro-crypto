@@ -1,5 +1,6 @@
-//! secp256k1 through bitcoin-core/libsecp256k1 (v0.8.0, recovery module), the implementation Bitcoin Core
-//! signs with: constant-time signing, RFC 6979 nonces, lower-S signatures, and public key recovery.
+//! secp256k1 through bitcoin-core/libsecp256k1 (v0.8.0; recovery, extrakeys and schnorrsig modules), the
+//! implementation Bitcoin Core signs with: constant-time signing, RFC 6979 nonces, lower-S signatures, public key
+//! recovery, and BIP-340 Schnorr signatures with BIP-341's Taproot tweak.
 //!
 //! Zig's own `std.crypto.ecc.Secp256k1` has none of the last three: its ECDSA nonces are not RFC 6979, it
 //! neither produces nor enforces lower S, and it cannot recover a key, so signatures from it would not match
@@ -22,10 +23,16 @@ pub const uncompressed_length = 65;
 pub const digest_length = 32;
 pub const signature_length = 64;
 pub const recoverable_signature_length = 65;
+pub const x_only_length = 32;
+pub const schnorr_signature_length = 64;
+pub const merkle_root_length = 32;
 
 pub const PrivateKey = [private_key_length]u8;
 pub const Digest = [digest_length]u8;
 pub const PublicKey = c.secp256k1_pubkey;
+/// BIP-340's public key: the x coordinate of the point whose y is even.
+pub const XOnly = [x_only_length]u8;
+pub const MerkleRoot = [merkle_root_length]u8;
 
 // --- context ---------------------------------------------------------------------------------------------
 
@@ -214,6 +221,128 @@ pub fn recover(digest: *const Digest, signature_bytes: *const [recoverable_signa
     return public_key;
 }
 
+// --- BIP-340 Schnorr and BIP-341 Taproot --------------------------------------------------------------------
+
+/// How a Schnorr signature's key is used: as it is, or tweaked first as BIP-341's key path spends it, by
+/// TapTweak(x-only key || merkle root), or by TapTweak(x-only key) alone when there is no script tree (BIP-86).
+pub const Tweak = union(enum) {
+    none,
+    taproot: ?*const MerkleRoot,
+};
+
+fn serializeXOnly(public_key: *const c.secp256k1_xonly_pubkey) XOnly {
+    var out: XOnly = undefined;
+    _ = c.nc_secp256k1_xonly_pubkey_serialize(publicContext(), &out, public_key);
+    return out;
+}
+
+/// The keypair of a private key: what libsecp256k1 signs Schnorr with. The caller zeroes it.
+fn keypairOf(key: *const PrivateKey, keypair: *c.secp256k1_keypair) Error!void {
+    if (c.nc_secp256k1_keypair_create(try signingContext(), keypair, key) != 1) {
+        secure.zeroValue(keypair);
+        return error.InvalidPrivateKey;
+    }
+}
+
+fn keypairXOnly(keypair: *const c.secp256k1_keypair) c.secp256k1_xonly_pubkey {
+    var public_key: c.secp256k1_xonly_pubkey = undefined;
+    _ = c.nc_secp256k1_keypair_xonly_pub(publicContext(), &public_key, null, keypair);
+    return public_key;
+}
+
+/// BIP-341's tweak: the tagged hash "TapTweak" of the x-only internal key, followed by the merkle root of its script
+/// tree when it has one.
+pub fn tapTweak(internal: *const XOnly, merkle_root: ?*const MerkleRoot) [32]u8 {
+    var message: [x_only_length + merkle_root_length]u8 = undefined;
+    @memcpy(message[0..x_only_length], internal);
+    var length: usize = x_only_length;
+    if (merkle_root) |root| {
+        @memcpy(message[x_only_length..], root);
+        length += merkle_root_length;
+    }
+    var out: [32]u8 = undefined;
+    const tag = "TapTweak";
+    _ = c.nc_secp256k1_tagged_sha256(publicContext(), &out, tag, tag.len, &message, length);
+    return out;
+}
+
+/// The x-only public key of a private key: x(d·G), whichever the parity of its y (BIP-340).
+pub fn xOnlyFromPrivate(key: *const PrivateKey) Error!XOnly {
+    var keypair: c.secp256k1_keypair = undefined;
+    defer secure.zeroValue(&keypair);
+    try keypairOf(key, &keypair);
+    return serializeXOnly(&keypairXOnly(&keypair));
+}
+
+/// BIP-341's output key Q = P + t·G for an internal key P (x-only, 32 bytes, or SEC1, 33 or 65, whose y parity
+/// BIP-341 drops) and the optional merkle root of its script tree, compressed (33 bytes): its x coordinate is what a
+/// P2TR output commits to, its prefix (0x02 even, 0x03 odd) the parity a script path's control block carries.
+/// Public data only. `DerivationFailed` when t is not below the group order (probability about 2^-128).
+pub fn taprootTweak(internal_key: []const u8, merkle_root: ?*const MerkleRoot) Error![compressed_length]u8 {
+    var internal: c.secp256k1_xonly_pubkey = undefined;
+    switch (internal_key.len) {
+        x_only_length => if (c.nc_secp256k1_xonly_pubkey_parse(publicContext(), &internal, internal_key.ptr) != 1) {
+            return error.InvalidPublicKey;
+        },
+        compressed_length, uncompressed_length => {
+            const full = try parsePublicKey(internal_key);
+            _ = c.nc_secp256k1_xonly_pubkey_from_pubkey(publicContext(), &internal, null, &full);
+        },
+        else => return error.InvalidLength,
+    }
+    const tweak = tapTweak(&serializeXOnly(&internal), merkle_root);
+    var output: PublicKey = undefined;
+    if (c.nc_secp256k1_xonly_pubkey_tweak_add(publicContext(), &output, &internal, &tweak) != 1) {
+        return error.DerivationFailed;
+    }
+    return compressedPublicKey(&output);
+}
+
+/// A BIP-340 signature of `message` (any length; Taproot signs a 32-byte sighash) with `aux` as the auxiliary
+/// randomness, by the key itself or by its Taproot tweak. As BIP-340's signing algorithm ends, the signature is
+/// verified before it is returned, so a fault in the computation cannot hand out a value that leaks the key.
+pub fn signSchnorr(key: *const PrivateKey, message: []const u8, aux: *const [32]u8, tweak: Tweak) Error![schnorr_signature_length]u8 {
+    const context = try signingContext();
+    var keypair: c.secp256k1_keypair = undefined;
+    defer secure.zeroValue(&keypair);
+    try keypairOf(key, &keypair);
+
+    switch (tweak) {
+        .none => {},
+        .taproot => |merkle_root| {
+            const t = tapTweak(&serializeXOnly(&keypairXOnly(&keypair)), merkle_root);
+            if (c.nc_secp256k1_keypair_xonly_tweak_add(context, &keypair, &t) != 1) return error.DerivationFailed;
+        },
+    }
+
+    var params: c.secp256k1_schnorrsig_extraparams = .{
+        .magic = .{ 0xda, 0x6f, 0xb3, 0x8c },
+        .noncefp = null,
+        .ndata = @ptrCast(@constCast(aux)),
+    };
+    var signature: [schnorr_signature_length]u8 = undefined;
+    if (c.nc_secp256k1_schnorrsig_sign_custom(context, &signature, message.ptr, message.len, &keypair, &params) != 1) {
+        return error.Internal;
+    }
+    const public_key = keypairXOnly(&keypair);
+    if (c.nc_secp256k1_schnorrsig_verify(publicContext(), &signature, message.ptr, message.len, &public_key) != 1) {
+        return error.Internal;
+    }
+    return signature;
+}
+
+/// BIP-340 verification. `InvalidPublicKey` when the key is not the x coordinate of a point on the curve;
+/// `VerificationFailed` for a signature that does not verify, malformed ones (r not below p, s not below n) included.
+pub fn verifySchnorr(public_key_bytes: *const XOnly, message: []const u8, signature: *const [schnorr_signature_length]u8) Error!void {
+    var public_key: c.secp256k1_xonly_pubkey = undefined;
+    if (c.nc_secp256k1_xonly_pubkey_parse(publicContext(), &public_key, public_key_bytes) != 1) {
+        return error.InvalidPublicKey;
+    }
+    if (c.nc_secp256k1_schnorrsig_verify(publicContext(), signature, message.ptr, message.len, &public_key) != 1) {
+        return error.VerificationFailed;
+    }
+}
+
 const testing = std.testing;
 
 fn hexArray(comptime length: usize, comptime hex: []const u8) [length]u8 {
@@ -364,4 +493,58 @@ test "addTweak: BIP-32's invalid cases fail and zero the key" {
     base[31] = 2;
     try addTweak(&base, &one);
     try testing.expectEqual(@as(u8, 3), base[31]);
+}
+
+test "Schnorr: BIP-340 vector 0, its public key, signature and verification" {
+    var key: PrivateKey = @splat(0);
+    key[31] = 3;
+    const aux: [32]u8 = @splat(0);
+    const message: [32]u8 = @splat(0);
+    try testing.expectEqualSlices(u8, &hexArray(32, "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"), &try xOnlyFromPrivate(&key));
+    const signature = try signSchnorr(&key, &message, &aux, .none);
+    try testing.expectEqualSlices(u8, &hexArray(64, "e907831f80848d1069a5371b402410364bdf1c5f8307b0084c55f1ce2dca821525f66a4a85ea8b71e482a74f382d2ce5ebeee8fdb2172f477df4900d310536c0"), &signature);
+    try verifySchnorr(&try xOnlyFromPrivate(&key), &message, &signature);
+}
+
+test "Schnorr: another message, another key or a changed signature fails; a key off the curve is refused" {
+    const key: PrivateKey = @splat(0x42);
+    const aux: [32]u8 = @splat(0x07);
+    const public_key = try xOnlyFromPrivate(&key);
+    const signature = try signSchnorr(&key, "hello", &aux, .none);
+    try verifySchnorr(&public_key, "hello", &signature);
+    try testing.expectError(error.VerificationFailed, verifySchnorr(&public_key, "hellp", &signature));
+    try testing.expectError(error.VerificationFailed, verifySchnorr(&try xOnlyFromPrivate(&order_minus_one), "hello", &signature));
+    var changed = signature;
+    changed[63] ^= 1;
+    try testing.expectError(error.VerificationFailed, verifySchnorr(&public_key, "hello", &changed));
+    // x = 5 is the x coordinate of no point.
+    var off_curve: XOnly = @splat(0);
+    off_curve[31] = 5;
+    try testing.expectError(error.InvalidPublicKey, verifySchnorr(&off_curve, "hello", &signature));
+    // Fresh aux, another signature of the same message, which verifies too.
+    const other = try signSchnorr(&key, "hello", &@as([32]u8, @splat(0x08)), .none);
+    try testing.expect(!std.mem.eql(u8, &signature, &other));
+    try verifySchnorr(&public_key, "hello", &other);
+}
+
+test "Taproot: a key path signature verifies under the output key, with and without a merkle root" {
+    const key: PrivateKey = @splat(0x24);
+    const aux: [32]u8 = @splat(0);
+    const message: [32]u8 = @splat(0x5a);
+    const internal = try xOnlyFromPrivate(&key);
+    const root: MerkleRoot = @splat(0x99);
+    for ([_]?*const MerkleRoot{ null, &root }) |merkle_root| {
+        const output = try taprootTweak(&internal, merkle_root);
+        try testing.expect(output[0] == 0x02 or output[0] == 0x03);
+        const signature = try signSchnorr(&key, &message, &aux, .{ .taproot = merkle_root });
+        try verifySchnorr(output[1..33], &message, &signature);
+        try testing.expectError(error.VerificationFailed, verifySchnorr(&internal, &message, &signature));
+        // The SEC1 encodings of the internal key, either parity, tweak the same as its x-only one.
+        const full = compressedPublicKey(&try publicKeyFromPrivate(&key));
+        try testing.expectEqualSlices(u8, &output, &try taprootTweak(&full, merkle_root));
+        var flipped = full;
+        flipped[0] ^= 1;
+        try testing.expectEqualSlices(u8, &output, &try taprootTweak(&flipped, merkle_root));
+    }
+    try testing.expectError(error.InvalidLength, taprootTweak(internal[0..31], null));
 }

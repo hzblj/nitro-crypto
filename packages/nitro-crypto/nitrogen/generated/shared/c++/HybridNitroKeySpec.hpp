@@ -52,6 +52,9 @@ namespace margelo::nitro::nitrocrypto {
       // Methods
       virtual std::shared_ptr<ArrayBuffer> getPublicKey(bool compressed) = 0;
       virtual std::shared_ptr<ArrayBuffer> sign(const std::shared_ptr<ArrayBuffer>& data) = 0;
+      virtual std::shared_ptr<ArrayBuffer> getXOnlyPublicKey() = 0;
+      virtual std::shared_ptr<ArrayBuffer> signSchnorr(const std::shared_ptr<ArrayBuffer>& message) = 0;
+      virtual std::shared_ptr<ArrayBuffer> signTaproot(const std::shared_ptr<ArrayBuffer>& message, const std::shared_ptr<ArrayBuffer>& merkleRoot) = 0;
 
     protected:
       // Hybrid Setup

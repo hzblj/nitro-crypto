@@ -2,8 +2,9 @@ import assert from 'node:assert/strict'
 import {describe, test} from 'node:test'
 
 import {type AnyAdapter, defineAdapter, hex, isCryptoError} from '../src/adapter'
+import {createEngine} from '../src/engine/create-engine'
 import {CAPABILITIES} from '../src/engine/info'
-import {createTestCryptoEngine} from '../src/testing'
+import {createTestCryptoEngine, testHost} from '../src/testing'
 import {ABANDON} from './support'
 
 /** Two toy chains with different request and account shapes, written only against `@hzblj/nitro-crypto/adapter`. */
@@ -86,8 +87,21 @@ describe('registration', () => {
   })
 
   test('a missing capability is refused, naming it and the adapter', () => {
-    const needy = {...alphaAdapter(), id: 'needy', requires: ['sha256', 'schnorr-bip340']} as unknown as AnyAdapter
-    fails(() => createTestCryptoEngine({adapters: [needy]}), 'MISSING_CAPABILITY', 'schnorr-bip340')
+    const needy = {...alphaAdapter(), id: 'needy', requires: ['sha256', 'ed448']} as unknown as AnyAdapter
+    fails(() => createTestCryptoEngine({adapters: [needy]}), 'MISSING_CAPABILITY', 'ed448')
+  })
+
+  test('an adapter needing Schnorr and Taproot registers here, and is refused by an engine without them', () => {
+    const requires = ['sha256', 'secp256k1-schnorr', 'taproot-tweak'] as const
+    const taproot = {...alphaAdapter(), id: 'taproot', requires}
+    assert.doesNotThrow(() => createTestCryptoEngine({adapters: [taproot]}))
+
+    // An engine from before them reports neither.
+    const host = testHost()
+    const older = Object.create(host, {
+      capabilities: {value: host.capabilities.filter(name => name !== 'secp256k1-schnorr' && name !== 'taproot-tweak')},
+    })
+    fails(() => createEngine(older, {adapters: [taproot]}), 'MISSING_CAPABILITY', 'secp256k1-schnorr, taproot-tweak')
   })
 
   test('an adapter needing every capability the engine has registers', () => {

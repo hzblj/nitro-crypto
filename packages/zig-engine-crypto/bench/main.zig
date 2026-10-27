@@ -58,6 +58,26 @@ fn secpPublic(s: *const Signing) !void {
     std.mem.doNotOptimizeAway(try engine.secp256k1.publicKeyFromPrivate(&s.key));
 }
 
+const Schnorr = struct {
+    key: engine.secp256k1.PrivateKey,
+    digest: engine.secp256k1.Digest,
+    signature: [64]u8,
+    public_key: engine.secp256k1.XOnly,
+};
+
+/// The aux randomness is fixed here: the engine draws it from the OS, a cost the hash benchmarks do not include either.
+fn schnorrSign(s: *const Schnorr) !void {
+    std.mem.doNotOptimizeAway(try engine.secp256k1.signSchnorr(&s.key, &s.digest, &s.digest, .none));
+}
+
+fn taprootSign(s: *const Schnorr) !void {
+    std.mem.doNotOptimizeAway(try engine.secp256k1.signSchnorr(&s.key, &s.digest, &s.digest, .{ .taproot = null }));
+}
+
+fn schnorrVerify(s: *const Schnorr) !void {
+    try engine.secp256k1.verifySchnorr(&s.public_key, &s.digest, &s.signature);
+}
+
 const Edwards = struct { pair: engine.ed25519.KeyPair, public_key: [32]u8, signature: [64]u8, message: []const u8 };
 
 fn edSign(e: *const Edwards) !void {
@@ -126,6 +146,13 @@ pub fn main(init: std.process.Init) !void {
     try bench.run("secp256k1 sign (RFC 6979)", 2_000, &signing, secpSign);
     try bench.run("secp256k1 verify", 2_000, &signing, secpVerify);
     try bench.run("secp256k1 recover", 2_000, &signing, secpRecover);
+
+    var schnorr: Schnorr = .{ .key = signing.key, .digest = signing.digest, .signature = undefined, .public_key = undefined };
+    schnorr.signature = try engine.secp256k1.signSchnorr(&schnorr.key, &schnorr.digest, &schnorr.digest, .none);
+    schnorr.public_key = try engine.secp256k1.xOnlyFromPrivate(&schnorr.key);
+    try bench.run("schnorr sign (BIP-340, verified)", 2_000, &schnorr, schnorrSign);
+    try bench.run("schnorr sign, taproot tweak", 2_000, &schnorr, taprootSign);
+    try bench.run("schnorr verify", 2_000, &schnorr, schnorrVerify);
 
     var edwards: Edwards = .{
         .pair = try engine.ed25519.keyPair(&@as(engine.ed25519.Seed, @splat(9))),

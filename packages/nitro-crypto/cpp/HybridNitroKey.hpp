@@ -18,6 +18,10 @@ public:
   Curve getCurve() override;
   std::shared_ptr<ArrayBuffer> getPublicKey(bool compressed) override;
   std::shared_ptr<ArrayBuffer> sign(const std::shared_ptr<ArrayBuffer>& data) override;
+  std::shared_ptr<ArrayBuffer> getXOnlyPublicKey() override;
+  std::shared_ptr<ArrayBuffer> signSchnorr(const std::shared_ptr<ArrayBuffer>& message) override;
+  std::shared_ptr<ArrayBuffer> signTaproot(const std::shared_ptr<ArrayBuffer>& message,
+                                           const std::shared_ptr<ArrayBuffer>& merkleRoot) override;
 
   void dispose() override;
 

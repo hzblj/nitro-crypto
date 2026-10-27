@@ -20,7 +20,7 @@ Android packaging, and the prebuilt engine. Three entry points:
 | `src/encoding/` | hex, UTF-8, Base58, Base58Check, Bech32/Bech32m. Pure. |
 | `NitroCrypto.podspec` | Vendors `engine/ios/NitroCryptoEngine.xcframework`, adds `engine/include` to header search. |
 | `android/` | Nitro's template library; `CMakeLists.txt` links `engine/android/<abi>/libnitro_crypto.a` and fails by name for an ABI it lacks. |
-| `test/` | node:test on the WebAssembly engine: encodings, primitives against `@noble`, wallets against `@scure`, the registry and its type inference, errors. |
+| `test/` | node:test on the WebAssembly engine: encodings, primitives against `@noble`, Schnorr and Taproot against BIP-340's and BIP-341's vectors (read from the engine's `test/vectors`), wallets against `@scure`, the registry and its type inference, errors. `abi.ts` reaches the C ABI itself in an instance of its own, for what the facade does not: the WebAssembly test hook. |
 
 ## Rules
 

@@ -40,6 +40,29 @@ export type Secp256k1Primitives = {
   readonly verify: (publicKey: Uint8Array, digest: Uint8Array, signature: Uint8Array) => boolean
 }
 
+/** BIP-341's output key: what a P2TR output commits to, with the parity a script path's control block carries. */
+export type TaprootOutputKey = {
+  /** The x-only output key, 32 bytes. */
+  readonly publicKey: Uint8Array
+  /** The parity of its y coordinate: 0 even, 1 odd. */
+  readonly parity: 0 | 1
+}
+
+/** BIP-340 Schnorr signatures over secp256k1, and BIP-341's Taproot tweak. Signing is a key's (`signSchnorr`). */
+export type SchnorrPrimitives = {
+  /**
+   * BIP-341's output key for an internal key and the merkle root of its script tree (32 bytes), or for a key with no
+   * script tree when `merkleRoot` is left out (BIP-86). `internalKey` is x-only (32 bytes) or SEC1 (33 or 65), whose y
+   * parity BIP-341 drops. Public data only.
+   */
+  readonly taprootTweak: (internalKey: Uint8Array, merkleRoot?: Uint8Array) => TaprootOutputKey
+  /**
+   * Whether a 64-byte BIP-340 signature of `message` (any length) verifies under a 32-byte x-only public key. A
+   * malformed signature is `false`. Throws when the key is the x coordinate of no point, or a length is wrong.
+   */
+  readonly verify: (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) => boolean
+}
+
 export type Ed25519Primitives = {
   /** RFC 8032 verification, strict: non-canonical encodings and small-order keys never verify. */
   readonly verify: (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) => boolean
@@ -54,6 +77,7 @@ export type Primitives = {
   readonly hmac: Hmacs
   /** Bytes from the operating system's CSPRNG; throws `ENTROPY_UNAVAILABLE` rather than return anything weaker. */
   readonly random: (length: number) => Uint8Array
+  readonly schnorr: SchnorrPrimitives
   readonly secp256k1: Secp256k1Primitives
 }
 
@@ -92,6 +116,19 @@ const verdict = (verify: () => boolean): boolean => {
   }
 }
 
+/** A Taproot merkle root: 32 bytes, or none. The engine reads an empty buffer as none, so an empty one is refused here. */
+export const merkleRootBuffer = (merkleRoot: Uint8Array | undefined): ArrayBuffer => {
+  if (merkleRoot === undefined) {
+    return new ArrayBuffer(0)
+  }
+
+  if (merkleRoot.length !== 32) {
+    throw new CryptoError('INVALID_LENGTH', 'A Taproot merkle root is 32 bytes.')
+  }
+
+  return toArrayBuffer(merkleRoot)
+}
+
 const checkLength = (length: number) => {
   if (!Number.isSafeInteger(length) || length < 0 || length > 2 ** 31 - 1) {
     throw new CryptoError('INVALID_ARGUMENT', 'A length is a non-negative integer below 2^31.')
@@ -126,6 +163,22 @@ export const createPrimitives = (host: NitroCrypto): Primitives => {
         fromArrayBuffer(native(() => host.hmac('sha512', toArrayBuffer(key), toArrayBuffer(data)))),
     }),
     random: (length: number) => fromArrayBuffer(native(() => host.randomBytes(checkLength(length)))),
+    schnorr: Object.freeze({
+      taprootTweak: (internalKey: Uint8Array, merkleRoot?: Uint8Array): TaprootOutputKey => {
+        const root = merkleRootBuffer(merkleRoot)
+        const output = fromArrayBuffer(native(() => host.secp256k1TaprootTweak(toArrayBuffer(internalKey), root)))
+
+        if (output.length !== 33 || (output[0] !== 2 && output[0] !== 3)) {
+          throw new CryptoError('INTERNAL', 'The engine returned an output key of another shape.')
+        }
+
+        return Object.freeze({parity: output[0] === 3 ? 1 : 0, publicKey: output.slice(1)})
+      },
+      verify: (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) =>
+        verdict(() =>
+          host.secp256k1SchnorrVerify(toArrayBuffer(publicKey), toArrayBuffer(message), toArrayBuffer(signature))
+        ),
+    }),
     secp256k1: Object.freeze({
       convertPublicKey: (publicKey: Uint8Array, format: PublicKeyFormat) =>
         fromArrayBuffer(native(() => host.secp256k1ConvertPublicKey(toArrayBuffer(publicKey), format === 'compressed'))),

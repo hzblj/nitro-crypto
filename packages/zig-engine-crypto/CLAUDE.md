@@ -13,7 +13,7 @@ threading, the compatibility policy.
 | Path | What it is |
 | --- | --- |
 | `src/root.zig` | The library's root (its `comptime` block exports `abi/c_api.zig`) and the module, every part by folder. |
-| `src/wasm.zig` | The WebAssembly root: the ABI plus `nc_wasm_alloc`/`nc_wasm_free`. |
+| `src/wasm.zig` | The WebAssembly root: the ABI plus `nc_wasm_alloc`/`nc_wasm_free`, and the test hook `nc_wasm_test_sign_schnorr` (Schnorr with the aux randomness given, for the published vectors; never in the native libraries). |
 | `src/abi/c_api.zig` | The ABI's functions: pointers and lengths to slices, the engine call, `status.of`. No logic beyond argument shape. |
 | `src/abi/version.zig` | ABI version, engine version, build info, capability bits and names. |
 | `src/core/status.zig` | `Error` (what engine code returns) and `Status` (what the ABI returns); the one mapping between them. |
@@ -24,15 +24,15 @@ threading, the compatibility policy.
 | `src/hash/sha2.zig` | The engine's SHA-256 and SHA-512: Zig's, or the same algorithm on the processor's instructions, chosen at compile time where the target settles it and at run time where it does not. |
 | `src/hash/sha2/armv8.zig`, `src/hash/sha2/x86.zig` | The compression functions on ARMv8's SHA-2 and SHA-512 extensions, and on x86's SHA extensions. |
 | `src/hash/ripemd160.zig` | RIPEMD-160, which Zig's library lacks. |
-| `src/curves/secp256k1.zig`, `.h`, `_prefix.h` | The only file that calls libsecp256k1; its bindings; every libsecp256k1 symbol renamed `nc_secp256k1_*`. |
+| `src/curves/secp256k1.zig`, `.h`, `_prefix.h` | The only file that calls libsecp256k1 (recovery, extrakeys and schnorrsig modules: ECDSA, BIP-340 Schnorr, BIP-341's tweak); its bindings; every libsecp256k1 symbol renamed `nc_secp256k1_*`. |
 | `src/curves/ed25519.zig` | Zig's Ed25519, with errors mapped. |
 | `src/derivation/bip39.zig`, `bip39_english.txt` | Mnemonics: generation from OS entropy, validation, seeds; word lookups scan all 2048 entries with masks. The list is pinned by SHA-256. |
 | `src/derivation/path.zig`, `bip32.zig`, `slip10.zig` | Derivation paths (strict, canonical), BIP-32 for secp256k1, SLIP-0010 for Ed25519. |
 | `src/vault/handles.zig` | The vault: a fixed table of generation-checked handles, zeroed on release (docs/adr/0004). |
-| `src/vault/keys.zig` | Operations on handles: seeds, derivation, generation, import, public keys, signing. |
+| `src/vault/keys.zig` | Operations on handles: seeds, derivation, generation, import, public keys, signing (ECDSA, Ed25519, Schnorr with or without a Taproot tweak). |
 | `src/backup/backup.zig` | A wallet's entropy under a password: Argon2id, XChaCha20-Poly1305, the versioned format (docs/adr/0009). |
 | `src/testing/property.zig` | Runs the fuzz targets over seeded random input (Zig 0.16.0's `--fuzz` mode does not build). |
-| `test/vectors.zig`, `test/vectors/` | Every published vector and both Wycheproof suites (README there says where each came from). |
+| `test/vectors.zig`, `test/vectors/` | Every published vector (BIP-340's CSV and BIP-341's wallet vectors among them, verbatim) and both Wycheproof suites (README there says where each came from). |
 | `test/c_abi_test.c` | The ABI as C sees it: errors, ownership, 64 MiB inputs, handle exhaustion, 8 threads. |
 | `bench/main.zig` | `zig build bench`: each primitive, ReleaseFast, no bridge. |
 

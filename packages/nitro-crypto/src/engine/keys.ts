@@ -1,7 +1,7 @@
 import {fromArrayBuffer, toArrayBuffer} from '../core/bytes'
 import {CryptoError, native} from '../core/errors'
 import type {Curve, DerivationScheme, NitroCrypto, NitroKey} from '../specs/nitro-crypto.nitro'
-import {type PublicKeyFormat, type RecoverableSignature, splitRecoverable} from './primitives'
+import {merkleRootBuffer, type PublicKeyFormat, type RecoverableSignature, splitRecoverable} from './primitives'
 
 /** The curve each derivation scheme produces keys on. */
 export type SchemeCurve = {bip32: 'secp256k1'; slip10: 'ed25519'}
@@ -24,6 +24,19 @@ export type Secp256k1Key = KeyBase & {
   readonly publicKey: (format?: PublicKeyFormat) => Uint8Array
   /** ECDSA over a 32-byte digest, with an RFC 6979 nonce and a lower-S signature. */
   readonly sign: (digest: Uint8Array) => RecoverableSignature
+  /** The BIP-340 x-only public key: 32 bytes, the x coordinate of the compressed key. */
+  readonly xOnlyPublicKey: () => Uint8Array
+  /**
+   * A BIP-340 Schnorr signature of `message` (any length), 64 bytes. Its auxiliary randomness is fresh from the
+   * operating system, so two signatures of one message differ, and both verify (`crypto.schnorr.verify`).
+   */
+  readonly signSchnorr: (message: Uint8Array) => Uint8Array
+  /**
+   * BIP-341's key path: a Schnorr signature of a 32-byte signature hash by this key tweaked inside the engine with
+   * the merkle root of its script tree (32 bytes), or with none when `merkleRoot` is left out (BIP-86). It verifies
+   * under the output key `crypto.schnorr.taprootTweak(key.xOnlyPublicKey(), merkleRoot)` gives.
+   */
+  readonly signTaproot: (sighash: Uint8Array, merkleRoot?: Uint8Array) => Uint8Array
 }
 
 /** An Ed25519 private key held by the engine. */
@@ -81,6 +94,13 @@ export const wrapKey = (key: NitroKey, options: KeyOptions = {}): SigningKey => 
     return cached.slice()
   }
   const sign = (data: Uint8Array) => fromArrayBuffer(native(() => live().sign(toArrayBuffer(data))))
+  let xOnly: Uint8Array | undefined
+  const xOnlyPublicKey = () => {
+    const current = live()
+    xOnly ??= fromArrayBuffer(native(() => current.getXOnlyPublicKey()))
+
+    return xOnly.slice()
+  }
   const dispose = () => {
     if (!disposed) {
       disposed = true
@@ -99,6 +119,13 @@ export const wrapKey = (key: NitroKey, options: KeyOptions = {}): SigningKey => 
       path: options.path,
       publicKey: (format = 'compressed') => publicKey(format === 'compressed'),
       sign: digest => splitRecoverable(sign(digest)),
+      signSchnorr: message => fromArrayBuffer(native(() => live().signSchnorr(toArrayBuffer(message)))),
+      signTaproot: (sighash, merkleRoot) => {
+        const root = merkleRootBuffer(merkleRoot)
+
+        return fromArrayBuffer(native(() => live().signTaproot(toArrayBuffer(sighash), root)))
+      },
+      xOnlyPublicKey,
     }
 
     return Object.freeze(secp256k1)

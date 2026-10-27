@@ -41,7 +41,9 @@ export type {
   PublicKeyFormat,
   RecoverableSignature,
   RecoveryId,
+  SchnorrPrimitives,
   Secp256k1Primitives,
+  TaprootOutputKey,
 } from './engine/primitives'
 export type {EphemeralWallet, WalletOptions} from './engine/wallet'
 export type {Curve, DerivationScheme, HashAlgorithm, HmacAlgorithm, NitroSeed} from './specs/nitro-crypto.nitro'
