@@ -107,7 +107,7 @@ const ethereum = async (crypto: AppCrypto, fingerprint: number, {recipient, sign
     answer,
     request: sent,
     review: [
-      {label: 'To', value: shortHex(review.transaction.to)},
+      {label: 'To', value: review.transaction.to === null ? 'A new contract' : shortHex(review.transaction.to)},
       {label: 'Value', value: '0.01 ETH'},
       {label: 'Chain id', value: String(review.transaction.chainId)},
       {label: 'Request id', value: review.requestId ?? 'None'},

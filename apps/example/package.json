@@ -19,9 +19,9 @@
   "dependencies": {
     "@expo/ui": "~57.0.26",
     "@hzblj/crypto-airgap": "^0.1.0",
-    "@hzblj/crypto-airgap-bitcoin": "^0.1.0",
-    "@hzblj/crypto-airgap-ethereum": "^0.1.0",
-    "@hzblj/crypto-airgap-solana": "^0.1.0",
+    "@hzblj/crypto-airgap-bitcoin": "^0.2.0",
+    "@hzblj/crypto-airgap-ethereum": "^0.2.0",
+    "@hzblj/crypto-airgap-solana": "^0.2.0",
     "@hzblj/crypto-bitcoin": "workspace:*",
     "@hzblj/crypto-ethereum": "workspace:*",
     "@hzblj/crypto-solana": "workspace:*",
