@@ -1,15 +1,34 @@
 import {CryptoError} from '@hzblj/nitro-crypto/adapter'
 
+import type {BitcoinAccountType} from './address'
 import type {BitcoinNetwork} from './networks'
 
 export type BitcoinAccountRequest =
   /**
-   * BIP-84, `m/84'/{coin}'/{account}'/{change}/{index}`: coin 0 on mainnet and 1 on test networks, change 0 for
-   * receiving addresses and 1 for change. Each defaults to 0.
+   * BIP-84 for P2WPKH, `m/84'/{coin}'/{account}'/{change}/{index}`, and BIP-86 for P2TR, `m/86'/…`: coin 0 on mainnet
+   * and 1 on test networks, change 0 for receiving addresses and 1 for change. Each defaults to 0.
    */
-  | {readonly account?: number; readonly change?: 0 | 1; readonly index?: number}
-  /** Any BIP-32 path. The address is still P2WPKH: this adapter derives no other type. */
-  | {readonly path: string}
+  | {
+      /** `p2wpkh` (native SegWit, the default) or `p2tr` (Taproot, BIP-86). */
+      readonly addressType?: BitcoinAccountType
+      readonly account?: number
+      readonly change?: 0 | 1
+      readonly index?: number
+    }
+  /** Any BIP-32 path, with the address type the account has there: P2WPKH unless `addressType` says `p2tr`. */
+  | {readonly addressType?: BitcoinAccountType; readonly path: string}
+
+/** The BIP-43 purpose of each type's standard paths: 84 for P2WPKH (BIP-84), 86 for P2TR (BIP-86). */
+export const PURPOSES: Readonly<Record<BitcoinAccountType, number>> = Object.freeze({p2tr: 86, p2wpkh: 84})
+
+/** The address type a request or a watch-only account asks for: `p2wpkh` unless stated. Throws `INVALID_ARGUMENT`. */
+export const accountType = (type: unknown = 'p2wpkh'): BitcoinAccountType => {
+  if (type !== 'p2wpkh' && type !== 'p2tr') {
+    throw new CryptoError('INVALID_ARGUMENT', 'A Bitcoin account`s address type is p2wpkh or p2tr.')
+  }
+
+  return type
+}
 
 const MAX_INDEX = 0x7fffffff
 
@@ -24,6 +43,8 @@ const index = (value: number | undefined, name: string): number => {
 }
 
 export const derivationPath = (request: BitcoinAccountRequest, network: BitcoinNetwork): string => {
+  const purpose = PURPOSES[accountType(request.addressType)]
+
   if ('path' in request) {
     return request.path
   }
@@ -34,7 +55,7 @@ export const derivationPath = (request: BitcoinAccountRequest, network: BitcoinN
     throw new CryptoError('INVALID_ARGUMENT', 'The change index is 0 (receiving) or 1 (change).')
   }
 
-  return `m/84'/${network.coinType}'/${index(request.account, 'account')}'/${change}/${index(request.index, 'address')}`
+  return `m/${purpose}'/${network.coinType}'/${index(request.account, 'account')}'/${change}/${index(request.index, 'address')}`
 }
 
 const PATH = /^m(\/\d+'?)*$/

@@ -1973,6 +1973,8 @@ __metadata:
   resolution: "@hzblj/crypto-bitcoin@workspace:packages/crypto-bitcoin"
   dependencies:
     "@hzblj/nitro-crypto": "workspace:*"
+    "@noble/curves": "npm:2.4.0"
+    "@noble/hashes": "npm:2.4.0"
     "@scure/bip32": "npm:2.4.0"
     "@scure/bip39": "npm:2.4.0"
     "@scure/btc-signer": "npm:2.4.1"

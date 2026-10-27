@@ -85,10 +85,12 @@ changelog and a GitHub advisory once a fixed version is published.
 - **Spin lock, not a mutex.** Handle-table operations are microseconds long; under heavy contention a thread spins,
   then yields.
 - **Chains: what is not implemented is refused, not imitated.** The adapters build and sign Ethereum transactions
-  of types 0 (EIP-155), 1, 2 and 4 and EIP-712 typed data, Bitcoin P2WPKH payments and PSBTs, and Solana legacy and v0
-  transactions (SOL and SPL transfers, and a slot of any transaction others sign too) and off-chain messages. Bitcoin
-  accounts have no `signMessage`; Ethereum's blob transactions (EIP-4844), Bitcoin's BIP-322, Taproot and PSBT
-  version 2, and Solana's v1 transactions are not implemented.
+  of types 0 (EIP-155), 1, 2 and 4 and EIP-712 typed data, Bitcoin P2WPKH and Taproot key path payments and PSBTs,
+  and Solana legacy and v0 transactions (SOL and SPL transfers, and a slot of any transaction others sign too) and
+  off-chain messages, and sign messages on all three (Bitcoin's as BIP-322 or the legacy BIP-137). Ethereum's blob
+  transactions (EIP-4844), Bitcoin's Taproot script paths, MuSig2, PSBT version 2 and BIP-322's full form, and
+  Solana's v1 transactions are not implemented; a Bitcoin message signature that needs a script interpreter to decide
+  is `UNSUPPORTED`, never valid.
 - **Ethereum signs nothing it cannot show.** No account signs a bare hash (`eth_sign`), directly or through the viem
   account. Every transaction, typed data domain and EIP-7702 authorization is bound to the adapter's chain id
   (`CHAIN_MISMATCH` otherwise); a legacy transaction always carries EIP-155 replay protection, and an authorization
@@ -137,8 +139,8 @@ JavaScript dependencies of the published packages: none at runtime besides the `
 ## Verification
 
 - Published vectors: FIPS 180-4, RFC 4231, RFC 8032, the RIPEMD-160 reference, BIP-39 (Trezor), BIP-32 vectors 1 to 4,
-  SLIP-0010, BIP-84, BIP-86, BIP-173, BIP-340, BIP-341's wallet vectors, BIP-350, RFC 9106 (Argon2id), RFC 5869
-  (HKDF) and draft-irtf-cfrg-xchacha.
+  SLIP-0010, BIP-84, BIP-86, BIP-173, BIP-322, BIP-340, BIP-341's wallet vectors, BIP-350, Bitcoin Core's
+  `signmessagewithprivkey` vector, RFC 9106 (Argon2id), RFC 5869 (HKDF) and draft-irtf-cfrg-xchacha.
 - Google's Wycheproof suites for secp256k1 ECDSA and Ed25519 (462 cases).
 - Parity on random inputs with `@noble/hashes`, `@noble/curves`, `@scure/bip32`, `@scure/bip39`, `@scure/btc-signer`,
   viem and `@solana/kit`, run against the engine itself (compiled to WebAssembly).

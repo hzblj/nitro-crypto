@@ -76,12 +76,22 @@ describe('accounts', () => {
     wallet.dispose()
   })
 
-  test('accounts sign no messages: Bitcoin message signing is not implemented, and the adapter says so', async () => {
+  test('accounts sign messages (BIP-322, BIP-137) and Taproot, and the adapter says so', async () => {
     const wallet = await crypto.createEphemeralWallet()
     const account = await wallet.deriveAccount({chain: 'bitcoin'})
-    assert.equal('signMessage' in account, false)
-    assert.equal(bitcoinAdapter().features.messageSigning, false)
-    assert.deepEqual(bitcoinAdapter().formats.signature, ['p2wpkh-bip143'])
+    assert.equal(typeof account.signMessage, 'function')
+    assert.deepEqual(bitcoinAdapter().features, {
+      messageSigning: true,
+      psbt: true,
+      taproot: true,
+      transactionSigning: true,
+    })
+    assert.deepEqual(bitcoinAdapter().formats, {
+      address: ['bech32-p2wpkh', 'bech32m-p2tr'],
+      signature: ['p2wpkh-bip143', 'p2tr-bip341', 'bip322-simple', 'bip137'],
+    })
+    // Taproot is not required: an engine without Schnorr signatures still registers the adapter.
+    assert.deepEqual(bitcoinAdapter().requires, ['sha256', 'ripemd160', 'bip32-secp256k1'])
     wallet.dispose()
   })
 

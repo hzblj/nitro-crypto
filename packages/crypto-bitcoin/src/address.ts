@@ -5,8 +5,20 @@ import {decodeSegwit, encodeSegwit, type WitnessProgram, witnessScript} from './
 
 export type Hash = (data: Uint8Array) => Uint8Array
 
-/** The kinds of address this adapter recognizes. It derives only `p2wpkh`; the rest it validates. */
+/** The kinds of address this adapter recognizes. It derives `p2wpkh` and `p2tr`; the rest it validates. */
 export type BitcoinAddressType = 'p2wpkh' | 'p2wsh' | 'p2tr' | 'witness' | 'p2pkh' | 'p2sh'
+
+/**
+ * The kinds of address an account can have: native SegWit (`p2wpkh`, BIP-84, the default) or Taproot (`p2tr`, BIP-86,
+ * a key path only).
+ */
+export type BitcoinAccountType = Extract<BitcoinAddressType, 'p2wpkh' | 'p2tr'>
+
+/** BIP-341's tweak, the engine's: the output key of an internal key and the merkle root of its script tree, if any. */
+export type TaprootTweak = (
+  internalKey: Uint8Array,
+  merkleRoot?: Uint8Array
+) => {readonly publicKey: Uint8Array; readonly parity: 0 | 1}
 
 export type BitcoinAddressValidation =
   | (AddressValidation & {
@@ -30,6 +42,20 @@ export const p2wpkhAddress = (publicKey: Uint8Array, network: BitcoinNetwork, sh
 
   return {address: encodeSegwit(network.bech32, witness), scriptPubKey: witnessScript(witness)}
 }
+
+/** The Taproot (P2TR) output of a 32-byte x-only output key: `OP_1 <key>`, and its Bech32m address. */
+export const p2trOutput = (outputKey: Uint8Array, network: BitcoinNetwork) => {
+  const witness = {program: outputKey, version: 1}
+
+  return {address: encodeSegwit(network.bech32, witness), scriptPubKey: witnessScript(witness)}
+}
+
+/**
+ * BIP-86: the Taproot (P2TR) address of a key with no script tree, its x-only key tweaked by BIP-341's TapTweak of
+ * itself. The key is SEC1 (33 or 65 bytes) or x-only (32); the tweak is the engine's.
+ */
+export const p2trAddress = (publicKey: Uint8Array, network: BitcoinNetwork, tweak: TaprootTweak) =>
+  p2trOutput(tweak(publicKey).publicKey, network)
 
 const segwitType = ({program, version}: WitnessProgram): BitcoinAddressType => {
   if (version === 0) {
