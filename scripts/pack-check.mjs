@@ -165,6 +165,7 @@ import {
   esploraBackend,
   isSyncError,
   parseExtendedKey,
+  type SyncFetch,
   type SyncSnapshot,
 } from '@hzblj/crypto-bitcoin/sync'
 import {ethereumAdapter, type Hex, type ParsedEthereumTransaction} from '@hzblj/crypto-ethereum'
@@ -302,8 +303,14 @@ export const sync = async (zpub: string) => {
   const psbt: Uint8Array = await account.createPsbt(payment)
   const txid: string = await account.broadcast(crypto.chains.bitcoin.finalizePsbt(psbt))
 
+  // Any HTTP client that answers like fetch: here, a hand-written one.
+  const own: SyncFetch = async (url, {method, signal}) => ({headers: {get: () => null}, ok: !signal.aborted, status: 200, text: async () => method + url})
+  esploraBackend({fetch: own, network: 'testnet', url: 'https://esplora.example.com/api'})
+
   // @ts-expect-error: a backend serves one network, and says which
   esploraBackend({url: 'https://mempool.space/api'})
+  // @ts-expect-error: a client's response has its body as text
+  esploraBackend({fetch: async () => ({headers: {get: () => null}, ok: true, status: 200}), network: 'testnet'})
   // @ts-expect-error: amounts are satoshis as bigints
   account.createPayment({amount: 10_000, feeRate: 1, to: ''})
 

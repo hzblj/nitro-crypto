@@ -156,9 +156,9 @@ describe('the Esplora backend', () => {
     await Promise.all(Array.from({length: 12}, () => backend.addressSummary(STRANGER)))
     assert.equal(peak, 3)
 
-    const limit = createLimiter(1)
+    const limiter = createLimiter(1)
     const order: number[] = []
-    await Promise.all([1, 2, 3].map(value => limit(async () => order.push(value))))
+    await Promise.all([1, 2, 3].map(value => limiter.run(async () => order.push(value))))
     assert.deepEqual(order, [1, 2, 3])
   })
 

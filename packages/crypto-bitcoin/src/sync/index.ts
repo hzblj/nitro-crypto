@@ -33,7 +33,7 @@ export {
   PUBLIC_PACING,
 } from './esplora'
 export {type ExtendedKeyNetwork, formatExtendedKey, type ParsedExtendedKey, parseExtendedKey} from './extended-key'
-export type {HttpOptions, RequestOptions} from './http'
+export type {HttpOptions, RequestOptions, SyncFetch, SyncRequestInit, SyncResponse} from './http'
 export type {ScriptType} from './script-types'
 export type {SnapshotAddress, SnapshotSummary, SnapshotTransaction, SyncSnapshot} from './state'
 export {

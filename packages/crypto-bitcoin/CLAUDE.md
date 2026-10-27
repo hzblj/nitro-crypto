@@ -23,7 +23,7 @@ TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, 
 | `src/der.ts` | A 64-byte `r \|\| s` signature to and from strict DER (BIP-66). |
 | `src/path.ts` | The account request (`addressType`), its derivation path (purpose 84 or 86). |
 | `src/version.ts` | `VERSION`, synced from package.json by `scripts/sync-versions.mjs`; a test holds them equal. |
-| `src/sync/` | `@hzblj/crypto-bitcoin/sync`, its own entry (`index.ts`): `createBitcoinSync` (`sync.ts`: discovery, incremental resync, reorganizations, payments, fee bumps, broadcast), the backend contract (`backend.ts`) and Esplora over `fetch` (`esplora.ts`, `http.ts`: timeouts, abort, retries, concurrency, pacing, the pause on an unreachable server), the account's view (`accounting.ts`), the snapshot (`state.ts`), extended key text (`extended-key.ts`), the script types (`script-types.ts`), the PSBT combiner (`psbt.ts`), `SyncError` (`errors.ts`). |
+| `src/sync/` | `@hzblj/crypto-bitcoin/sync`, its own entry (`index.ts`): `createBitcoinSync` (`sync.ts`: discovery, incremental resync, reorganizations, payments, fee bumps, broadcast), the backend contract (`backend.ts`) and Esplora over `fetch` (`esplora.ts`, `http.ts`: `SyncFetch`, timeouts, abort, retries, concurrency, pacing, the pause on an unreachable server), the account's view (`accounting.ts`), the snapshot (`state.ts`), extended key text (`extended-key.ts`), the script types (`script-types.ts`), the PSBT combiner (`psbt.ts`), `SyncError` (`errors.ts`). |
 | `test/` | Published vectors, and parity on many keys with independent libraries, all on the real engine (WebAssembly). `support.ts` reaches the WebAssembly build's Schnorr test hook (`../nitro-crypto/test/abi.ts`) to sign with given aux randomness, so Taproot transactions compare with btc-signer byte for byte. `test/sync/`: a fake Esplora over an in-memory chain (`fake-esplora.ts`: real transaction bytes, reorganizations, drops, replacements), parity with @scure/bip32 and btc-signer, and `live.test.ts` against a real Esplora (`BITCOIN_SYNC_LIVE_URL`, mempool.space's testnet4 by default), skipped unless `BITCOIN_SYNC_LIVE=1`. |
 
 ## The sync's rules
@@ -43,6 +43,10 @@ TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, 
   mempool.space and blockstream.info whatever the call; repeated connection failures pause every request
   (`UNREACHABLE`). Never loosen these defaults for a public host, and never point a test at one: an unpaced sync of a
   large account got this machine's IP address blocked by mempool.space. Tests use the fake; the live test is opt-in.
+- **The HTTP client is the app's.** `http.ts` calls a `SyncFetch` (the global `fetch` unless given one) with a URL,
+  a method, headers, a body for broadcasts and always the signal, and reads `ok`, `status`, `headers.get` and
+  `text()`: nothing more, so `react-native-nitro-fetch` and hand-written clients fit. Never depend on a client. A slot
+  among `concurrency` is released when the client settles the request, not when the sync stops waiting for it.
 - **Every failure is a `SyncError`;** a `CryptoError` from the adapter is mapped (`fromCrypto`). Messages never quote
   an address or a key.
 

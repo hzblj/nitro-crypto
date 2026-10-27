@@ -3,14 +3,62 @@ import {SyncError} from './errors'
 /** What every backend call takes: an `AbortSignal`, which ends the call (and any wait between retries) at once. */
 export type RequestOptions = {readonly signal?: AbortSignal}
 
+/** What a request asks of a `SyncFetch`: always a method, headers and a signal; a body for a broadcast. */
+export type SyncRequestInit = {
+  readonly method: 'GET' | 'POST'
+  /** Every request's (`headers` from the options), and `content-type: text/plain` with a body. */
+  readonly headers: Readonly<Record<string, string>>
+  /** The transaction's hex, on `POST /tx`; absent otherwise. */
+  readonly body?: string
+  /**
+   * Fires on the caller's abort and on the timeout. Forward it to the HTTP client, so the request is really cancelled:
+   * the sync stops waiting either way, but a request that keeps running holds its place among `concurrency` until it
+   * settles.
+   */
+  readonly signal: AbortSignal
+}
+
+/** The part of a response the backend reads: its status, one header (`retry-after`) and its body as text. */
+export type SyncResponse = {
+  readonly ok: boolean
+  readonly status: number
+  readonly headers: {readonly get: (name: string) => string | null}
+  /** The whole body, read once. */
+  readonly text: () => Promise<string>
+}
+
+/**
+ * The HTTP client a backend sends its requests through: the global `fetch`, `react-native-nitro-fetch`'s `fetch`, or a
+ * function of your own over any client (axios, a native module, a proxy that adds authentication), as long as it
+ * resolves to what `SyncResponse` lists. Resolve for every status (a 404 or a 503 is an answer); reject only when there
+ * is no answer at all (no connection, a reset, the signal). It is called with a full URL (the backend's `url` and the
+ * path) and a `SyncRequestInit`; forward its `signal`.
+ *
+ * ```ts
+ * const viaAxios: SyncFetch = async (url, {body, headers, method, signal}) => {
+ *   const answer = await axios.request({data: body, headers, method, signal, url, validateStatus: () => true})
+ *   return {
+ *     headers: {get: name => answer.headers[name.toLowerCase()] ?? null},
+ *     ok: answer.status >= 200 && answer.status < 300,
+ *     status: answer.status,
+ *     text: async () => (typeof answer.data === 'string' ? answer.data : JSON.stringify(answer.data)),
+ *   }
+ * }
+ * ```
+ */
+export type SyncFetch = (url: string, init: SyncRequestInit) => Promise<SyncResponse>
+
 export type HttpOptions = {
-  /** Milliseconds one attempt may take, the body included. 15 seconds unless stated. */
+  /** Milliseconds one attempt may take, from its start to its whole body. 15 seconds unless stated. */
   readonly timeoutMs?: number
   /** Attempts after the first, for a timeout, a lost connection, a 429 or a 5xx. 3 unless stated. */
   readonly retries?: number
   /** The first wait before a retry, doubled each time (with jitter, at most 30 seconds). 500 ms unless stated. */
   readonly retryDelayMs?: number
-  /** Requests in flight at once, across every call of this backend. 4 unless stated. */
+  /**
+   * Requests in flight at once, across every call of this backend. A request counts until the HTTP client settles it,
+   * even after the sync stopped waiting for it (a fetcher that ignores the signal). 4 unless stated.
+   */
   readonly concurrency?: number
   /**
    * Request starts per second, sustained, across every call of this backend (retries included): what keeps a long
@@ -33,8 +81,11 @@ export type HttpOptions = {
   readonly unreachablePauseMs?: number
   /** Sent with every request: an API key for a hosted service, say. */
   readonly headers?: Readonly<Record<string, string>>
-  /** `fetch`, unless stated: React Native's, Node's or a test's. */
-  readonly fetch?: typeof fetch
+  /**
+   * The HTTP client (see `SyncFetch`): `react-native-nitro-fetch`'s `fetch`, or your own. The global `fetch` unless
+   * stated, looked up when a request goes out.
+   */
+  readonly fetch?: SyncFetch
 }
 
 type Request = {
@@ -55,22 +106,62 @@ export type HttpClient = {
 const MAX_DELAY_MS = 30_000
 const MAX_PAUSE_MS = 600_000
 
-/** At most `concurrency` tasks at once; the rest wait their turn, first come first served. */
+const aborted = () => new SyncError('ABORTED')
+
+/**
+ * At most `concurrency` slots taken at once; the rest wait their turn, first come first served. `acquire` resolves
+ * to the slot's release, which frees it once (later calls do nothing); a waiter whose signal fires leaves the queue.
+ */
 export const createLimiter = (concurrency: number) => {
   let active = 0
   const queue: (() => void)[] = []
 
-  const release = () => {
-    active--
-    queue.shift()?.()
+  const grant = (): (() => void) => {
+    active++
+    let released = false
+
+    return () => {
+      if (!released) {
+        released = true
+        active--
+        queue.shift()?.()
+      }
+    }
   }
 
-  return async <T>(task: () => Promise<T>): Promise<T> => {
-    if (active >= concurrency) {
-      await new Promise<void>(resolve => queue.push(resolve))
-    }
+  const acquire = (signal?: AbortSignal): Promise<() => void> =>
+    new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(aborted())
+        return
+      }
 
-    active++
+      if (active < concurrency) {
+        resolve(grant())
+        return
+      }
+
+      const onAbort = () => {
+        const index = queue.indexOf(waiter)
+
+        if (index >= 0) {
+          queue.splice(index, 1)
+        }
+
+        reject(aborted())
+      }
+      const waiter = () => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve(grant())
+      }
+
+      queue.push(waiter)
+      signal?.addEventListener('abort', onAbort, {once: true})
+    })
+
+  /** Runs `task` in a slot, released when it settles. */
+  const run = async <T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
+    const release = await acquire(signal)
 
     try {
       return await task()
@@ -78,9 +169,9 @@ export const createLimiter = (concurrency: number) => {
       release()
     }
   }
-}
 
-const aborted = () => new SyncError('ABORTED')
+  return {acquire, active: () => active, run}
+}
 
 /** Waits `ms`, or rejects with `ABORTED` as soon as `signal` fires. */
 export const delay = (ms: number, signal?: AbortSignal) =>
@@ -100,6 +191,28 @@ export const delay = (ms: number, signal?: AbortSignal) =>
     }, ms)
 
     signal?.addEventListener('abort', onAbort, {once: true})
+  })
+
+/** `promise`, or a rejection with `ABORTED` as soon as `signal` fires, whichever comes first. */
+const untilAborted = <T>(promise: Promise<T>, signal: AbortSignal) =>
+  new Promise<T>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(aborted())
+      return
+    }
+
+    const onAbort = () => reject(aborted())
+    signal.addEventListener('abort', onAbort, {once: true})
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      error => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
   })
 
 /**
@@ -177,10 +290,11 @@ type Attempt = {
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504])
 
 /**
- * `fetch` with what a wallet's sync needs: a timeout per attempt, the caller's `AbortSignal`, retries with exponential
- * backoff (and `Retry-After`) for what may pass (a timeout, a lost connection, 429, 5xx), at most `concurrency`
- * requests at once, at most `requestsPerSecond` starting, a pause once the server cannot be reached at all, and every
- * failure a `SyncError`. URLs are built by hand: React Native's `URL` is partial.
+ * An HTTP client with what a wallet's sync needs, over any `SyncFetch`: a timeout per attempt, the caller's
+ * `AbortSignal`, retries with exponential backoff (and `Retry-After`) for what may pass (a timeout, a lost
+ * connection, 429, 5xx), at most `concurrency` requests in flight, at most `requestsPerSecond` starting, a pause once
+ * the server cannot be reached at all, and every failure a `SyncError`. URLs are built by hand: React Native's `URL` is
+ * partial.
  */
 export const createHttpClient = (base: string, options: HttpOptions = {}): HttpClient => {
   const root = base.replace(/\/+$/, '')
@@ -222,8 +336,14 @@ export const createHttpClient = (base: string, options: HttpOptions = {}): HttpC
     throw new SyncError('INVALID_ARGUMENT', 'A pause is a number of milliseconds.')
   }
 
-  const limit = createLimiter(concurrency)
+  if (options.fetch !== undefined && typeof options.fetch !== 'function') {
+    throw new SyncError('INVALID_ARGUMENT', 'A fetch is a function.')
+  }
+
+  const limiter = createLimiter(concurrency)
   const pace = createPacer(requestsPerSecond, burst)
+  // Looked up per request, not at creation: an app may install its fetch after creating the backend.
+  const fetcher: SyncFetch = options.fetch ?? ((url, init) => globalThis.fetch(url, init))
   // Connection failures in a row, across every request, and when the next request may try the server again.
   let failures = 0
   let pausedUntil = 0
@@ -235,13 +355,26 @@ export const createHttpClient = (base: string, options: HttpOptions = {}): HttpC
       `The backend could not be reached ${unreachableAfter} times in a row (no network, or a server refusing this address): it is tried again in ${Math.ceil(Math.max(0, pausedUntil - Date.now()) / 1000)} s.`,
       {cause}
     )
-  const fetcher: typeof fetch = options.fetch ?? ((...args) => globalThis.fetch(...args))
 
-  /** One attempt: the body as text, `undefined` for an allowed 404, or what to do about the failure. */
+  /**
+   * One attempt: a slot among `concurrency`, its turn under the pace, then the request under the timeout. The sync
+   * stops waiting at the timeout or the caller's abort whatever the HTTP client does; the slot is freed only when the
+   * client settles the request, so a client that ignores the signal still never has more than `concurrency` running.
+   */
   const attempt = async (
     request: Request,
     signal: AbortSignal | undefined
   ): Promise<{readonly body: string | undefined} | Attempt> => {
+    const release = await limiter.acquire(signal)
+    let settled: Promise<unknown> | undefined
+
+    try {
+      await pace(signal)
+    } catch (error) {
+      release()
+      throw error
+    }
+
     const controller = new AbortController()
     let timedOut = false
     const timer = setTimeout(() => {
@@ -252,16 +385,18 @@ export const createHttpClient = (base: string, options: HttpOptions = {}): HttpC
     signal?.addEventListener('abort', onAbort, {once: true})
 
     try {
-      const response = await fetcher(`${root}${request.path}`, {
-        body: request.body,
-        headers: {
-          ...headers,
-          ...(request.body === undefined ? {} : {'content-type': 'text/plain'}),
-        },
-        method: request.method ?? 'GET',
-        signal: controller.signal,
-      })
-      const text = await response.text()
+      const exchange = (async () => {
+        const response = await fetcher(`${root}${request.path}`, {
+          ...(request.body === undefined ? {} : {body: request.body}),
+          headers: request.body === undefined ? {...headers} : {...headers, 'content-type': 'text/plain'},
+          method: request.method ?? 'GET',
+          signal: controller.signal,
+        })
+
+        return {response, text: await response.text()}
+      })()
+      settled = exchange.then(release, release)
+      const {response, text} = await untilAborted(exchange, controller.signal)
 
       if (response.ok) {
         return {body: text}
@@ -271,7 +406,7 @@ export const createHttpClient = (base: string, options: HttpOptions = {}): HttpC
         return {body: undefined}
       }
 
-      const reason = reasonOf(text.trim()).slice(0, 300)
+      const reason = reasonOf(String(text).trim()).slice(0, 300)
 
       if (RETRY_STATUSES.has(response.status)) {
         const code = response.status === 429 ? 'RATE_LIMITED' : 'BACKEND_ERROR'
@@ -287,24 +422,30 @@ export const createHttpClient = (base: string, options: HttpOptions = {}): HttpC
         ? new SyncError('BROADCAST_REJECTED', reason || `The node refused the transaction (${response.status}).`)
         : new SyncError('BACKEND_ERROR', `The backend answered ${response.status}${reason ? `: ${reason}` : '.'}`)
     } catch (error) {
-      if (error instanceof SyncError) {
-        throw error
-      }
-
       if (signal?.aborted) {
         throw aborted()
       }
 
-      return timedOut
-        ? {
-            connection: true,
-            error: new SyncError('TIMEOUT', `The backend did not answer within ${timeoutMs} ms.`),
-            retry: true,
-          }
-        : {connection: true, error: new SyncError('NETWORK_ERROR', undefined, {cause: error}), retry: true}
+      if (timedOut) {
+        return {
+          connection: true,
+          error: new SyncError('TIMEOUT', `The backend did not answer within ${timeoutMs} ms.`),
+          retry: true,
+        }
+      }
+
+      if (error instanceof SyncError) {
+        throw error
+      }
+
+      return {connection: true, error: new SyncError('NETWORK_ERROR', undefined, {cause: error}), retry: true}
     } finally {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
+
+      if (!settled) {
+        release()
+      }
     }
   }
 
@@ -314,55 +455,53 @@ export const createHttpClient = (base: string, options: HttpOptions = {}): HttpC
     pause = unreachablePauseMs
   }
 
-  const text = (request: Request, {signal}: RequestOptions = {}) =>
-    limit(async () => {
-      for (let tries = 0; ; tries++) {
-        if (signal?.aborted) {
-          throw aborted()
-        }
+  const text = async (request: Request, {signal}: RequestOptions = {}) => {
+    for (let tries = 0; ; tries++) {
+      if (signal?.aborted) {
+        throw aborted()
+      }
 
-        if (Date.now() < pausedUntil) {
-          throw unreachable()
-        }
+      if (Date.now() < pausedUntil) {
+        throw unreachable()
+      }
 
-        await pace(signal)
-        let result: Awaited<ReturnType<typeof attempt>>
+      let result: Awaited<ReturnType<typeof attempt>>
 
-        try {
-          result = await attempt(request, signal)
-        } catch (error) {
-          if (error instanceof SyncError && error.code !== 'ABORTED') {
-            reached()
-          }
-
-          throw error
-        }
-
-        if (!('body' in result) && result.retry && result.connection) {
-          failures++
-
-          if (failures >= unreachableAfter) {
-            pausedUntil = Date.now() + pause
-            pause = Math.min(MAX_PAUSE_MS, pause * 2)
-
-            throw unreachable(result.error)
-          }
-        } else {
+      try {
+        result = await attempt(request, signal)
+      } catch (error) {
+        if (error instanceof SyncError && error.code !== 'ABORTED') {
           reached()
         }
 
-        if ('body' in result) {
-          return result.body
-        }
-
-        if (!result.retry || tries >= retries) {
-          throw result.retry ? result.error : new SyncError('BACKEND_ERROR')
-        }
-
-        const backoff = retryDelayMs * 2 ** tries * (0.5 + Math.random() / 2)
-        await delay(Math.min(MAX_DELAY_MS, Math.max(backoff, result.wait ?? 0)), signal)
+        throw error
       }
-    })
+
+      if (!('body' in result) && result.retry && result.connection) {
+        failures++
+
+        if (failures >= unreachableAfter) {
+          pausedUntil = Date.now() + pause
+          pause = Math.min(MAX_PAUSE_MS, pause * 2)
+
+          throw unreachable(result.error)
+        }
+      } else {
+        reached()
+      }
+
+      if ('body' in result) {
+        return result.body
+      }
+
+      if (!result.retry || tries >= retries) {
+        throw result.retry ? result.error : new SyncError('BACKEND_ERROR')
+      }
+
+      const backoff = retryDelayMs * 2 ** tries * (0.5 + Math.random() / 2)
+      await delay(Math.min(MAX_DELAY_MS, Math.max(backoff, result.wait ?? 0)), signal)
+    }
+  }
 
   const json = async (request: Request, options?: RequestOptions) => {
     const body = await text(request, options)

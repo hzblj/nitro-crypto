@@ -230,7 +230,7 @@ sync forgets it.
 | `sync.broadcast({hex, txid})` | Sends a signed transaction and records it, so its coins are spent and its change is there before the next sync. A node that has it already is a success |
 | `sync.transactionStatus(txid)` | `confirmed` (with confirmations), `pending` or `unknown` |
 | `parseExtendedKey(text, sha256)`, `formatExtendedKey(key, {network, scriptType?}, sha256)` | Extended public keys to and from text: xpub, tpub, zpub, vpub. A private key is `PRIVATE_KEY_MATERIAL`; ypub and the multisig forms are `UNSUPPORTED` |
-| `esploraBackend({network, url?, ...})` | An Esplora server: `url`, or mempool.space's for mainnet, testnet (testnet4) and signet (regtest needs a `url`). Paced and retried as below |
+| `esploraBackend({network, url?, fetch?, ...})` | An Esplora server: `url`, or mempool.space's for mainnet, testnet (testnet4) and signet (regtest needs a `url`), over the global `fetch` or yours. Paced and retried as below |
 
 | The view | |
 | --- | --- |
@@ -318,6 +318,56 @@ At the public defaults a one-address sync (about six requests) is immediate, and
 45) takes some 20 seconds; every option overrides them, and `headers` carries a hosted service's API key.
 `isPublicEsplora(url)`, `PUBLIC_PACING` and `OWN_PACING` say which applies.
 
+### Your own HTTP client
+
+`esploraBackend` sends every request through `fetch`: the global one unless you pass your own. Anything that answers
+like `fetch` does fits, such as [`react-native-nitro-fetch`](https://github.com/margelo/react-native-nitro-fetch)
+(URLSession on iOS, Cronet on Android, HTTP/2 and HTTP/3), which this package does not depend on: the client is the
+app's choice.
+
+```ts
+import {esploraBackend} from '@hzblj/crypto-bitcoin/sync'
+import {fetch} from 'react-native-nitro-fetch'
+
+const backend = esploraBackend({fetch, network: 'mainnet', url: 'https://esplora.example.com/api'})
+```
+
+A client of your own is a `SyncFetch`: a function of a URL and `{method, headers, body?, signal}` that resolves to
+`{ok, status, headers: {get}, text()}`, for every status (a 404 or a 503 is an answer), and rejects only when there is
+no answer at all. Nothing else of `fetch` is used, so axios, a native module or a proxy that adds authentication wraps
+in a few lines (`SyncFetch`'s JSDoc has one over axios).
+
+**Forward the signal.** It fires on the caller's abort and on the timeout. The sync stops waiting either way (`TIMEOUT`,
+`ABORTED`, on time), but a client that ignores it keeps the request running, and a running request keeps its place
+among `concurrency` until it settles: the backend never has more requests in flight than that, whatever the client
+does. A client that never settles holds its place for good.
+
+### Your own backend
+
+The sync asks a `BitcoinBackend` eleven questions, and `esploraBackend` is one way to answer them. Another is an
+Electrum server through a native socket (one connection, no per-address requests), a company API that already indexes
+its users' addresses, or a cache in front of either. The contract (`BitcoinBackend`'s JSDoc says it in full): every
+call takes `options.signal`; every failure is a `SyncError` with a fitting code; unknown is `undefined` for
+`blockHash`, `transaction` and `transactionStatus`; and an address's summary counts exactly the transactions its
+history lists, as Esplora's `/address` does.
+
+```ts
+import type {BitcoinBackend} from '@hzblj/crypto-bitcoin/sync'
+
+const companyBackend = (api: CompanyApi): BitcoinBackend => ({
+  network: 'mainnet',
+  tip: options => api.tip(options),
+  blockHash: (height, options) => api.blockHash(height, options), // undefined above the tip
+  addressSummary: (address, options) => api.summary(address, options), // {txCount, funded, spent, mempool...}
+  addressHistory: async (address, options) => ({next: undefined, transactions: await api.history(address, options)}),
+  transaction: (txid, options) => api.transaction(txid, options), // undefined when unknown
+  transactionHex: (txid, options) => api.raw(txid, options),
+  transactionStatus: (txid, options) => api.status(txid, options), // undefined when unknown
+  feeEstimates: options => api.fees(options),
+  broadcast: (hex, options) => api.broadcast(hex, options), // resolves to the txid
+})
+```
+
 ### Privacy and trust
 
 **The backend sees the whole account.** Esplora is asked about every address, so the server learns that they are one
@@ -330,7 +380,7 @@ JSON: keep it where the app keeps private data.
 
 **Not in this version:** Taproot accounts (P2TR, BIP-86: the script type is reserved and `UNSUPPORTED` until the
 adapter has Taproot), P2SH-wrapped and multisig accounts (ypub, Zpub), backends other than Esplora (the
-`BitcoinBackend` interface takes them), push updates (a sync polls), branch-and-bound coin selection, CPFP (a child
+`BitcoinBackend` interface takes them, as above), push updates (a sync polls), branch-and-bound coin selection, CPFP (a child
 paying for its parent), payments to several recipients, and more than 50 pending transactions on one address (Esplora
 lists 50).
 

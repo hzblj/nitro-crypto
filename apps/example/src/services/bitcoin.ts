@@ -2,6 +2,8 @@ import {bitcoinAirgap} from '@hzblj/crypto-airgap-bitcoin'
 import type {BitcoinChain, BitcoinWatchAccount} from '@hzblj/crypto-bitcoin'
 import {type AccountTransaction, type BitcoinSync, createBitcoinSync, esploraBackend} from '@hzblj/crypto-bitcoin/sync'
 
+import {fetch} from 'react-native-nitro-fetch'
+
 import {NETWORKS} from '../config'
 import {formatUnits} from '../utils'
 import {NetworkError} from './http'
@@ -29,7 +31,9 @@ const toActivity = (transaction: AccountTransaction): ActivityItem => ({
 
 export const bitcoinService = (chain: BitcoinChain): ChainService<'bitcoin'> => {
   const airgap = bitcoinAirgap(chain)
-  const backend = esploraBackend({network: chain.network.name, url: network.endpoint})
+  // Over react-native-nitro-fetch (URLSession on iOS, Cronet on Android): any client that answers like `fetch` does, and
+  // forwards the signal, so a sync that is cancelled really stops its requests.
+  const backend = esploraBackend({fetch, network: chain.network.name, url: network.endpoint})
   const syncs = new Map<string, BitcoinSync>()
 
   /**
