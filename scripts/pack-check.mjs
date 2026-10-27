@@ -36,7 +36,8 @@ const ENGINE = [
 const ADAPTER = ['package.json', 'README.md', 'LICENSE', 'build/index.js', 'build/index.d.ts']
 
 const REQUIRED = {
-  '@hzblj/crypto-bitcoin': ADAPTER,
+  // `/sync`, the watch-only account sync, is a subpath of its own: the main entry stays free of network code.
+  '@hzblj/crypto-bitcoin': [...ADAPTER, 'build/sync/index.js', 'build/sync/index.d.ts'],
   '@hzblj/crypto-ethereum': [...ADAPTER, 'build/viem.js', 'build/viem.d.ts'],
   '@hzblj/crypto-solana': [...ADAPTER, 'build/kit.js', 'build/kit.d.ts'],
   '@hzblj/nitro-crypto': [
@@ -158,6 +159,14 @@ for (const {directory, name} of packages) {
 }
 
 const consumer = `import {bitcoinAdapter} from '@hzblj/crypto-bitcoin'
+import {
+  type AccountView,
+  createBitcoinSync,
+  esploraBackend,
+  isSyncError,
+  parseExtendedKey,
+  type SyncSnapshot,
+} from '@hzblj/crypto-bitcoin/sync'
 import {ethereumAdapter, type Hex, type ParsedEthereumTransaction} from '@hzblj/crypto-ethereum'
 import {toViemAccount} from '@hzblj/crypto-ethereum/viem'
 import {solanaAdapter} from '@hzblj/crypto-solana'
@@ -273,6 +282,32 @@ export const evm = async (unsigned: Uint8Array) => {
   await account.signTransaction({authorizationList: [], gas: 1n, maxFeePerGas: 1n, maxPriorityFeePerGas: 1n, nonce: 0, to: null, type: 'eip7702'})
 
   return [typed, signed.hash, parsed.type, hash]
+}
+
+// The Bitcoin sync subpath: an account followed from its extended key over Esplora, a payment as one PSBT.
+export const sync = async (zpub: string) => {
+  const crypto = createCryptoEngine({adapters: [bitcoinAdapter({network: 'testnet'})]})
+  const {extendedKey, scriptType} = parseExtendedKey(zpub, crypto.hash.sha256)
+  const account = createBitcoinSync({
+    backend: esploraBackend({network: 'testnet'}),
+    chain: crypto.chains.bitcoin,
+    extendedKey,
+    fingerprint: 0x73c5da0a,
+    scriptType,
+  })
+  const view: AccountView = await account.sync({signal: new AbortController().signal})
+  const total: bigint = view.balance.total
+  const saved: SyncSnapshot = JSON.parse(JSON.stringify(account.snapshot()))
+  const payment = account.createPayment({amount: 10_000n, feeRate: (await account.feeEstimates()).halfHour, to: view.receiveAddress.address})
+  const psbt: Uint8Array = await account.createPsbt(payment)
+  const txid: string = await account.broadcast(crypto.chains.bitcoin.finalizePsbt(psbt))
+
+  // @ts-expect-error: a backend serves one network, and says which
+  esploraBackend({url: 'https://mempool.space/api'})
+  // @ts-expect-error: amounts are satoshis as bigints
+  account.createPayment({amount: 10_000, feeRate: 1, to: ''})
+
+  return [total, saved, txid, isSyncError(null, 'INSUFFICIENT_FUNDS')]
 }
 
 export const customChain = defineAdapter({

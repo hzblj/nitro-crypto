@@ -7,7 +7,9 @@ Bitcoin for [`@hzblj/nitro-crypto`](https://www.npmjs.com/package/@hzblj/nitro-c
 BIP-84) and Taproot (P2TR, BIP-86) accounts on mainnet, testnet, signet or regtest, validation of every address type,
 payments from an account (coin selection, fees, BIP-143 and BIP-341 signatures), PSBTs (BIP-174, with BIP-371's
 Taproot fields) for keys held elsewhere, and message signatures (BIP-322, and the legacy "Bitcoin Signed Message").
-The keys stay in the native engine; this package is TypeScript over it.
+The keys stay in the native engine; this package is TypeScript over it. Its
+[`/sync`](#sync) subpath keeps a watch-only account in step with the chain over Esplora: balances, history, payments
+as PSBTs, broadcasts.
 
 ```sh
 npx expo install @hzblj/nitro-crypto @hzblj/crypto-bitcoin react-native-nitro-modules
@@ -74,7 +76,7 @@ engine an app has.
 ## Payments
 
 An account spends the coins its address holds. `createTransaction` plans a payment and `signTransaction` signs and
-serializes it; fetching coins and broadcasting are the app's (any Esplora or Bitcoin Core node).
+serializes it; fetching coins and broadcasting are the app's (any Esplora or Bitcoin Core node), or [`/sync`](#sync)'s.
 
 ```ts
 const utxos = (await (await fetch(`${esplora}/address/${account.address}/utxo`)).json()).map(
@@ -167,6 +169,138 @@ proof-of-funds signatures and its PSBT-based signing, BIP-137 signatures for P2P
 package does not derive), sighash types other than SIGHASH_ALL (P2WPKH) and SIGHASH_DEFAULT or SIGHASH_ALL (Taproot)
 when signing, PSBT version 2, spending from several addresses in one `signTransaction` (a PSBT does it), inputs of any
 type but P2WPKH and Taproot key paths, and watching an extended public key's every address at once (one address per
-watch-only account).
+watch-only account; [`/sync`](#sync) watches an account and spends from all of its addresses).
+
+## Sync
+
+`@hzblj/crypto-bitcoin/sync` keeps a watch-only account in step with the chain, over `fetch`: the account found from
+its extended public key (receiving and change addresses, up to the gap limit), its coins, balance and history, its
+next receiving and change addresses, fee estimates, payments as one PSBT for the engine or an air-gapped signer, fee
+bumps and broadcasts. It talks to Esplora (mempool.space, blockstream.info, your own electrs); anything that answers the
+same questions plugs in as a `BitcoinBackend`. A subpath of its own: the main entry has no network code, and an app
+that only signs never loads it. No key is held here: the engine derives the addresses publicly, and signing is the
+engine's or the signer's.
+
+```ts
+import {createBitcoinSync, esploraBackend, parseExtendedKey} from '@hzblj/crypto-bitcoin/sync'
+
+const sync = createBitcoinSync({
+  backend: esploraBackend({network: 'testnet'}), // mempool.space's testnet4
+  chain: crypto.chains.bitcoin,
+  extendedKey: wallet.extendedPublicKey("m/84'/1'/0'"), // or parseExtendedKey(vpub, crypto.hash.sha256).extendedKey
+  fingerprint: wallet.fingerprint, // the master key's, which PSBTs name
+  snapshot: saved ? JSON.parse(saved) : undefined, // what sync.snapshot() returned last time
+})
+
+const {balance, receiveAddress, transactions, utxos} = await sync.sync()
+storage.set('bitcoin', JSON.stringify(sync.snapshot())) // MMKV, say: plain JSON, bigints as strings
+
+const fees = await sync.feeEstimates()
+const payment = sync.createPayment({amount: 25_000n, feeRate: fees.halfHour, to})
+const psbt = await sync.createPsbt(payment) // every coin's key origin, each from its own address
+
+// The engine signs (an air-gapped signer takes the same PSBT through @hzblj/crypto-airgap-bitcoin):
+const signed = await sync.signPsbt(psbt, path => wallet.deriveAccount({chain: 'bitcoin', path}))
+await sync.broadcast(crypto.chains.bitcoin.finalizePsbt(signed)) // recorded as pending at once
+```
+
+| It follows | |
+| --- | --- |
+| `{extendedKey, path?, fingerprint?, scriptType?}` | An account: `wallet.extendedPublicKey(path)`, or a signer's xpub, tpub, zpub or vpub (`parseExtendedKey`). `path` defaults to BIP-84's account at the key's index on the adapter's network; `fingerprint` is needed for PSBTs only; `scriptType` is `p2wpkh` |
+| `{account}` | One key's address, receiving and change alike: an account of the engine (`wallet.deriveAccount`) or a watch-only one (`chain.watchAccount`). No discovery |
+| `{address}` | An address alone, of any type: its balance and history, no payments (`MISSING_KEY`) |
+
+`gapLimit` (20) is how many unused addresses in a row end discovery on each branch; `snapshot` resumes;
+`broadcastGraceMs` (ten minutes) is how long a transaction broadcast here may stay unknown to the backend before a
+sync forgets it.
+
+| | |
+| --- | --- |
+| `sync.sync({signal?, maxAgeMs?, full?})` | Reads what changed and resolves to the view. Concurrent calls share one run; `maxAgeMs` skips the network when the last sync is younger; `full` reads every history again. A failure leaves the state as it was |
+| `sync.view()` | The view as of the last sync or the snapshot, no network |
+| `sync.subscribe(listener)` | The new view after every sync and broadcast; returns the unsubscribe (fits `useSyncExternalStore`) |
+| `sync.snapshot()` | The state as plain JSON, to persist and pass back as `snapshot` |
+| `sync.addressAt(change, index)` | Any address of the account, with its path and key |
+| `sync.feeEstimates()` | `{fastest, halfHour, hour, economy, minimum, byTarget}` in sat/vB: mempool.space's recommendation when the server has it, else Esplora's confirmation targets |
+| `sync.createPayment({to, amount, feeRate, coins?, unconfirmed?})` | A plan: its coins with their paths, the change address, the fee rate. `amount: 'max'` sends everything selection may spend |
+| `sync.createFeeBump(txid, {feeRate})` | A replacement (BIP-125) of the account's own pending transaction, as a payment |
+| `sync.createPsbt(payment, {previousTransactions?})` | One PSBT for coins of any addresses of the account: each input's witness UTXO and key origin, the origin on change, each coin's previous transaction (checked against it) unless `false` |
+| `sync.signPsbt(psbt, derive)` | Signs with the engine, every key of the account the PSBT names, each derived by `derive` and checked against it |
+| `sync.broadcast({hex, txid})` | Sends a signed transaction and records it, so its coins are spent and its change is there before the next sync. A node that has it already is a success |
+| `sync.transactionStatus(txid)` | `confirmed` (with confirmations), `pending` or `unknown` |
+| `parseExtendedKey(text, sha256)`, `formatExtendedKey(key, {network, scriptType?}, sha256)` | Extended public keys to and from text: xpub, tpub, zpub, vpub. A private key is `PRIVATE_KEY_MATERIAL`; ypub and the multisig forms are `UNSUPPORTED` |
+| `esploraBackend({network, url?, timeoutMs?, retries?, retryDelayMs?, concurrency?, headers?, fetch?})` | An Esplora server: mempool.space's for mainnet, testnet (testnet4) and signet unless `url` says otherwise (regtest needs one). 15 s per attempt, 3 retries with backoff on timeouts, lost connections, 429 (honouring `Retry-After`) and 5xx, 4 requests at once |
+
+| The view | |
+| --- | --- |
+| `balance` | `confirmed` and `unconfirmed` (the mempool's delta, which can be negative) as Esplora counts them, `total`, and `spendable`: what a payment can spend now |
+| `utxos` | Every unspent coin, largest first: outpoint, value, address, branch, index, path, confirmations, `trusted` (confirmed, or the account's own change), `coinbase` |
+| `transactions` | Newest first, each from the account's side: `kind` (`received`, `sent`, `self`), `amount`, `net`, `received`, `sent`, `fee` (the account's: `undefined` when it shares its inputs with others), `transactionFee`, `feeRate`, `counterparties`, confirmations, height, block time, `firstSeen`, `replaceable` |
+| `receiveAddress`, `changeAddress` | The first address after the last one with history, on each branch |
+| `addresses` | Every address with history: its transactions and what its coins hold |
+| `tip`, `syncedAt` | The best chain's tip at the last sync, and when it finished |
+
+### How a sync reads only what changed
+
+1. **The tip.** When it moved, the blocks of the account's confirmed transactions are compared with the backend's best
+   chain, newest first, until one agrees; the transactions of every block that does not are looked up again. A
+   reorganization moves them to their new block, back to the mempool, or out.
+2. **Pending transactions,** each looked up: confirmed, still waiting, or gone (dropped, or replaced by its sender) and
+   forgotten. One broadcast here is kept for `broadcastGraceMs` while the backend catches up.
+3. **Every address's summary** up to the gap limit past the last used one, on both branches: what Esplora's
+   `/address` says it received, spent and holds in the mempool.
+4. **History, only for the addresses whose summary changed,** page by page until the transactions add up to the
+   summary. When they do not, the whole history is read again and what the backend no longer lists is forgotten.
+
+A sync with nothing new is two requests for the tip, one per address scanned (Esplora has no batch: the used ones and
+the gap on each branch) and one per pending transaction. The snapshot (`version: 1`) is the tip, each used address's
+summary, and each transaction as the account needs it (inputs with their coins' addresses and values, outputs, fee,
+size, block, when it was first seen), all JSON. The receiving and change addresses the app shows are never read from
+it: they are derived again from the key.
+
+### Payments, from the adapter
+
+Coin selection is the adapter's own (largest coins first, change when it is worth an output) over the coins
+`unconfirmed` allows: confirmed coins and the account's own unconfirmed change by default (`own`), any (`all`) or none
+(`none`); `coins` is coin control. Change goes to the next change address, every input is replaceable (BIP-125), and
+the transaction is version 2 with lock time 0, as `createTransaction` makes it. `createPsbt` writes one PSBT per key
+with the adapter's `createPsbt` and takes each input's fields from its own key's: the PSBT a hardware wallet, an
+air-gapped phone or the engine reads is the adapter's, field for field.
+
+A fee bump spends the same coins (or fewer of them), pays the same recipient the same amount and takes the fee from
+the change, at least the original fee plus 1 sat/vB of its own size and at a higher rate (BIP-125's rules; else
+`FEE_TOO_LOW`, saying how much). It refuses (`FEE_BUMP_UNAVAILABLE`) a confirmed transaction, one that spends someone
+else's coins or pays several recipients, and one whose change another pending transaction already spends.
+
+| Code | When |
+| --- | --- |
+| `NETWORK_ERROR`, `TIMEOUT`, `RATE_LIMITED`, `BACKEND_ERROR` | The backend, after every retry: unreachable, too slow, 429, an error status |
+| `ABORTED` | The `AbortSignal` fired |
+| `INVALID_RESPONSE` | An answer Esplora would not give, or a previous transaction that is not the coin it spends |
+| `BROADCAST_REJECTED` | The node refused the transaction; the message is its reason |
+| `INSUFFICIENT_FUNDS`, `UNKNOWN_COIN`, `INVALID_ADDRESS` | A payment the coins cannot pay, coin control outside the account, a recipient of another network |
+| `FEE_BUMP_UNAVAILABLE`, `FEE_TOO_LOW` | A replacement this account cannot make, or one that pays too little |
+| `MISSING_KEY`, `MISSING_FINGERPRINT`, `KEY_MISMATCH` | A payment from an address alone, a PSBT without the master fingerprint, a derived key that is not the PSBT's |
+| `INVALID_EXTENDED_KEY`, `PRIVATE_KEY_MATERIAL`, `UNSUPPORTED` | Key text that does not read, or does not fit its path; an xprv; P2TR, ypub, multisig |
+| `NETWORK_MISMATCH`, `INVALID_SNAPSHOT`, `SNAPSHOT_MISMATCH`, `INVALID_ARGUMENT` | The key, adapter and backend on different networks; a snapshot this version did not write, or another account's |
+
+Every error is a `SyncError` with one of these codes (`isSyncError(error, 'INSUFFICIENT_FUNDS')`); messages never
+quote an address or a key.
+
+### Privacy and trust
+
+**The backend sees the whole account.** Esplora is asked about every address, so the server learns that they are one
+wallet, which ones were used, when the app looks, and from which IP address. Run your own (electrs or mempool behind
+`url`), or reach it through Tor; a public server is a convenience, and mempool.space limits how hard it can be asked.
+**It is trusted for what it says:** a lying backend can hide coins, invent them, or misstate a history. A PSBT with
+previous transactions lets a signer check the values it signs, and the sync checks those transactions against their
+coins before writing them; a balance is still the backend's word. **The snapshot is the account's history** in plain
+JSON: keep it where the app keeps private data.
+
+**Not in this version:** Taproot accounts (P2TR, BIP-86: the script type is reserved and `UNSUPPORTED` until the
+adapter has Taproot), P2SH-wrapped and multisig accounts (ypub, Zpub), backends other than Esplora (the
+`BitcoinBackend` interface takes them), push updates (a sync polls), branch-and-bound coin selection, CPFP (a child
+paying for its parent), payments to several recipients, and more than 50 pending transactions on one address (Esplora
+lists 50).
 
 [Documentation](https://github.com/hzblj/nitro-crypto#readme) · [Security](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md)

@@ -5,6 +5,7 @@
     // the example type-checks against them without a build. The air-gap packages come from npm.
     "paths": {
       "@hzblj/crypto-bitcoin": ["../../packages/crypto-bitcoin/src/index.ts"],
+      "@hzblj/crypto-bitcoin/sync": ["../../packages/crypto-bitcoin/src/sync/index.ts"],
       "@hzblj/crypto-ethereum": ["../../packages/crypto-ethereum/src/index.ts"],
       "@hzblj/crypto-solana": ["../../packages/crypto-solana/src/index.ts"],
       "@hzblj/nitro-crypto": ["../../packages/nitro-crypto/src/index.ts"],

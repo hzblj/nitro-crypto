@@ -1,150 +1,121 @@
 import {bitcoinAirgap} from '@hzblj/crypto-airgap-bitcoin'
-import type {BitcoinChain, BitcoinTransactionPlan, BitcoinUtxo, BitcoinWatchAccount} from '@hzblj/crypto-bitcoin'
+import type {BitcoinChain, BitcoinWatchAccount} from '@hzblj/crypto-bitcoin'
+import {type AccountTransaction, type BitcoinSync, createBitcoinSync, esploraBackend} from '@hzblj/crypto-bitcoin/sync'
 
 import {NETWORKS} from '../config'
 import {formatUnits} from '../utils'
-import {getJson, getText, NetworkError, postText} from './http'
+import {NetworkError} from './http'
 import type {ActivityItem, ChainService, SendRequest} from './types'
 
 const network = NETWORKS.bitcoin
-const api = network.endpoint
 
-type Stats = {readonly funded_txo_sum: number; readonly spent_txo_sum: number}
-type AddressInfo = {readonly chain_stats: Stats; readonly mempool_stats: Stats}
-type Status = {readonly confirmed: boolean; readonly block_time?: number}
-type Output = {readonly scriptpubkey_address?: string; readonly value: number}
-type EsploraTransaction = {
-  readonly txid: string
-  readonly vin: readonly {readonly prevout: Output | null}[]
-  readonly vout: readonly Output[]
-  readonly fee: number
-  readonly status: Status
-}
-type EsploraUtxo = {readonly txid: string; readonly vout: number; readonly value: number}
-type Fees = {readonly halfHourFee: number; readonly minimumFee: number}
+/** A balance and a history asked for together (the home screen does) share one sync. */
+const FRESH_MS = 5_000
 
-const sum = (outputs: readonly Output[]) => outputs.reduce((total, output) => total + BigInt(output.value), 0n)
+const DIRECTIONS = {received: 'in', self: 'self', sent: 'out'} as const
 
-/** One Esplora transaction from the address's side: what it sent others, or what it received. */
-const toActivity = (address: string, transaction: EsploraTransaction): ActivityItem => {
-  const ours = (output: Output | null) => output?.scriptpubkey_address === address
-  const spending = transaction.vin.some(input => ours(input.prevout))
-  const others = transaction.vout.filter(output => !ours(output))
-  const direction = spending ? (others.length === 0 ? 'self' : 'out') : 'in'
-
-  return {
-    // Sent: what others got. Received, or moved between this address's own coins: what came back to it.
-    amount: direction === 'out' ? sum(others) : sum(transaction.vout.filter(ours)),
-    asset: network.native,
-    chain: 'bitcoin',
-    counterparty: spending
-      ? others[0]?.scriptpubkey_address
-      : transaction.vin.find(input => !ours(input.prevout))?.prevout?.scriptpubkey_address,
-    direction,
-    hash: transaction.txid,
-    id: `bitcoin:${transaction.txid}`,
-    status: transaction.status.confirmed ? 'confirmed' : 'pending',
-    timestamp: transaction.status.block_time ? transaction.status.block_time * 1000 : undefined,
-  }
-}
-
-/** A payment from `account` at the network's current state: the coins it spends, the fee, what the screens list. */
-const prepare = async (chain: BitcoinChain, account: BitcoinWatchAccount, {amount, to}: SendRequest) => {
-  const recipient = chain.validateAddress(to)
-
-  if (!recipient.valid) {
-    throw new NetworkError(recipient.reason)
-  }
-
-  const [coins, fees] = await Promise.all([
-    getJson<EsploraUtxo[]>(`${api}/address/${account.address}/utxo`),
-    getJson<Fees>(`${api}/v1/fees/recommended`),
-  ])
-
-  if (coins.length === 0) {
-    throw new NetworkError('This address has no coins to spend yet: fund it from a testnet4 faucet.')
-  }
-
-  const utxos: BitcoinUtxo[] = coins.map(coin => ({txid: coin.txid, value: BigInt(coin.value), vout: coin.vout}))
-  const feeRate = Math.max(fees.halfHourFee, fees.minimumFee, 1)
-  const plan = account.createTransaction({amount, feeRate, to: recipient.normalized, utxos})
-
-  return {
-    amount: plan.amount,
-    details: [
-      {label: 'Network', value: `Bitcoin ${network.testnet}`},
-      {label: 'Fee rate', value: `${feeRate} sat/vB`},
-      {label: 'Size', value: `${plan.vsize} vB, at most`},
-      {label: 'Inputs', value: `${plan.inputs.length} of ${utxos.length} coins`},
-      {
-        label: 'Change',
-        value: plan.change > 0n ? `${formatUnits(plan.change, 8, 8)} BTC back to this address` : 'None',
-      },
-    ],
-    fee: plan.fee,
-    plan,
-  }
-}
-
-/** Each coin's whole previous transaction, which lets the signer check the values it signs (and so the fee). */
-const previousTransactions = async (plan: BitcoinTransactionPlan) =>
-  Object.fromEntries(
-    await Promise.all(
-      [...new Set(plan.inputs.map(input => input.txid))].map(
-        async txid => [txid, await getText(`${api}/tx/${txid}/hex`)] as const
-      )
-    )
-  )
+/** One transaction from the address's side, as the sync accounts for it: what it sent others, or what it received. */
+const toActivity = (transaction: AccountTransaction): ActivityItem => ({
+  amount: transaction.amount,
+  asset: network.native,
+  chain: 'bitcoin',
+  counterparty: transaction.counterparties[0],
+  direction: DIRECTIONS[transaction.kind],
+  hash: transaction.txid,
+  id: `bitcoin:${transaction.txid}`,
+  status: transaction.confirmations > 0 ? 'confirmed' : 'pending',
+  timestamp: transaction.blockTime ? transaction.blockTime * 1000 : undefined,
+})
 
 export const bitcoinService = (chain: BitcoinChain): ChainService<'bitcoin'> => {
   const airgap = bitcoinAirgap(chain)
+  const backend = esploraBackend({network: chain.network.name, url: network.endpoint})
+  const syncs = new Map<string, BitcoinSync>()
+
+  /**
+   * The address's sync, one per address for the app's run. The screens read balances and histories by address;
+   * a payment needs the account's key, and its sync takes over what the address's had read (`snapshot`).
+   */
+  const syncOf = (address: string, account?: BitcoinWatchAccount) => {
+    const current = syncs.get(address)
+
+    if (current && (current.scriptType !== undefined || !account)) {
+      return current
+    }
+
+    const next = account
+      ? createBitcoinSync({account, backend, chain, snapshot: current?.snapshot()})
+      : createBitcoinSync({address, backend, chain})
+    syncs.set(address, next)
+
+    return next
+  }
+
+  /** A payment from `account` at the network's current state: the coins it spends, the fee, what the screens list. */
+  const prepare = async (account: BitcoinWatchAccount, {amount, to}: SendRequest) => {
+    const recipient = chain.validateAddress(to)
+
+    if (!recipient.valid) {
+      throw new NetworkError(recipient.reason)
+    }
+
+    const sync = syncOf(account.address, account)
+    const [view, fees] = await Promise.all([sync.sync(), sync.feeEstimates()])
+
+    if (view.utxos.length === 0) {
+      throw new NetworkError('This address has no coins to spend yet: fund it from a testnet4 faucet.')
+    }
+
+    const feeRate = Math.max(fees.halfHour, fees.minimum, 1)
+    // Unconfirmed coins too, as faucets pay them: a test wallet should not make the user wait for a block.
+    const payment = sync.createPayment({amount, feeRate, to: recipient.normalized, unconfirmed: 'all'})
+    const {plan} = payment
+
+    return {
+      amount: plan.amount,
+      details: [
+        {label: 'Network', value: `Bitcoin ${network.testnet}`},
+        {label: 'Fee rate', value: `${feeRate} sat/vB`},
+        {label: 'Size', value: `${plan.vsize} vB, at most`},
+        {label: 'Inputs', value: `${plan.inputs.length} of ${view.utxos.length} coins`},
+        {
+          label: 'Change',
+          value: plan.change > 0n ? `${formatUnits(plan.change, 8, 8)} BTC back to this address` : 'None',
+        },
+      ],
+      fee: plan.fee,
+      payment,
+      sync,
+    }
+  }
 
   return {
-    activity: async address =>
-      (await getJson<EsploraTransaction[]>(`${api}/address/${address}/txs`)).map(transaction =>
-        toActivity(address, transaction)
-      ),
+    activity: async address => (await syncOf(address).sync({maxAgeMs: FRESH_MS})).transactions.map(toActivity),
     airgapQuote: async (account, send) => {
-      const {plan, ...quote} = await prepare(chain, account, send)
-      const psbt = account.createPsbt(plan, {previousTransactions: await previousTransactions(plan)})
+      const {payment, sync, ...quote} = await prepare(account, send)
+      // Each coin's whole previous transaction goes with it, so the signer can check the values it signs.
+      const psbt = await sync.createPsbt(payment)
 
       return {
         ...quote,
-        complete: async answer =>
-          postText(`${api}/tx`, airgap.decodeSignResponse(answer, {request: psbt}).transaction.hex),
+        complete: async answer => sync.broadcast(airgap.decodeSignResponse(answer, {request: psbt}).transaction),
         request: airgap.encodeSignRequest({psbt}),
       }
     },
     holdings: async address => {
-      const {chain_stats: confirmed, mempool_stats: pending} = await getJson<AddressInfo>(`${api}/address/${address}`)
-      const balance =
-        BigInt(confirmed.funded_txo_sum - confirmed.spent_txo_sum) +
-        BigInt(pending.funded_txo_sum - pending.spent_txo_sum)
+      const {balance} = await syncOf(address).sync({maxAgeMs: FRESH_MS})
 
-      return [{asset: network.native, balance}]
+      return [{asset: network.native, balance: balance.total}]
     },
     quote: async (account, send) => {
-      const {plan, ...quote} = await prepare(chain, account, send)
+      const {payment, sync, ...quote} = await prepare(account, send)
 
       return {
         ...quote,
-        send: async () => {
-          const signed = await account.signTransaction(plan)
-
-          return postText(`${api}/tx`, signed.hex)
-        },
+        send: async () => sync.broadcast(await account.signTransaction(payment.plan)),
       }
     },
-    status: async txid => {
-      try {
-        return (await getJson<Status>(`${api}/tx/${txid}/status`)).confirmed ? 'confirmed' : 'pending'
-      } catch (error) {
-        // Not yet propagated to the explorer's node.
-        if (error instanceof NetworkError && /not found/i.test(error.message)) {
-          return 'pending'
-        }
-        throw error
-      }
-    },
+    // Unknown is not yet propagated to the explorer's node: pending, as far as the screens go.
+    status: async txid => ((await backend.transactionStatus(txid))?.confirmed ? 'confirmed' : 'pending'),
   }
 }

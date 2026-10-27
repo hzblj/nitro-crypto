@@ -110,6 +110,22 @@ check before a signer signs and before a watch-only wallet broadcasts, and what 
 to pair comes from here: public keys with their paths, or an account's extended public key, never the master's and
 never a private one (docs/adr/0007).
 
+## Syncing a Bitcoin account
+
+`@hzblj/crypto-bitcoin/sync` (docs/adr/0011) talks to the network for a watch-only account. It holds no key: the
+engine derives the addresses from the account's extended public key, and the engine or an air-gapped signer signs.
+What it does expose is privacy, and what it trusts is the backend:
+
+- **The backend sees the whole account.** Every address is asked about, so the server learns they are one wallet,
+  which were used, when the app looks and from which IP address. Run your own Esplora (electrs, or mempool behind a
+  `url`), or reach one through Tor; mempool.space and blockstream.info are conveniences.
+- **The backend is trusted for chain data.** It can hide coins, invent them, or misstate a history and a balance.
+  Its answers are parsed strictly, and the previous transactions a PSBT carries are checked against the coins they
+  pay before a signer sees them, so the values a signer verifies are not the backend's word.
+- **Addresses are derived, never stored.** The snapshot an app persists holds what the backend said (the account's
+  history, as plain JSON: keep it with the app's private data); the receiving and change addresses shown and paid to
+  are derived again from the key on every load.
+
 ## Primitives and dependencies
 
 | Primitive | Implementation | Notes |

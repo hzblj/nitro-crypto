@@ -3,7 +3,8 @@
 Bitcoin: BIP-84 native SegWit and BIP-86 Taproot (key path) accounts on four networks, validation of every address
 type, payments (coin selection, fees, BIP-143 and BIP-341 signing), PSBTs (BIP-174 v0 with BIP-371's Taproot fields),
 watch-only accounts, and message signatures (BIP-322 simple, legacy BIP-137). Parity: BIP-84, BIP-86, BIP-143,
-BIP-341 and BIP-322 vectors, Bitcoin Core's message vector, @scure/btc-signer, @noble/curves.
+BIP-341 and BIP-322 vectors, Bitcoin Core's message vector, @scure/btc-signer, @noble/curves. A second entry, `/sync`
+(`src/sync/`), keeps a watch-only account in step with the chain over Esplora (ADR 0011).
 
 TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, no other adapter. Keys come from the
 `KeySource` a wallet hands `deriveAccount`; the primitives from the `AdapterContext` `create` receives.
@@ -22,6 +23,23 @@ TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, 
 | `src/der.ts` | A 64-byte `r \|\| s` signature to and from strict DER (BIP-66). |
 | `src/path.ts` | The account request (`addressType`), its derivation path (purpose 84 or 86). |
 | `src/version.ts` | `VERSION`, synced from package.json by `scripts/sync-versions.mjs`; a test holds them equal. |
-| `test/` | Published vectors, and parity on many keys with independent libraries, all on the real engine (WebAssembly). `support.ts` reaches the WebAssembly build's Schnorr test hook (`../nitro-crypto/test/abi.ts`) to sign with given aux randomness, so Taproot transactions compare with btc-signer byte for byte. |
+| `src/sync/` | `@hzblj/crypto-bitcoin/sync`, its own entry (`index.ts`): `createBitcoinSync` (`sync.ts`: discovery, incremental resync, reorganizations, payments, fee bumps, broadcast), the backend contract (`backend.ts`) and Esplora over `fetch` (`esplora.ts`, `http.ts`: timeouts, abort, retries, concurrency), the account's view (`accounting.ts`), the snapshot (`state.ts`), extended key text (`extended-key.ts`), the script types (`script-types.ts`), the PSBT combiner (`psbt.ts`), `SyncError` (`errors.ts`). |
+| `test/` | Published vectors, and parity on many keys with independent libraries, all on the real engine (WebAssembly). `support.ts` reaches the WebAssembly build's Schnorr test hook (`../nitro-crypto/test/abi.ts`) to sign with given aux randomness, so Taproot transactions compare with btc-signer byte for byte. `test/sync/`: a fake Esplora over an in-memory chain (`fake-esplora.ts`: real transaction bytes, reorganizations, drops, replacements), parity with @scure/bip32 and btc-signer, and `live.test.ts` against testnet4, skipped unless `BITCOIN_SYNC_LIVE=1`. |
+
+## The sync's rules
+
+- **The main entry has no network code.** Nothing outside `src/sync/` imports from it or calls `fetch`; a test holds
+  that. The subpath is in `exports` (with `source`), `publishConfig.exports`, the example's `tsconfig.json` paths and
+  the pack check's required files.
+- **The adapter plans and writes; the sync combines.** Coin selection is `createTransaction`'s and PSBT fields are
+  `createPsbt`'s, one watch-only account per key; `sync/psbt.ts` only picks which PSBT each map comes from. A new
+  script type is a `ScriptSupport` in `script-types.ts` (P2TR is reserved there): nothing else in `src/sync/` knows a
+  script's fields.
+- **Addresses come from the key, never from storage.** A snapshot holds what the backend said; the receiving and change
+  addresses are derived again on every load.
+- **The backend is read strictly and trusted only for chain data.** Every Esplora answer is parsed field by field
+  (`INVALID_RESPONSE`); previous transactions are checked against their coins before a PSBT carries them.
+- **Every failure is a `SyncError`;** a `CryptoError` from the adapter is mapped (`fromCrypto`). Messages never quote
+  an address or a key.
 
 What the adapter does not do it says in `features` (`false`), and its README lists. Docs copy has no em dashes.
