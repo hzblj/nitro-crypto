@@ -273,6 +273,27 @@ static void test_entropy(void) {
     CHECK_STATUS(NC_OK, nc_handle_destroy(from_words));
     CHECK_STATUS(NC_OK, nc_handle_destroy(from_entropy));
 
+    /* A passphrase is hashed as given, so the caller normalizes it: e-acute in NFKD (e, then U+0301) makes the seed the
+       words make under it, NFC (U+00E9) another. */
+    const char *nfkd = "e\xcc\x81", *nfc = "\xc3\xa9";
+    nc_handle from_nfc = 0;
+    uint32_t c = 0;
+    CHECK_STATUS(NC_OK, nc_seed_from_mnemonic(ABANDON, strlen(ABANDON), nfkd, strlen(nfkd), &from_words));
+    CHECK_STATUS(NC_OK, nc_seed_from_entropy(zero, sizeof zero, nfkd, strlen(nfkd), &from_entropy));
+    CHECK_STATUS(NC_OK, nc_seed_from_entropy(zero, sizeof zero, nfc, strlen(nfc), &from_nfc));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_words, &a));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_entropy, &b));
+    CHECK_STATUS(NC_OK, nc_seed_fingerprint(from_nfc, &c));
+    CHECK(a == b && b != c);
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_words));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_entropy));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_nfc));
+    static char long_passphrase[1025];
+    memset(long_passphrase, 'a', sizeof long_passphrase);
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_seed_from_entropy(zero, 16, long_passphrase, 1025, &from_entropy));
+    CHECK_STATUS(NC_OK, nc_seed_from_entropy(zero, 16, long_passphrase, 1024, &from_entropy));
+    CHECK_STATUS(NC_OK, nc_handle_destroy(from_entropy));
+
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_seed_from_entropy(zero, 15, NULL, 0, &from_entropy));
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_mnemonic_from_entropy(zero, 15, words, sizeof words, &written));
     CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_mnemonic_from_entropy(zero, 16, words, 12 * 9 - 2, &written));

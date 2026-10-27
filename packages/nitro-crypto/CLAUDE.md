@@ -20,7 +20,7 @@ Android packaging, and the prebuilt engine. Three entry points:
 | `src/encoding/` | hex, UTF-8, Base58, Base58Check, Bech32/Bech32m. Pure. |
 | `NitroCrypto.podspec` | Vendors `engine/ios/NitroCryptoEngine.xcframework`, adds `engine/include` to header search. |
 | `android/` | Nitro's template library; `CMakeLists.txt` links `engine/android/<abi>/libnitro_crypto.a` and fails by name for an ABI it lacks. |
-| `test/` | node:test on the WebAssembly engine: encodings, primitives against `@noble`, Schnorr and Taproot against BIP-340's and BIP-341's vectors (read from the engine's `test/vectors`), wallets against `@scure`, the registry and its type inference, errors. Key-sealed backups through the C ABI (`backup.test.ts`, opened by `@noble` both ways). `abi.ts` reaches the C ABI itself in an instance of its own, for what the facade does not: the native-only functions and the WebAssembly test hook. |
+| `test/` | node:test on the WebAssembly engine: encodings, primitives against `@noble`, Schnorr and Taproot against BIP-340's and BIP-341's vectors (read from the engine's `test/vectors`), wallets against `@scure`, the registry and its type inference, errors. Key-sealed backups and seeds from entropy under a passphrase through the C ABI (`backup.test.ts`, `entropy.test.ts`). `abi.ts` reaches the C ABI itself in an instance of its own, for what the facade does not: the native-only functions and the WebAssembly test hook. |
 
 ## Rules
 

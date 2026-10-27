@@ -244,8 +244,9 @@ nc_status nc_seed_from_mnemonic(const char *mnemonic, size_t mnemonic_len, const
 #define NC_ENTROPY_MAX_LENGTH 32
 
 /**
- * Stores the BIP-39 seed of the mnemonic `entropy` encodes (16, 20, 24, 28 or 32 bytes), under `passphrase`, as a
- * seed handle: the seed a wallet restored from those words would have. The mnemonic exists only on this call's
+ * Stores the BIP-39 seed of the mnemonic `entropy` encodes (16, 20, 24, 28 or 32 bytes), under `passphrase` (UTF-8,
+ * NFKD-normalized by the caller, at most 1024 bytes), as a seed handle: the seed a wallet restored from those words
+ * would have. The mnemonic exists only on this call's
  * stack. For a vault that keeps the entropy, sealed by hardware, rather than the words (ADR 0008); any other
  * NC_ERR_INVALID_LENGTH.
  */

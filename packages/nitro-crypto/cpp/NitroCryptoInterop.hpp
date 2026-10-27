@@ -47,13 +47,24 @@ inline void randomBytes(uint8_t* out, size_t length) {
   bridge::check(nc_random_bytes(out, length));
 }
 
-/// A seed from BIP-39 entropy (16, 20, 24, 28 or 32 bytes), as the NitroSeed JavaScript receives: the seed the words
-/// behind that entropy make, with no passphrase. Runs PBKDF2, so call it off the JS thread. The entropy stays the
-/// caller's to zero.
-inline std::shared_ptr<HybridNitroSeedSpec> seedFromEntropy(const uint8_t* entropy, size_t length) {
+/// A seed from BIP-39 entropy (16, 20, 24, 28 or 32 bytes) under a BIP-39 passphrase (the "25th word"), as the
+/// NitroSeed JavaScript receives: the seed a wallet restored from the words behind that entropy, with that passphrase,
+/// has. `passphrase` is UTF-8, at most 1024 bytes (NC_ERR_INVALID_LENGTH beyond), and must already be NFKD-normalized,
+/// as BIP-39 requires and as the facade normalizes `createEphemeralWallet`'s: the engine hashes the bytes it is given.
+/// Normalize with the platform (Swift: `decomposedStringWithCompatibilityMapping`; Kotlin:
+/// `Normalizer.normalize(passphrase, Normalizer.Form.NFKD)`), or a passphrase that is not ASCII makes a seed no other
+/// wallet makes. Empty is no passphrase. Runs PBKDF2, so call it off the JS thread. The entropy and the passphrase stay
+/// the caller's to zero.
+inline std::shared_ptr<HybridNitroSeedSpec> seedFromEntropy(const uint8_t* entropy, size_t length, const char* passphrase,
+                                                            size_t passphraseLength) {
   nc_handle handle = 0;
-  bridge::check(nc_seed_from_entropy(entropy, length, nullptr, 0, &handle));
+  bridge::check(nc_seed_from_entropy(entropy, length, passphrase, passphraseLength, &handle));
   return std::make_shared<HybridNitroSeed>(handle);
+}
+
+/// `seedFromEntropy` with no passphrase: the seed the words behind that entropy make on their own.
+inline std::shared_ptr<HybridNitroSeedSpec> seedFromEntropy(const uint8_t* entropy, size_t length) {
+  return seedFromEntropy(entropy, length, nullptr, 0);
 }
 
 /// The entropy `mnemonic` encodes (NFKD-normalized UTF-8, single spaces) into `out`, which holds at least

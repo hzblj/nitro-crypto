@@ -108,13 +108,14 @@ Nothing is persisted: a reload or a restart loses every wallet. A wallet the use
 behind biometrics), and restore with `createEphemeralWallet({mnemonic})`. The engine hands out no other secret, and
 cannot read a mnemonic back from a seed.
 
-A vault does better: it keeps the wallet's BIP-39 entropy sealed by the Secure Enclave or StrongBox and hands the
-engine a seed natively, through `cpp/NitroCryptoInterop.hpp` (`<NitroCrypto/NitroCryptoInterop.hpp>` on iOS, the
-prefab `hzblj_nitro-crypto::NitroCrypto` on Android), so neither the words nor the entropy pass through JavaScript;
-the facade takes the seed over with `createEphemeralWallet({seed, words})` (docs/adr/0008). The same header seals
-that entropy into a backup that may leave the device, under a password (`backupSeal`, Argon2id) or under the 32 bytes
-a passkey's PRF extension returns (`backupSealWithKey`, HKDF-SHA256), with nothing for the user to remember, and opens
-it again; `backupKeyDerivation` says which a backup needs (docs/adr/0009, docs/adr/0010).
+A vault does better: it keeps the wallet's BIP-39 entropy sealed by the Secure Enclave or StrongBox and hands the engine
+a seed natively (under a BIP-39 passphrase too, NFKD-normalized by the vault, if the wallet has one), through
+`cpp/NitroCryptoInterop.hpp` (`<NitroCrypto/NitroCryptoInterop.hpp>` on iOS, the prefab
+`hzblj_nitro-crypto::NitroCrypto` on Android), so neither the words nor the entropy pass through JavaScript; the facade
+takes the seed over with `createEphemeralWallet({seed, words})` (docs/adr/0008). The same header seals that entropy into
+a backup that may leave the device, under a password (`backupSeal`, Argon2id) or under the 32 bytes a passkey's PRF
+extension returns (`backupSealWithKey`, HKDF-SHA256), with nothing for the user to remember, and opens it again;
+`backupKeyDerivation` says which a backup needs (docs/adr/0009, docs/adr/0010).
 
 ```ts
 const mnemonic = crypto.mnemonic.generate(12) // show once, for the user to write down
