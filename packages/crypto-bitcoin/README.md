@@ -225,6 +225,10 @@ const taproot = createBitcoinSync({
 | `{account}` | One key's address, receiving and change alike: an account of the engine (`wallet.deriveAccount`) or a watch-only one (`chain.watchAccount`). No discovery |
 | `{address}` | An address alone, of any type: its balance and history, no payments (`MISSING_KEY`) |
 
+An xpub or tpub does not say which script it was exported for: pass the `scriptType` (and `path`) of the account it
+came from. A BIP-84 key followed as `p2tr` finds an empty account, and its payments are refused (`KEY_MISMATCH`)
+rather than signed. A zpub or vpub names P2WPKH itself.
+
 `gapLimit` (20) is how many unused addresses in a row end discovery on each branch; `snapshot` resumes;
 `broadcastGraceMs` (ten minutes) is how long a transaction broadcast here may stay unknown to the backend before a
 sync forgets it.
