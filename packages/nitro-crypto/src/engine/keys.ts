@@ -84,10 +84,11 @@ export const wrapKey = (key: NitroKey, options: KeyOptions = {}): SigningKey => 
     return key
   }
   const publicKey = (compressed: boolean) => {
+    const current = live()
     let cached = publicKeys.get(compressed)
 
     if (!cached) {
-      cached = fromArrayBuffer(native(() => live().getPublicKey(compressed)))
+      cached = fromArrayBuffer(native(() => current.getPublicKey(compressed)))
       publicKeys.set(compressed, cached)
     }
 

@@ -168,11 +168,14 @@ A chain whose curves and hashes the engine has is one adapter, written against `
 | Mnemonics, seeds | BIP-39 (English) | This package |
 | HD keys | BIP-32 (secp256k1, and public derivation), SLIP-0010 (Ed25519) | This package |
 
-| Chain | Package | Accounts | Signing |
-| --- | --- | --- | --- |
-| Ethereum and EVM | `@hzblj/crypto-ethereum` | BIP-44, EIP-55 addresses, per-network chain ids | EIP-191 messages, signer recovery |
-| Bitcoin | `@hzblj/crypto-bitcoin` | BIP-84 native SegWit (P2WPKH), mainnet, testnet, signet, regtest | None yet |
-| Solana | `@hzblj/crypto-solana` | SLIP-0010, Base58 addresses | Ed25519 over message bytes |
+| Chain | Package | Accounts | Signing | Beside it |
+| --- | --- | --- | --- | --- |
+| Ethereum and EVM | `@hzblj/crypto-ethereum` | BIP-44, EIP-55 addresses, per-network chain ids | EIP-191 messages, EIP-712 typed data, transactions of types 0 (EIP-155), 1, 2 and 4 (EIP-7702) and their authorizations, contract creation | `/viem`: a viem `LocalAccount` |
+| Bitcoin | `@hzblj/crypto-bitcoin` | BIP-84 native SegWit (P2WPKH) and BIP-86 Taproot (P2TR); mainnet, testnet, signet, regtest | Transactions and PSBTs (with BIP-371's Taproot fields), Taproot key path, messages (BIP-322, legacy BIP-137) | `/sync`: a watch-only account kept in sync over Esplora |
+| Solana | `@hzblj/crypto-solana` | SLIP-0010, Base58 addresses | Messages, legacy and v0 transactions (address lookup tables), a slot of a transaction others sign too, off-chain messages | `/kit`: a @solana/kit signer |
+
+The subpaths are optional: viem and @solana/kit are optional peer dependencies, and only their own entry loads them;
+the Bitcoin sync speaks `fetch`, yours or any client's.
 
 | Platform | Minimum |
 | --- | --- |
@@ -182,11 +185,20 @@ A chain whose curves and hashes the engine has is one adapter, written against `
 | iOS | 15.1 |
 | Android | API 24 (arm64-v8a, armeabi-v7a, x86, x86_64; 16 KB pages) |
 
+## Beside this package
+
+| Package | What it adds |
+| --- | --- |
+| [`@hzblj/crypto-vault`](https://github.com/hzblj/crypto-vault) | The wallet's entropy sealed by the Secure Enclave or StrongBox behind the biometric prompt, a BIP-39 passphrase it checks, backups under a password or a passkey |
+| [`@hzblj/crypto-recovery`](https://github.com/hzblj/crypto-recovery) | Those backups in iCloud Keychain or Android Block Store, for the next phone |
+| [`@hzblj/crypto-airgap`](https://github.com/hzblj/crypto-airgap) | Air-gapped signing over QR codes (BC-UR), with MetaMask, Sparrow and Keystone |
+
 ## Not in this version
 
-EIP-712 typed data and transaction signing; Bitcoin message signing (BIP-322), PSBT and Taproot; Solana transactions;
-persistent or hardware-backed storage, backup and recovery, which belong to a vault beside this package (above). The
-adapters' `features` say so at runtime.
+Ethereum's blob transactions (EIP-4844), chain-specific transaction types, and signing a bare hash (`eth_sign`,
+refused on purpose); Bitcoin's Taproot script paths, MuSig2, PSBT version 2 and BIP-322's full form; Solana's v1
+transactions. Persistent or hardware-backed storage, backup and recovery belong to the vault and recovery packages
+(above). The adapters' `features` say what each one signs, at runtime.
 
 ## More
 
