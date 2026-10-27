@@ -186,6 +186,15 @@ describe('keys', () => {
     throwsCode(() => key.publicKey(), 'DISPOSED')
   })
 
+  test('a public key read before disposal is not handed out after it', () => {
+    const key = crypto.keys.generate('secp256k1')
+    key.publicKey()
+    key.publicKey('uncompressed')
+    key.dispose()
+    throwsCode(() => key.publicKey(), 'DISPOSED')
+    throwsCode(() => key.publicKey('uncompressed'), 'DISPOSED')
+  })
+
   test('returned public keys are copies: mutating one does not change the key', () => {
     const key = crypto.keys.generate('secp256k1')
     const first = key.publicKey()
