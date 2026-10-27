@@ -1,7 +1,7 @@
 {
   "name": "@hzblj/crypto-ethereum",
   "version": "0.2.0",
-  "description": "Ethereum and EVM adapter for @hzblj/nitro-crypto: secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 message signatures and signer recovery.",
+  "description": "Ethereum and EVM adapter for @hzblj/nitro-crypto: secp256k1 accounts at BIP-44 paths, EIP-55 addresses, EIP-191 messages, EIP-712 typed data, legacy, EIP-2930, EIP-1559 and EIP-7702 transactions, and a viem account.",
   "author": "Jan Blazej",
   "license": "MIT",
   "repository": {
@@ -14,8 +14,11 @@
   },
   "homepage": "https://github.com/hzblj/nitro-crypto/tree/main/packages/crypto-ethereum#readme",
   "keywords": [
+    "eip-1559",
     "eip-191",
     "eip-55",
+    "eip-712",
+    "eip-7702",
     "ethereum",
     "evm",
     "expo",
@@ -23,6 +26,7 @@
     "nitro-crypto",
     "react-native",
     "secp256k1",
+    "viem",
     "wallet"
   ],
   "main": "./build/index.js",
@@ -33,6 +37,11 @@
       "source": "./src/index.ts",
       "types": "./build/index.d.ts",
       "default": "./build/index.js"
+    },
+    "./viem": {
+      "source": "./src/viem.ts",
+      "types": "./build/viem.d.ts",
+      "default": "./build/viem.js"
     },
     "./package.json": "./package.json"
   },
@@ -50,7 +59,13 @@
     "test": "node --conditions=source --import tsx --test 'test/**/*.test.ts'"
   },
   "peerDependencies": {
-    "@hzblj/nitro-crypto": "workspace:^"
+    "@hzblj/nitro-crypto": "workspace:^",
+    "viem": "^2.26.0"
+  },
+  "peerDependenciesMeta": {
+    "viem": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@hzblj/nitro-crypto": "workspace:*",
@@ -65,6 +80,10 @@
       ".": {
         "types": "./build/index.d.ts",
         "default": "./build/index.js"
+      },
+      "./viem": {
+        "types": "./build/viem.d.ts",
+        "default": "./build/viem.js"
       },
       "./package.json": "./package.json"
     },

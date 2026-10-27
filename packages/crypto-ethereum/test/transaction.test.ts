@@ -18,7 +18,7 @@ import {
 } from 'viem'
 import {mnemonicToAccount} from 'viem/accounts'
 
-import {type EthereumTransactionRequest, ethereumAdapter, type Hex} from '../src'
+import {type Eip1559TransactionRequest, ethereumAdapter, type Hex} from '../src'
 import {type RlpItem, rlpEncode} from '../src/rlp'
 
 const HARDHAT = 'test test test test test test test test test test test junk'
@@ -70,7 +70,7 @@ const random = (seed: number) => {
   return {bytes, int, uint}
 }
 
-const randomRequest = (rng: ReturnType<typeof random>): EthereumTransactionRequest => {
+const randomRequest = (rng: ReturnType<typeof random>): Eip1559TransactionRequest & {readonly to: string} => {
   const maxFeePerGas = rng.uint(256)
   const raw = toHex(rng.bytes(20))
   const to = rng.int(2) === 0 ? raw : getAddress(raw)
@@ -91,7 +91,7 @@ const randomRequest = (rng: ReturnType<typeof random>): EthereumTransactionReque
 }
 
 /** The same request as viem takes it. */
-const viemRequest = (request: EthereumTransactionRequest, chainId = SEPOLIA) => ({
+const viemRequest = (request: ReturnType<typeof randomRequest>, chainId = SEPOLIA) => ({
   chainId,
   data: request.data as Hex | undefined,
   gas: request.gas,
@@ -232,9 +232,11 @@ describe('EIP-1559 transactions', () => {
     )
     await assert.rejects(
       () => onMainnet.signTransaction({...request, chainId: SEPOLIA}),
-      error => isCryptoError(error, 'INVALID_ARGUMENT')
+      error => isCryptoError(error, 'CHAIN_MISMATCH')
     )
-    throwsCode(() => sepolia.serializeTransaction({...request, chainId: 1}), 'INVALID_ARGUMENT')
+    throwsCode(() => sepolia.serializeTransaction({...request, chainId: 1}), 'CHAIN_MISMATCH')
+    throwsCode(() => sepolia.serializeTransaction({...request, chainId: 0}), 'CHAIN_MISMATCH')
+    throwsCode(() => sepolia.serializeTransaction({...request, chainId: -1}), 'INVALID_ARGUMENT')
     wallet.dispose()
   })
 
@@ -408,7 +410,7 @@ describe('reading transactions to sign elsewhere', () => {
     wallet.dispose()
   })
 
-  test('anything but an unsigned EIP-1559 transaction of this network is refused', async () => {
+  test('a malformed EIP-1559 transaction, or one for another network, is refused', async () => {
     const request = {
       gas: 21_000n,
       maxFeePerGas: 30_000_000_000n,
@@ -436,18 +438,23 @@ describe('reading transactions to sign elsewhere', () => {
     }
 
     assert.equal(fields(), unsigned)
-    throwsCode(() => crypto.chains.ethereum.parseTransaction(unsigned), 'INVALID_ARGUMENT')
-    // A legacy (EIP-155) transaction, as viem serializes one: an RLP list, no type byte.
-    throwsCode(
-      () => sepolia.parseTransaction('0xe205018252089470997970c51812dc3a010c7d01b50e0d17dc79c8018083aa36a78080'),
-      'INVALID_ARGUMENT'
-    )
+    throwsCode(() => crypto.chains.ethereum.parseTransaction(unsigned), 'CHAIN_MISMATCH')
     throwsCode(() => sepolia.parseTransaction(fields(['0x01', '0x02', '0x03'])), 'INVALID_ARGUMENT')
+    // An access list entry without its list of storage keys, and a storage key of 31 bytes.
     throwsCode(
-      () => sepolia.parseTransaction(fields([], {8: [['0x70997970c51812dc3a010c7d01b50e0d17dc79c8', []]]})),
+      () => sepolia.parseTransaction(fields([], {8: [['0x70997970c51812dc3a010c7d01b50e0d17dc79c8']]})),
       'INVALID_ARGUMENT'
     )
+    throwsCode(
+      () =>
+        sepolia.parseTransaction(
+          fields([], {8: [['0x70997970c51812dc3a010c7d01b50e0d17dc79c8', [`0x${'00'.repeat(31)}`]]]})
+        ),
+      'INVALID_ARGUMENT'
+    )
+    // No recipient and no init code: a contract creation with nothing to create.
     throwsCode(() => sepolia.parseTransaction(fields([], {5: '0x'})), 'INVALID_ARGUMENT')
+    throwsCode(() => sepolia.parseTransaction(fields([], {5: '0x7099'})), 'INVALID_ARGUMENT')
     throwsCode(() => sepolia.parseTransaction(fields([], {1: '0x0005'})), 'INVALID_ARGUMENT')
     throwsCode(() => sepolia.parseTransaction(fields([], {2: '0x06fc23ac01'})), 'INVALID_ARGUMENT')
     // Non-canonical RLP: a single byte below 0x80 wrapped in a string header.

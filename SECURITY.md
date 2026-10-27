@@ -80,11 +80,16 @@ changelog and a GitHub advisory once a fixed version is published.
   wiped: the one the app holds, and any copies the JS engine made, are outside the library's control.
 - **Spin lock, not a mutex.** Handle-table operations are microseconds long; under heavy contention a thread spins,
   then yields.
-- **Chains: what is not implemented is refused, not imitated.** The adapters build and sign Ethereum EIP-1559
-  transactions (ether and ERC-20 transfers), Bitcoin P2WPKH payments and PSBTs, and Solana legacy transactions (SOL
-  and SPL transfers). Bitcoin accounts have no `signMessage`; Ethereum's typed data (EIP-712), legacy and access-list
-  transactions, Bitcoin's BIP-322, Taproot and PSBT version 2, and Solana's versioned transactions are not
+- **Chains: what is not implemented is refused, not imitated.** The adapters build and sign Ethereum transactions
+  of types 0 (EIP-155), 1, 2 and 4 and EIP-712 typed data, Bitcoin P2WPKH payments and PSBTs, and Solana legacy
+  transactions (SOL and SPL transfers). Bitcoin accounts have no `signMessage`; Ethereum's blob transactions
+  (EIP-4844), Bitcoin's BIP-322, Taproot and PSBT version 2, and Solana's versioned transactions are not
   implemented.
+- **Ethereum signs nothing it cannot show.** No account signs a bare hash (`eth_sign`), directly or through the viem
+  account. Every transaction, typed data domain and EIP-7702 authorization is bound to the adapter's chain id
+  (`CHAIN_MISMATCH` otherwise); a legacy transaction always carries EIP-155 replay protection, and an authorization
+  for chain id 0, valid on every chain, needs an explicit `allowAllChains`. What a delegate contract does with an
+  account, and what a dApp's typed data means, is for the app to show before it asks for the signature.
 - **The example wallet is a testnet demo.** `apps/example` keeps its recovery phrase in the platform keychain
   (`expo-secure-store`, this device only, behind Face ID or the passcode), reads it into JavaScript to unlock, and
   wipes the engine's seed and keys after a minute in the background. That is the least a wallet should do, not an

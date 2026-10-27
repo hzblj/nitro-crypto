@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import {readFileSync} from 'node:fs'
+import {readdirSync, readFileSync} from 'node:fs'
 import path from 'node:path'
 import {describe, test} from 'node:test'
 
@@ -205,13 +205,36 @@ describe('adapter', () => {
     const adapter = ethereumAdapter()
     assert.equal(adapter.id, 'ethereum')
     assert.equal(adapter.curve, 'secp256k1')
-    assert.deepEqual(adapter.formats, {address: ['eip55'], signature: ['eip191', 'eip1559']})
-    assert.equal(adapter.features.messageSigning, true)
-    assert.equal(adapter.features.transactionSigning, true)
-    assert.equal(adapter.features.typedData, false)
+    assert.deepEqual(adapter.formats, {
+      address: ['eip55'],
+      signature: ['eip191', 'eip712', 'eip155', 'eip2930', 'eip1559', 'eip7702'],
+    })
+    assert.deepEqual(adapter.features, {
+      accessLists: true,
+      blobTransactions: false,
+      contractCreation: true,
+      hashSigning: false,
+      legacyTransactions: true,
+      messageSigning: true,
+      setCodeTransactions: true,
+      transactionSigning: true,
+      typedData: true,
+    })
     const manifest = JSON.parse(readFileSync(path.join(import.meta.dirname, '../package.json'), 'utf8'))
     assert.equal(adapter.version, manifest.version)
     assert.equal(VERSION, manifest.version)
+  })
+
+  test('the main entry never imports viem: only the /viem subpath does', () => {
+    const sources = path.join(import.meta.dirname, '../src')
+    for (const file of readdirSync(sources)) {
+      const text = readFileSync(path.join(sources, file), 'utf8')
+      const importsViem = /from '(viem|viem\/[^']*)'/.test(text)
+      assert.equal(importsViem, file === 'viem.ts', file)
+      if (file !== 'viem.ts') {
+        assert.doesNotMatch(text, /from '\.\/viem'/, file)
+      }
+    }
   })
 
   test('invalid configurations are refused', () => {

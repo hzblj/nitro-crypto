@@ -37,7 +37,7 @@ const ADAPTER = ['package.json', 'README.md', 'LICENSE', 'build/index.js', 'buil
 
 const REQUIRED = {
   '@hzblj/crypto-bitcoin': ADAPTER,
-  '@hzblj/crypto-ethereum': ADAPTER,
+  '@hzblj/crypto-ethereum': [...ADAPTER, 'build/viem.js', 'build/viem.d.ts'],
   '@hzblj/crypto-solana': ADAPTER,
   '@hzblj/nitro-crypto': [
     'package.json',
@@ -133,6 +133,23 @@ for (const {directory, name} of packages) {
     fail(`${name} publishes a \`source\` condition in its exports, to a src/ it does not ship`)
   }
 
+  // An optional peer dependency belongs to its subpath alone: no other file may import it, or installing the package
+  // without it would break the main entry.
+  for (const [peer, meta] of Object.entries(packed.peerDependenciesMeta ?? {})) {
+    if (!meta.optional) {
+      continue
+    }
+    const importers = files.filter(
+      file =>
+        /^build\/.*\.js$/.test(file) &&
+        file !== `build/${peer}.js` &&
+        new RegExp(`from ['"]${peer}(/[^'"]*)?['"]`).test(run('tar', ['-xzOf', tarball, `package/${file}`]))
+    )
+    if (importers.length > 0) {
+      fail(`${name} imports its optional peer ${peer} outside build/${peer}.js:\n  ${importers.join('\n  ')}`)
+    }
+  }
+
   const installed = path.join(WORK, 'node_modules', name)
   await mkdir(installed, {recursive: true})
   run('tar', ['-xzf', tarball, '-C', installed, '--strip-components', '1'])
@@ -140,7 +157,8 @@ for (const {directory, name} of packages) {
 }
 
 const consumer = `import {bitcoinAdapter} from '@hzblj/crypto-bitcoin'
-import {ethereumAdapter, type Hex} from '@hzblj/crypto-ethereum'
+import {ethereumAdapter, type Hex, type ParsedEthereumTransaction} from '@hzblj/crypto-ethereum'
+import {toViemAccount} from '@hzblj/crypto-ethereum/viem'
 import {solanaAdapter} from '@hzblj/crypto-solana'
 import {
   base58,
@@ -154,6 +172,8 @@ import {
 } from '@hzblj/nitro-crypto'
 import {defineAdapter, type KeySource} from '@hzblj/nitro-crypto/adapter'
 import {createTestCryptoEngine} from '@hzblj/nitro-crypto/testing'
+import {createWalletClient, http} from 'viem'
+import {sepolia} from 'viem/chains'
 
 export const app = async () => {
   const crypto = createCryptoEngine({adapters: [ethereumAdapter(), bitcoinAdapter({network: 'testnet'}), solanaAdapter()]})
@@ -197,6 +217,42 @@ export const elsewhere = async (psbt: Uint8Array, unsigned: Uint8Array, signatur
   crypto.bip32.derivePublic("m/84'/1'/0'", 'm/0/1')
 
   return [child, watch.address, fee, signed, signer]
+}
+
+// Ethereum beyond EIP-1559: typed data, EIP-7702 authorizations and transactions, and a viem account.
+export const evm = async (unsigned: Uint8Array) => {
+  const crypto = createCryptoEngine({adapters: [ethereumAdapter({chainId: 11155111, id: 'sepolia', name: 'Sepolia'})]})
+  const wallet = await crypto.createEphemeralWallet()
+  const account = await wallet.deriveAccount({chain: 'sepolia'})
+  const typed: Hex = await account.signTypedData({
+    domain: {chainId: 11155111, name: 'Example'},
+    message: {amount: 1n},
+    primaryType: 'Transfer',
+    types: {Transfer: [{name: 'amount', type: 'uint256'}]},
+  })
+  const authorization = await account.signAuthorization({address: account.address, nonce: 1})
+  const signed = await account.signTransaction({
+    authorizationList: [authorization],
+    gas: 60_000n,
+    maxFeePerGas: 2n,
+    maxPriorityFeePerGas: 1n,
+    nonce: 0,
+    to: account.address,
+    type: 'eip7702',
+  })
+  const parsed: ParsedEthereumTransaction = crypto.chains.sepolia.parseTransaction(unsigned)
+  const viemAccount = toViemAccount(account)
+  const client = createWalletClient({account: viemAccount, chain: sepolia, transport: http()})
+  const hash: Hex = await client.sendTransaction({to: account.address, value: 1n})
+
+  // @ts-expect-error: the viem account signs no bare hash (eth_sign)
+  await viemAccount.sign({hash})
+  // @ts-expect-error: a legacy transaction pays a gasPrice, not EIP-1559 fees
+  await account.signTransaction({gas: 21_000n, maxFeePerGas: 1n, nonce: 0, to: account.address, type: 'legacy'})
+  // @ts-expect-error: an EIP-7702 transaction always has a recipient
+  await account.signTransaction({authorizationList: [], gas: 1n, maxFeePerGas: 1n, maxPriorityFeePerGas: 1n, nonce: 0, to: null, type: 'eip7702'})
+
+  return [typed, signed.hash, parsed.type, hash]
 }
 
 export const customChain = defineAdapter({

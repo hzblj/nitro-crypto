@@ -29,3 +29,33 @@ export const resolveConfig = <Id extends string>(config: EthereumConfig<Id>) => 
 
   return {id: (config.id ?? 'ethereum') as Id, network: Object.freeze({chainId, name})}
 }
+
+/**
+ * The chain id a request names, bound to the network: left out, it is the network's; any other is `CHAIN_MISMATCH`,
+ * so an adapter configured for one network never signs for another. The message names the adapter's chain id, never
+ * the request's.
+ */
+export const networkChainId = (value: unknown, network: EthereumNetwork, subject: string): number => {
+  if (value === undefined) {
+    return network.chainId
+  }
+
+  const chainId =
+    typeof value === 'bigint' ? value : typeof value === 'number' && Number.isSafeInteger(value) ? BigInt(value) : -1n
+
+  if (chainId < 0n) {
+    throw new CryptoError('INVALID_ARGUMENT', `The chain id of ${subject} is a non-negative integer.`)
+  }
+
+  if (chainId !== BigInt(network.chainId)) {
+    throw chainMismatch(network, subject)
+  }
+
+  return network.chainId
+}
+
+export const chainMismatch = (network: EthereumNetwork, subject: string) =>
+  new CryptoError(
+    'CHAIN_MISMATCH',
+    `${subject} is for another chain than this adapter's, chain id ${network.chainId} (${network.name}).`
+  )
