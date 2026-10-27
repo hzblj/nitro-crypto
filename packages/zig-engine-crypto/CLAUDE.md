@@ -30,7 +30,7 @@ threading, the compatibility policy.
 | `src/derivation/path.zig`, `bip32.zig`, `slip10.zig` | Derivation paths (strict, canonical), BIP-32 for secp256k1, SLIP-0010 for Ed25519. |
 | `src/vault/handles.zig` | The vault: a fixed table of generation-checked handles, zeroed on release (docs/adr/0004). |
 | `src/vault/keys.zig` | Operations on handles: seeds, derivation, generation, import, public keys, signing (ECDSA, Ed25519, Schnorr with or without a Taproot tweak). |
-| `src/backup/backup.zig` | A wallet's entropy under a password: Argon2id, XChaCha20-Poly1305, the versioned format (docs/adr/0009). |
+| `src/backup/backup.zig` | A wallet's entropy under a password (Argon2id, docs/adr/0009) or a 32-byte key such as a passkey's PRF output (HKDF-SHA256, docs/adr/0010), sealed with XChaCha20-Poly1305 in one versioned format whose key derivation byte says which. |
 | `src/testing/property.zig` | Runs the fuzz targets over seeded random input (Zig 0.16.0's `--fuzz` mode does not build). |
 | `test/vectors.zig`, `test/vectors/` | Every published vector (BIP-340's CSV and BIP-341's wallet vectors among them, verbatim) and both Wycheproof suites (README there says where each came from). |
 | `test/c_abi_test.c` | The ABI as C sees it: errors, ownership, 64 MiB inputs, handle exhaustion, 8 threads. |
@@ -44,7 +44,8 @@ threading, the compatibility policy.
   stack for one operation and zeroed before it returns (`defer secure.zero(...)`), on every path, errors included.
   The exceptions are `nc_mnemonic_generate` (a fresh mnemonic, handed out once for backup and never kept,
   docs/adr/0005) and what only native callers may use: entropy in and out for a vault (docs/adr/0008), and a backup
-  opened back into entropy (docs/adr/0009). Nothing else joins them without an ADR of its own. Chain codes are not
+  opened back into entropy, under a password or a key (docs/adr/0009, 0010). Nothing else joins them without an ADR of
+  its own. Chain codes are not
   secrets but are not free either: `nc_seed_extended_public` hands out an account's, never the master's
   (docs/adr/0007).
 - **No allocator for secrets.** The vault is a fixed table; buffers are stack arrays. The one exception is Argon2id's

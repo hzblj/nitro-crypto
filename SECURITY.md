@@ -72,8 +72,10 @@ changelog and a GitHub advisory once a fixed version is published.
   strings and native UI buffers before the facade encodes it; the facade overwrites its own byte copies after use,
   and the C++ bridge zeroes its copies, but the JS engine may have made others. Swap and core dumps are the
   operating system's.
-- **No secure storage.** Persistence, biometric authorization, passkeys and encrypted backup each need their own design
-  and review, and are deliberately absent from the library. An app that keeps a mnemonic decides where: the platform's
+- **No secure storage.** Persistence, biometric authorization and passkeys each need their own design and review, and
+  are deliberately absent from the library. The engine does the cryptography of an encrypted backup, for a vault's
+  native code only: a wallet's entropy sealed under a password (Argon2id) or under a passkey's PRF output (HKDF-SHA256),
+  then XChaCha20-Poly1305 (docs/adr/0009, docs/adr/0010). Where the backup and the passkey live is the vault's. An app that keeps a mnemonic decides where: the platform's
   keychain, behind its biometric prompt, is the least it should do. Better is a vault that keeps the entropy sealed by
   the Secure Enclave or StrongBox and hands the engine a seed natively (docs/adr/0008), so no word or byte of it
   reaches JavaScript.
@@ -115,6 +117,7 @@ never a private one (docs/adr/0007).
 | SHA-256, SHA-512, HMAC, PBKDF2 | Zig 0.16 standard library | MIT. Where the processor has instructions Zig does not use, the next row's. |
 | SHA-256 and SHA-512 on the processor's instructions | This repository (`packages/zig-engine-crypto/src/hash/sha2.zig`, `sha2/armv8.zig`, `sha2/x86.zig`) | Used where Zig's library would hash in software though the processor has the instructions: SHA-256 on Android (ARMv8 SHA-2, x86 SHA extensions), SHA-512 everywhere it has ARMv8.2's. The system is asked once (`getauxval`, `sysctlbyname`, `cpuid`); otherwise Zig's software. SHA-256's sequences are Zig's own; SHA-512's follows the instructions' definitions, as the Linux kernel's does. Branches on lengths only. Checked against the FIPS 180-4 examples and Zig's implementation at every length, split and random input, on a Mac, the Android emulator and QEMU's x86-64. Ed25519 keeps Zig's own SHA-512. |
 | Keccak-256 | Zig 0.16 standard library | Ethereum's Keccak (padding 0x01), not SHA3-256. MIT. |
+| Argon2id, HKDF-SHA256, XChaCha20-Poly1305 | Zig 0.16 standard library (HKDF over the engine's SHA-256) | Backups only, for native callers (docs/adr/0009, docs/adr/0010). Argon2id's 64 MiB come from the page allocator through one that zeroes every block before it goes back. MIT. |
 | RIPEMD-160 | This repository (`packages/zig-engine-crypto/src/hash/ripemd160.zig`) | Zig's library lacks it. A transcription of the reference, for public data only (HASH160 of public keys). Checked against the reference vectors and `@noble/hashes`. |
 | BIP-39 | This repository, English list from bitcoin/bips | Word lookups in both directions scan the whole list with masks, so timing does not depend on the words. The list is pinned by its SHA-256. |
 | BIP-32, SLIP-0010 | This repository, over the primitives above | BIP-32's invalid-child case fails (`DERIVATION_FAILED`) rather than silently moving to the next index. |
@@ -134,7 +137,8 @@ JavaScript dependencies of the published packages: none at runtime besides the `
 ## Verification
 
 - Published vectors: FIPS 180-4, RFC 4231, RFC 8032, the RIPEMD-160 reference, BIP-39 (Trezor), BIP-32 vectors 1 to 4,
-  SLIP-0010, BIP-84, BIP-86, BIP-173, BIP-340, BIP-341's wallet vectors and BIP-350.
+  SLIP-0010, BIP-84, BIP-86, BIP-173, BIP-340, BIP-341's wallet vectors, BIP-350, RFC 9106 (Argon2id), RFC 5869
+  (HKDF) and draft-irtf-cfrg-xchacha.
 - Google's Wycheproof suites for secp256k1 ECDSA and Ed25519 (462 cases).
 - Parity on random inputs with `@noble/hashes`, `@noble/curves`, `@scure/bip32`, `@scure/bip39`, `@scure/btc-signer`,
   viem and `@solana/kit`, run against the engine itself (compiled to WebAssembly).

@@ -34,6 +34,13 @@ inline bool backupSupported() {
   return supported() && (nc_capabilities() & NC_CAP_BACKUP_ARGON2ID) != 0;
 }
 
+/// Whether the linked engine seals backups under a 32-byte key, such as a passkey's PRF output, and reads which kind a
+/// backup is (`backup-hkdf-sha256`, docs/adr/0010): `backupSealWithKey`, `backupOpenWithKey` and
+/// `backupKeyDerivation` below. Checked as `supported()` above.
+inline bool backupWithKeySupported() {
+  return supported() && (nc_capabilities() & NC_CAP_BACKUP_HKDF_SHA256) != 0;
+}
+
 /// `length` bytes from the operating system's CSPRNG, through the engine, which fails closed: fresh entropy is
 /// 16 bytes for 12 words, 32 for 24.
 inline void randomBytes(uint8_t* out, size_t length) {
@@ -77,12 +84,44 @@ inline size_t backupSeal(const uint8_t* entropy, size_t length, const char* pass
 }
 
 /// The entropy a backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes); its length. Throws
-/// NC_ERR_VERIFICATION_FAILED for a wrong password and for a changed backup alike. `out` is the caller's to zero.
+/// NC_ERR_VERIFICATION_FAILED for a wrong password and for a changed backup alike, and NC_ERR_INVALID_ARGUMENT for a
+/// backup sealed under a key (`backupKeyDerivation` tells them apart). `out` is the caller's to zero.
 inline size_t backupOpen(const uint8_t* backup, size_t length, const char* password, size_t passwordLength, uint8_t* out,
                          size_t capacity) {
   size_t written = 0;
   bridge::check(nc_backup_open(backup, length, password, passwordLength, out, capacity, &written));
   return written;
+}
+
+/// Entropy sealed under a 32-byte key (NC_BACKUP_KEY_LENGTH) into `out` (at least NC_BACKUP_MAX_LENGTH bytes): the key a
+/// passkey's PRF extension returns for a salt the vault keeps, so the user has nothing to remember. HKDF-SHA256 and
+/// XChaCha20-Poly1305, microseconds; the key comes from the platform's passkey API natively and never reaches
+/// JavaScript. Throws NC_ERR_INVALID_ARGUMENT for a key of 32 zero bytes. The entropy and the key stay the caller's to
+/// zero.
+inline size_t backupSealWithKey(const uint8_t* entropy, size_t length, const uint8_t* key, size_t keyLength, uint8_t* out,
+                                size_t capacity) {
+  size_t written = 0;
+  bridge::check(nc_backup_seal_with_key(entropy, length, key, keyLength, out, capacity, &written));
+  return written;
+}
+
+/// The entropy a key-sealed backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes); its length. Throws
+/// NC_ERR_VERIFICATION_FAILED for a wrong key and for a changed backup alike, and NC_ERR_INVALID_ARGUMENT for a backup
+/// sealed under a password. `out` is the caller's to zero.
+inline size_t backupOpenWithKey(const uint8_t* backup, size_t length, const uint8_t* key, size_t keyLength, uint8_t* out,
+                                size_t capacity) {
+  size_t written = 0;
+  bridge::check(nc_backup_open_with_key(backup, length, key, keyLength, out, capacity, &written));
+  return written;
+}
+
+/// Which key a backup was sealed under, without opening it: NC_BACKUP_KDF_ARGON2ID (ask for the password) or
+/// NC_BACKUP_KDF_KEY (ask the passkey). Throws NC_ERR_INVALID_ARGUMENT for a header this engine does not read and
+/// NC_ERR_INVALID_LENGTH for a length no backup has; says nothing of whether it opens.
+inline uint32_t backupKeyDerivation(const uint8_t* backup, size_t length) {
+  uint32_t kdf = 0;
+  bridge::check(nc_backup_kdf(backup, length, &kdf));
+  return kdf;
 }
 
 } // namespace margelo::nitro::nitrocrypto::interop

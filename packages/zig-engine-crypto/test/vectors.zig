@@ -7,6 +7,8 @@
 //!   rfc8032.json  RFC 8032 section 7.1, Ed25519
 //!   bip340.csv    BIP-340's test-vectors.csv, Schnorr signatures (verbatim)
 //!   bip341.json   BIP-341's wallet-test-vectors.json, Taproot output keys and key path signatures (verbatim)
+//!
+//! And two parity checks against an independent implementation: backup.json and backup_key.json (README there).
 
 const std = @import("std");
 const engine = @import("engine");
@@ -564,6 +566,33 @@ test "backups: the engine seals and opens what an independent implementation doe
 
         var opened: [engine.backup.max_entropy_length]u8 = undefined;
         const length = try engine.backup.open(expected, vector.password, &opened);
+        try testing.expectEqualSlices(u8, entropy, opened[0..length]);
+    }
+}
+
+const BackupKey = struct {
+    vectors: []const struct { backup: []const u8, entropy: []const u8, key: []const u8, nonce: []const u8, salt: []const u8 },
+};
+
+test "key-sealed backups: the engine seals and opens what an independent implementation does, byte for byte" {
+    const parsed = try load(BackupKey, "backup_key.json");
+    defer parsed.deinit();
+    try testing.expectEqual(@as(usize, 3), parsed.value.vectors.len);
+
+    for (parsed.value.vectors) |vector| {
+        const entropy = try hexAlloc(vector.entropy);
+        defer testing.allocator.free(entropy);
+        const expected = try hexAlloc(vector.backup);
+        defer testing.allocator.free(expected);
+        const key = try bytes(32, vector.key);
+
+        var sealed: [engine.backup.max_length]u8 = undefined;
+        const written = try engine.backup.sealWithKeyWith(entropy, &key, &try bytes(16, vector.salt), &try bytes(24, vector.nonce), &sealed);
+        try testing.expectEqualSlices(u8, expected, sealed[0..written]);
+        try testing.expectEqual(engine.backup.kdf_key, try engine.backup.keyDerivation(expected));
+
+        var opened: [engine.backup.max_entropy_length]u8 = undefined;
+        const length = try engine.backup.openWithKey(expected, &key, &opened);
         try testing.expectEqualSlices(u8, entropy, opened[0..length]);
     }
 }

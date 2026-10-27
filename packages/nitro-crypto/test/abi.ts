@@ -2,8 +2,8 @@ import {ENGINE_WASM_BASE64} from '../src/host/wasm-binary.generated'
 
 /**
  * The engine's C ABI as the WebAssembly build exports it, in an instance of its own: for what the facade does not
- * reach, such as the test hook the native libraries lack (Schnorr signing with the auxiliary randomness given, for the
- * published vectors).
+ * reach. That is the functions only native callers have (backups, ADR 0009 and 0010) and the test hook the native
+ * libraries lack (Schnorr signing with the auxiliary randomness given, for the published vectors).
  */
 
 type Pointer = number
@@ -12,7 +12,16 @@ type Pointer = number
 type AbiFunction = (...args: (number | bigint)[]) => number
 
 /** The functions these tests call; every other `nc_*` is exported too. */
-const FUNCTIONS = ['nc_handle_count', 'nc_handle_destroy', 'nc_key_import', 'nc_wasm_test_sign_schnorr'] as const
+const FUNCTIONS = [
+  'nc_backup_kdf',
+  'nc_backup_open',
+  'nc_backup_open_with_key',
+  'nc_backup_seal_with_key',
+  'nc_handle_count',
+  'nc_handle_destroy',
+  'nc_key_import',
+  'nc_wasm_test_sign_schnorr',
+] as const
 
 type Exports = {
   readonly memory: WebAssembly.Memory

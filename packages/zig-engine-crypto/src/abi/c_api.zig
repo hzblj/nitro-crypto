@@ -409,6 +409,57 @@ fn backupOpen(sealed: ?[*]const u8, sealed_len: usize, password: ?[*]const u8, p
     try store(usize, written, length);
 }
 
+export fn nc_backup_seal_with_key(
+    entropy_bytes: ?[*]const u8,
+    entropy_len: usize,
+    key: ?[*]const u8,
+    key_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(backupSealWithKey(entropy_bytes, entropy_len, key, key_len, out, out_len, written));
+}
+
+fn backupSealWithKey(entropy_bytes: ?[*]const u8, entropy_len: usize, key: ?[*]const u8, key_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const length = try backup.sealWithKey(try input(entropy_bytes, entropy_len), try input(key, key_len), try output(out, out_len));
+    try store(usize, written, length);
+}
+
+export fn nc_backup_open_with_key(
+    sealed: ?[*]const u8,
+    sealed_len: usize,
+    key: ?[*]const u8,
+    key_len: usize,
+    out: ?[*]u8,
+    out_len: usize,
+    written: ?*usize,
+) i32 {
+    return code(backupOpenWithKey(sealed, sealed_len, key, key_len, out, out_len, written));
+}
+
+fn backupOpenWithKey(sealed: ?[*]const u8, sealed_len: usize, key: ?[*]const u8, key_len: usize, out: ?[*]u8, out_len: usize, written: ?*usize) Error!void {
+    if (written == null) return error.InvalidArgument;
+    const buffer = try output(out, out_len);
+    if (buffer.len < backup.max_entropy_length) return error.BufferTooSmall;
+
+    var entropy_bytes: [backup.max_entropy_length]u8 = undefined;
+    defer secure.zero(&entropy_bytes);
+    const length = try backup.openWithKey(try input(sealed, sealed_len), try input(key, key_len), &entropy_bytes);
+    @memcpy(buffer[0..length], entropy_bytes[0..length]);
+    try store(usize, written, length);
+}
+
+export fn nc_backup_kdf(sealed: ?[*]const u8, sealed_len: usize, kdf: ?*u32) i32 {
+    return code(backupKdf(sealed, sealed_len, kdf));
+}
+
+fn backupKdf(sealed: ?[*]const u8, sealed_len: usize, kdf: ?*u32) Error!void {
+    if (kdf == null) return error.InvalidArgument;
+    try store(u32, kdf, try backup.keyDerivation(try input(sealed, sealed_len)));
+}
+
 export fn nc_seed_fingerprint(seed: Handle, out: ?*u32) i32 {
     return code(seedFingerprint(seed, out));
 }
@@ -589,6 +640,7 @@ fn fuzzBoundary(_: void, smith: *testing.Smith) anyerror!void {
     const out_ptr: ?[*]u8 = if (smith.value(bool)) &out else null;
     const handle: Handle = smith.value(u64);
     const selector = smith.value(u32);
+    var selector_out: u32 = 0;
 
     // Every entry point taking buffers, with random ids, lengths, null pointers and handles: each returns a
     // status the header defines, and none crashes.
@@ -608,6 +660,9 @@ fn fuzzBoundary(_: void, smith: *testing.Smith) anyerror!void {
         nc_key_sign_taproot(handle, data_ptr, @min(data_len, 32), data_ptr, data_len % 33, out_ptr, out_len, &written),
         nc_secp256k1_schnorr_verify(data_ptr, @min(data_len, 32), data_ptr, data_len, data_ptr, @min(data_len, 64)),
         nc_secp256k1_taproot_tweak(data_ptr, data_len % 66, data_ptr, data_len % 33, out_ptr, out_len, &written),
+        nc_backup_open_with_key(data_ptr, data_len, data_ptr, @min(data_len, 32), out_ptr, out_len, &written),
+        nc_backup_seal_with_key(data_ptr, data_len % 33, data_ptr, @min(data_len, 32), out_ptr, out_len, &written),
+        nc_backup_kdf(data_ptr, data_len, if (smith.value(bool)) &selector_out else null),
         nc_seed_extended_public(handle, data_ptr, data_len % 40, out_ptr, out_len, &written),
         // An extended key of the right length with a random path, and of a random length with a valid one.
         nc_bip32_public_derive(data_ptr, @min(data_len, 74), data_ptr, data_len % 12, out_ptr, out_len, &written),

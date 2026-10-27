@@ -14,13 +14,15 @@ computed here. `test/vectors.zig` runs every one of them against the engine.
 | `wycheproof_ecdsa_secp256k1_sha256_p1363_test.json` | [C2SP/wycheproof](https://github.com/C2SP/wycheproof/tree/main/testvectors_v1) | Unchanged. |
 | `wycheproof_ed25519_test.json` | [C2SP/wycheproof](https://github.com/C2SP/wycheproof/tree/main/testvectors_v1) | Unchanged. |
 
-One file is not a standard's but a parity check: `backup.json`, ADR 0009's backup format sealed by an independent
+Two files are not a standard's but parity checks: `backup.json`, ADR 0009's backup format sealed by an independent
 implementation (@noble/hashes' Argon2id and @noble/ciphers' XChaCha20-Poly1305), written by `backup.mjs`
 (`node packages/zig-engine-crypto/test/vectors/backup.mjs > packages/zig-engine-crypto/test/vectors/backup.json` at
-the root). The engine must seal the same bytes from the same inputs and open them.
+the root), and `backup_key.json`, ADR 0010's key-sealed backups (@noble/hashes' HKDF-SHA256 and @noble/ciphers'
+XChaCha20-Poly1305), written by `backup_key.mjs` the same way. The engine must seal the same bytes from the same inputs
+and open them; the facade's tests open `backup_key.json` through the WebAssembly build too.
 
-Vectors that live in code rather than here: RFC 9106's Argon2id and draft-irtf-cfrg-xchacha's XChaCha20-Poly1305
-(`src/backup/backup.zig`), FIPS 180-4 and Keccak digests and RFC 4231 HMACs (`src/hash.zig`), the
+Vectors that live in code rather than here: RFC 9106's Argon2id, RFC 5869's HKDF-SHA256 and draft-irtf-cfrg-xchacha's
+XChaCha20-Poly1305 (`src/backup/backup.zig`), FIPS 180-4 and Keccak digests and RFC 4231 HMACs (`src/hash.zig`), the
 RIPEMD-160 reference vectors (`src/ripemd160.zig`), and SEC 2's generator (`src/secp256k1.zig`).
 
 The facade's tests read `bip340.csv` and `bip341.json` from here too, and sign them through the WebAssembly build's

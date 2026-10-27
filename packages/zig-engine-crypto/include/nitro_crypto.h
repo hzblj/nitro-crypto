@@ -95,8 +95,9 @@ const char *nc_build_info(void);
 #define NC_CAP_BIP32_PUBLIC_DERIVATION (1ull << 15)
 #define NC_CAP_BIP39_ENTROPY (1ull << 16)
 #define NC_CAP_BACKUP_ARGON2ID (1ull << 17)
-#define NC_CAP_SECP256K1_SCHNORR (1ull << 18) /* BIP-340: Schnorr verification, x-only keys, nc_key_sign_schnorr */
-#define NC_CAP_TAPROOT_TWEAK (1ull << 19)     /* BIP-341: nc_secp256k1_taproot_tweak, nc_key_sign_taproot */
+#define NC_CAP_SECP256K1_SCHNORR (1ull << 18)  /* BIP-340: Schnorr verification, x-only keys, nc_key_sign_schnorr */
+#define NC_CAP_TAPROOT_TWEAK (1ull << 19)      /* BIP-341: nc_secp256k1_taproot_tweak, nc_key_sign_taproot */
+#define NC_CAP_BACKUP_HKDF_SHA256 (1ull << 20) /* nc_backup_seal_with_key, nc_backup_open_with_key, nc_backup_kdf */
 
 /** Every capability this build provides, as NC_CAP_* bits. */
 uint64_t nc_capabilities(void);
@@ -269,9 +270,20 @@ nc_status nc_mnemonic_to_entropy(const char *mnemonic, size_t mnemonic_len, uint
 
 /* ------------------------------------------------------------------------------------------------- backup */
 
-/** A sealed backup's header: magic, version, key derivation, memory, passes, lanes, salt and nonce (ADR 0009). */
+/** The key derivations a backup names in its sixth byte, after the magic "ncbk" and the version, 1. */
+#define NC_BACKUP_KDF_ARGON2ID 1 /* a password, through Argon2id (ADR 0009): nc_backup_seal and nc_backup_open */
+#define NC_BACKUP_KDF_KEY 2      /* a 32-byte key, through HKDF-SHA256 (ADR 0010): the _with_key pair */
+
+/** A password-sealed backup's header: magic, version, key derivation, memory, passes, lanes, salt, nonce (ADR 0009). */
 #define NC_BACKUP_HEADER_LENGTH 55
-/** The longest sealed backup: the header, 32 bytes of entropy and the 16-byte tag. A buffer this size fits any. */
+/** A key-sealed backup's header: magic, version, key derivation, salt and nonce (ADR 0010). */
+#define NC_BACKUP_KEY_HEADER_LENGTH 46
+/** The key nc_backup_seal_with_key seals under: 32 bytes, such as a passkey's PRF output. */
+#define NC_BACKUP_KEY_LENGTH 32
+/**
+ * The longest sealed backup of either kind: a password-sealed one's header, 32 bytes of entropy and the 16-byte tag. A
+ * buffer this size fits any.
+ */
 #define NC_BACKUP_MAX_LENGTH (NC_BACKUP_HEADER_LENGTH + 32 + 16)
 
 /**
@@ -287,11 +299,40 @@ nc_status nc_backup_seal(const uint8_t *entropy, size_t entropy_len, const char 
 /**
  * The entropy a backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes), its length through `written`.
  * NC_ERR_VERIFICATION_FAILED for a wrong password and for any change to the backup alike; NC_ERR_INVALID_ARGUMENT for
- * a header this engine does not read (or parameters out of the bounds it accepts: 19 to 256 MiB, 1 to 10 passes).
+ * a header this engine does not read (or parameters out of the bounds it accepts: 19 to 256 MiB, 1 to 10 passes), and
+ * for a backup sealed under a key rather than a password (nc_backup_kdf tells them apart).
  * The caller should zero `out` when done.
  */
 nc_status nc_backup_open(const uint8_t *backup, size_t backup_len, const char *password, size_t password_len,
                          uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * Seals BIP-39 `entropy` (16 to 32 bytes) under a 32-byte `key` rather than a password: the output of a passkey's PRF
+ * extension, or any key as random. HKDF-SHA256 extracts a sealing key from it with a fresh 16-byte salt (no stretching:
+ * the key is uniformly random already), then XChaCha20-Poly1305 with a fresh nonce, the header as associated data.
+ * Writes the backup, NC_BACKUP_KEY_HEADER_LENGTH + entropy_len + 16 bytes, through `written`. A key of 32 zero bytes,
+ * what a buffer nobody filled holds, is NC_ERR_INVALID_ARGUMENT; any other length NC_ERR_INVALID_LENGTH. For native
+ * callers that hold the entropy and the key, such as a vault (ADR 0010); quick enough for any thread but JavaScript's,
+ * where the key must never be.
+ */
+nc_status nc_backup_seal_with_key(const uint8_t *entropy, size_t entropy_len, const uint8_t *key, size_t key_len,
+                                  uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * The entropy a key-sealed backup holds, into `out` (at least NC_ENTROPY_MAX_LENGTH bytes), its length through
+ * `written`. NC_ERR_VERIFICATION_FAILED for a wrong key and for any change to the backup alike; NC_ERR_INVALID_ARGUMENT
+ * for a header this engine does not read, and for a backup sealed under a password. The caller should zero `out`.
+ */
+nc_status nc_backup_open_with_key(const uint8_t *backup, size_t backup_len, const uint8_t *key, size_t key_len,
+                                  uint8_t *out, size_t out_len, size_t *written);
+
+/**
+ * The key derivation a backup names (NC_BACKUP_KDF_ARGON2ID or NC_BACKUP_KDF_KEY), through `kdf`, without opening it:
+ * whether to ask for the password or the passkey. NC_ERR_INVALID_ARGUMENT for a header this engine does not read (a
+ * later version, another key derivation, not a backup); NC_ERR_INVALID_LENGTH for a length no backup of that kind has.
+ * Says nothing of whether the backup opens.
+ */
+nc_status nc_backup_kdf(const uint8_t *backup, size_t backup_len, uint32_t *kdf);
 
 /** The BIP-32 fingerprint of the seed's secp256k1 master key (HASH160 of its public key, first 4 bytes, big-endian). */
 nc_status nc_seed_fingerprint(nc_handle seed, uint32_t *out);

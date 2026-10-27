@@ -71,6 +71,7 @@ static void test_version_and_capabilities(void) {
     CHECK((caps & NC_CAP_BACKUP_ARGON2ID) && strcmp(nc_capability_name(17), "backup-argon2id") == 0);
     CHECK((caps & NC_CAP_SECP256K1_SCHNORR) && strcmp(nc_capability_name(18), "secp256k1-schnorr") == 0);
     CHECK((caps & NC_CAP_TAPROOT_TWEAK) && strcmp(nc_capability_name(19), "taproot-tweak") == 0);
+    CHECK((caps & NC_CAP_BACKUP_HKDF_SHA256) && strcmp(nc_capability_name(20), "backup-hkdf-sha256") == 0);
 }
 
 static void test_status_names(void) {
@@ -308,6 +309,59 @@ static void test_backup(void) {
     CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_seal(entropy, 32, password, 0, sealed, NC_BACKUP_MAX_LENGTH - 1, &written));
     CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_seal(entropy, 15, password, 0, sealed, sizeof sealed, &written));
     memset(opened, 0, sizeof opened);
+
+    /* What a backup sealed under a password says, and what opening it under a key does. */
+    uint32_t kdf = 0;
+    uint8_t key[NC_BACKUP_KEY_LENGTH];
+    memset(key, 0x42, sizeof key);
+    CHECK_STATUS(NC_OK, nc_backup_kdf(other, other_written, &kdf));
+    CHECK(kdf == NC_BACKUP_KDF_ARGON2ID);
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_open_with_key(other, other_written, key, 32, opened, sizeof opened, &length));
+}
+
+/* A backup sealed under a 32-byte key, as a passkey's PRF gives one: sealed, opened, and refused every other way. */
+static void test_backup_with_key(void) {
+    static const uint8_t entropy[16] = {9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 1, 2, 3, 4, 5, 6};
+    uint8_t key[NC_BACKUP_KEY_LENGTH], wrong[NC_BACKUP_KEY_LENGTH], zero[NC_BACKUP_KEY_LENGTH] = {0};
+    uint8_t sealed[NC_BACKUP_MAX_LENGTH], other[NC_BACKUP_MAX_LENGTH], opened[NC_ENTROPY_MAX_LENGTH];
+    size_t written = 0, other_written = 0, length = 0;
+    uint32_t kdf = 0;
+    CHECK_STATUS(NC_OK, nc_random_bytes(key, sizeof key));
+    memcpy(wrong, key, sizeof key);
+    wrong[0] ^= 1;
+
+    CHECK_STATUS(NC_OK, nc_backup_seal_with_key(entropy, 16, key, 32, sealed, sizeof sealed, &written));
+    CHECK(written == NC_BACKUP_KEY_HEADER_LENGTH + 16 + 16);
+    CHECK(memcmp(sealed, "ncbk\x01\x02", 6) == 0);
+    CHECK_STATUS(NC_OK, nc_backup_kdf(sealed, written, &kdf));
+    CHECK(kdf == NC_BACKUP_KDF_KEY);
+    CHECK_STATUS(NC_OK, nc_backup_open_with_key(sealed, written, key, 32, opened, sizeof opened, &length));
+    CHECK(length == 16 && memcmp(opened, entropy, 16) == 0);
+    CHECK_STATUS(NC_OK, nc_backup_seal_with_key(entropy, 16, key, 32, other, sizeof other, &other_written));
+    CHECK(other_written == written && memcmp(other, sealed, written) != 0);
+
+    /* A wrong key and a changed backup fail alike; a password cannot open it, nor it a password's backup. */
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_backup_open_with_key(sealed, written, wrong, 32, opened, sizeof opened, &length));
+    other[NC_BACKUP_KEY_HEADER_LENGTH - 1] ^= 1;
+    CHECK_STATUS(NC_ERR_VERIFICATION_FAILED, nc_backup_open_with_key(other, written, key, 32, opened, sizeof opened, &length));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_open(sealed, written, "pw", 2, opened, sizeof opened, &length));
+
+    /* Lengths, buffers, a key of zeros, a header this engine does not read. */
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_seal_with_key(entropy, 16, key, 31, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_seal_with_key(entropy, 15, key, 32, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_seal_with_key(entropy, 16, zero, 32, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_seal_with_key(entropy, 16, NULL, 32, sealed, sizeof sealed, &length));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_seal_with_key(entropy, 16, key, 32, sealed, written - 1, &length));
+    CHECK_STATUS(NC_ERR_BUFFER_TOO_SMALL, nc_backup_open_with_key(sealed, written, key, 32, opened, 31, &length));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_open_with_key(sealed, written - 1, key, 32, opened, sizeof opened, &length));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_kdf(sealed, written - 1, &kdf));
+    CHECK_STATUS(NC_ERR_INVALID_LENGTH, nc_backup_kdf(sealed, 5, &kdf));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_kdf(sealed, written, NULL));
+    sealed[4] = 2;
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_kdf(sealed, written, &kdf));
+    CHECK_STATUS(NC_ERR_INVALID_ARGUMENT, nc_backup_open_with_key(sealed, written, key, 32, opened, sizeof opened, &length));
+    memset(opened, 0, sizeof opened);
+    memset(key, 0, sizeof key);
 }
 
 /* The BIP-32 fingerprint of "abandon ... about" with no passphrase, as BIP-84's and BIP-86's examples show it. */
@@ -610,6 +664,7 @@ int main(void) {
     test_mnemonic_generate();
     test_entropy();
     test_backup();
+    test_backup_with_key();
     test_seed_and_ethereum_key();
     test_taproot_key();
     test_extended_public_key();
