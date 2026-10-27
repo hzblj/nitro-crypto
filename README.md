@@ -34,7 +34,7 @@ and what is not in this version.
 | Path | What lives there |
 | --- | --- |
 | `packages/nitro-crypto/` | `@hzblj/nitro-crypto`: the TypeScript facade and adapter registry, the Nitro specs and C++ bridge, the prebuilt engine |
-| `packages/crypto-ethereum/`, `crypto-bitcoin/`, `crypto-solana/` | The chain adapters, each published on its own |
+| `packages/crypto-ethereum/`, `crypto-bitcoin/`, `crypto-solana/` | The chain adapters, each published on its own; Bitcoin's with a watch-only account sync over Esplora (`@hzblj/crypto-bitcoin/sync`) |
 | `packages/zig-engine-crypto/` | The engine in Zig: its C ABI, tests, published vectors and benchmark (private; it ships inside `@hzblj/nitro-crypto`) |
 | `apps/example/` | The example app: a testnet wallet (Sepolia, Bitcoin testnet4, Solana devnet) that sends and receives on the engine, signs offline over QR codes for a watch-only wallet, and a Debug tab with the self-test, accounts on four chains, signing, an air-gap loopback, primitives, benchmarks, security |
 | `scripts/` | The engine's reproducible builds and their verification, the pack check, version sync |

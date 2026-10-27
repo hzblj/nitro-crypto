@@ -1,7 +1,7 @@
 {
   "name": "@hzblj/crypto-bitcoin",
   "version": "0.2.0",
-  "description": "Bitcoin adapter for @hzblj/nitro-crypto: native SegWit (P2WPKH) accounts at BIP-84 paths, bech32 addresses for mainnet, testnet, signet and regtest, address validation, and P2WPKH payments with coin selection and BIP-143 signing.",
+  "description": "Bitcoin adapter for @hzblj/nitro-crypto: native SegWit (P2WPKH) accounts at BIP-84 paths, bech32 addresses for mainnet, testnet, signet and regtest, address validation, P2WPKH payments with coin selection and BIP-143 signing, PSBTs, and (in /sync) a watch-only account kept in sync over Esplora: xpub discovery, balances, history, fee bumps, broadcast.",
   "author": "Jan Blazej",
   "license": "MIT",
   "repository": {
@@ -16,16 +16,23 @@
   "keywords": [
     "bech32",
     "bip143",
+    "bip44",
     "bip84",
     "bitcoin",
+    "esplora",
     "expo",
+    "gap-limit",
+    "mempool",
     "nitro-crypto",
     "p2wpkh",
+    "psbt",
     "react-native",
     "secp256k1",
     "segwit",
     "transaction",
-    "wallet"
+    "wallet",
+    "watch-only",
+    "xpub"
   ],
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
@@ -35,6 +42,11 @@
       "source": "./src/index.ts",
       "types": "./build/index.d.ts",
       "default": "./build/index.js"
+    },
+    "./sync": {
+      "source": "./src/sync/index.ts",
+      "types": "./build/sync/index.d.ts",
+      "default": "./build/sync/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -71,6 +83,10 @@
       ".": {
         "types": "./build/index.d.ts",
         "default": "./build/index.js"
+      },
+      "./sync": {
+        "types": "./build/sync/index.d.ts",
+        "default": "./build/sync/index.js"
       },
       "./package.json": "./package.json"
     },

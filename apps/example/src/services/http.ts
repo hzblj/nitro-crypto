@@ -52,28 +52,6 @@ export const getJson = async <T>(url: string): Promise<T> => {
   return (await response.json()) as T
 }
 
-/** GETs a text answer, as Esplora returns a raw transaction's hex. */
-export const getText = async (url: string): Promise<string> => {
-  const response = await withTimeout(url)
-
-  if (!response.ok) {
-    throw await failure(response)
-  }
-
-  return (await response.text()).trim()
-}
-
-/** POSTs a body as text, as Esplora takes a raw transaction, and returns the text answer. */
-export const postText = async (url: string, body: string): Promise<string> => {
-  const response = await withTimeout(url, {body, headers: {'content-type': 'text/plain'}, method: 'POST'})
-
-  if (!response.ok) {
-    throw await failure(response)
-  }
-
-  return (await response.text()).trim()
-}
-
 type RpcCall = {readonly method: string; readonly params: readonly unknown[]}
 type RpcReply = {readonly id: number; readonly result?: unknown; readonly error?: {message: string; code: number}}
 

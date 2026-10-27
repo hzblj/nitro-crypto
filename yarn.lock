@@ -7374,6 +7374,7 @@ __metadata:
     react-native: "npm:0.86.3"
     react-native-gesture-handler: "npm:~2.32.0"
     react-native-mmkv: "npm:4.3.2"
+    react-native-nitro-fetch: "npm:1.9.0"
     react-native-nitro-modules: "npm:0.37.1"
     react-native-reanimated: "npm:4.5.1"
     react-native-safe-area-context: "npm:~5.7.0"
@@ -7966,6 +7967,23 @@ __metadata:
     react-native: "*"
     react-native-nitro-modules: "*"
   checksum: 10c0/47c86114ee0ddbc8245dda174f419df9390a8ce0a6bcee0ded5eabd0b257e2b49257ddaf3b39eb5ab95ad7eed0ffa6d6b1e7c6bf8a3e56e6508408e49b98ed07
+  languageName: node
+  linkType: hard
+
+"react-native-nitro-fetch@npm:1.9.0":
+  version: 1.9.0
+  resolution: "react-native-nitro-fetch@npm:1.9.0"
+  dependencies:
+    web-streams-polyfill: "npm:^4.2.0"
+  peerDependencies:
+    react: "*"
+    react-native: "*"
+    react-native-nitro-modules: ">=0.37.1"
+    react-native-worklets: ">=0.8.0"
+  peerDependenciesMeta:
+    react-native-worklets:
+      optional: true
+  checksum: 10c0/73bf6c4293a3cf1dcb02b0aa1c8d00b0d53810eccb12942f7bb34318889a2f10de343e8c895a46352e9b7d61228a28757d27aed7cac4b7cc7a70d12b06ce32b4
   languageName: node
   linkType: hard
 
@@ -9320,6 +9338,13 @@ __metadata:
   dependencies:
     defaults: "npm:^1.0.3"
   checksum: 10c0/5b61ca583a95e2dd85d7078400190efd452e05751a64accb8c06ce4db65d7e0b0cde9917d705e826a2e05cc2548f61efde115ffa374c3e436d04be45c889e5b4
+  languageName: node
+  linkType: hard
+
+"web-streams-polyfill@npm:^4.2.0":
+  version: 4.3.0
+  resolution: "web-streams-polyfill@npm:4.3.0"
+  checksum: 10c0/b00df8bc814e2a9dcb4b7e80972ff7b0a18415bc3ba58eb1fb94aacc912df936a8f2465ab1e8c548e37ea4e5c9ce1898b407f962e9782ee7ae2dca2396cccd6e
   languageName: node
   linkType: hard
 
