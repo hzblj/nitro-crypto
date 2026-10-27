@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import {describe, test} from 'node:test'
 
-import {esploraBackend} from '../../src/sync'
+import {createBitcoinSync, esploraBackend, isPublicEsplora, PUBLIC_PACING} from '../../src/sync'
 import {createLimiter, reasonOf} from '../../src/sync/http'
 import {createFakeEsplora, STRANGER} from './fake-esplora'
-import {rejectsSync, URL} from './helpers'
+import {chain, openWallet, rejectsSync, URL} from './helpers'
 
 const backendOver = (fetch: typeof globalThis.fetch, options: {timeoutMs?: number; retries?: number} = {}) =>
   esploraBackend({fetch, network: 'testnet', retryDelayMs: 1, url: URL, ...options})
@@ -184,5 +184,174 @@ describe('the Esplora backend', () => {
       'min relay fee not met, 110 < 141'
     )
     assert.equal(reasonOf('Transaction not found'), 'Transaction not found')
+  })
+})
+
+/** A `fetch` that answers every address summary after `latency` ms, recording when each request started. */
+const timed = (latency = 0) => {
+  const starts: number[] = []
+  let active = 0
+  let peak = 0
+  const STATS = {funded_txo_sum: 0, spent_txo_sum: 0, tx_count: 0}
+  const fetch = (async () => {
+    starts.push(Date.now())
+    active++
+    peak = Math.max(peak, active)
+    await new Promise(resolve => setTimeout(resolve, latency))
+    active--
+
+    return new Response(JSON.stringify({chain_stats: STATS, mempool_stats: STATS}))
+  }) as unknown as typeof globalThis.fetch
+
+  return {fetch, peak: () => peak, starts}
+}
+
+/** Whether request `i` started no earlier than its slot: `burst` at once, then one per `interval` ms. */
+const paced = (starts: readonly number[], burst: number, interval: number) =>
+  starts.every((start, index) => start - (starts[0] ?? 0) >= Math.max(0, index - burst + 1) * interval - 3)
+
+describe('pacing', () => {
+  test('request starts are spaced across every call of a backend: a burst, then the rate', async () => {
+    const server = timed()
+    const backend = esploraBackend({
+      burst: 3,
+      fetch: server.fetch,
+      network: 'testnet',
+      requestsPerSecond: 100,
+      url: URL,
+    })
+
+    await Promise.all(Array.from({length: 13}, () => backend.addressSummary(STRANGER)))
+
+    assert.equal(server.starts.length, 13)
+    assert.ok(paced(server.starts, 3, 10), `starts: ${server.starts.map(start => start - (server.starts[0] ?? 0))}`)
+    assert.ok((server.starts[12] ?? 0) - (server.starts[0] ?? 0) >= 97)
+  })
+
+  test('public servers get polite defaults, your own fast ones', async () => {
+    assert.equal(isPublicEsplora('https://mempool.space/testnet4/api'), true)
+    assert.equal(isPublicEsplora('https://blockstream.info/testnet/api'), true)
+    assert.equal(isPublicEsplora('https://API.mempool.space/api'), true)
+    assert.equal(isPublicEsplora('https://mempool.space.example.com/api'), false)
+    assert.equal(isPublicEsplora('https://esplora.example.com/api'), false)
+    assert.equal(isPublicEsplora('http://localhost:3002'), false)
+    assert.deepEqual(PUBLIC_PACING, {burst: 5, concurrency: 2, requestsPerSecond: 2, retryDelayMs: 1000})
+
+    // mempool.space, by default: five at once, then one every half second, never more than two in flight.
+    const publicServer = timed(20)
+    const polite = esploraBackend({fetch: publicServer.fetch, network: 'testnet'})
+    await Promise.all(Array.from({length: 7}, () => polite.addressSummary(STRANGER)))
+    assert.ok(paced(publicServer.starts, 5, 500))
+    assert.ok((publicServer.starts[6] ?? 0) - (publicServer.starts[0] ?? 0) >= 997)
+    assert.equal(publicServer.peak(), 2)
+
+    // Your own server: twenty at once, eight in flight.
+    const ownServer = timed(20)
+    const own = esploraBackend({fetch: ownServer.fetch, network: 'testnet', url: 'https://esplora.example.com/api'})
+    await Promise.all(Array.from({length: 7}, () => own.addressSummary(STRANGER)))
+    assert.ok((ownServer.starts[6] ?? 0) - (ownServer.starts[0] ?? 0) < 100)
+    assert.equal(ownServer.peak(), 7)
+  })
+
+  test('a long first sync stays under the pace, history reads included', async () => {
+    const esplora = createFakeEsplora()
+    const starts: number[] = []
+    const fetch = ((input: string | URL | Request, init?: RequestInit) => {
+      starts.push(Date.now())
+
+      return esplora.fetch(input, init)
+    }) as typeof globalThis.fetch
+    const wallet = await openWallet()
+    const backend = esploraBackend({burst: 4, fetch, network: 'testnet', requestsPerSecond: 400, url: URL})
+    const sync = createBitcoinSync({backend, chain, extendedKey: wallet.extendedPublicKey("m/84'/1'/0'")})
+    const account = (index: number) => sync.addressAt(0, index).address
+
+    for (let count = 0; count < 30; count++) {
+      esplora.fund([
+        {address: account(count % 6), value: 1_000 + count},
+        {address: account(20), value: 1_000},
+      ])
+      esplora.mine()
+    }
+
+    const view = await sync.sync()
+    assert.equal(view.transactions.length, 30)
+    assert.ok(starts.length >= 70, `${starts.length} requests`)
+    assert.ok(
+      starts.some(start => start - (starts[0] ?? 0) > 150),
+      'the history reads waited their turn'
+    )
+    assert.ok(paced(starts, 4, 2.5))
+    wallet.dispose()
+  })
+})
+
+describe('an unreachable server', () => {
+  test('is left alone after repeated connection failures: UNREACHABLE at once, nothing sent, until the pause passes', async () => {
+    let calls = 0
+    const refused = (() => {
+      calls++
+
+      return Promise.reject(new TypeError('fetch failed'))
+    }) as unknown as typeof globalThis.fetch
+    const backend = esploraBackend({
+      fetch: refused,
+      network: 'testnet',
+      retries: 5,
+      retryDelayMs: 1,
+      unreachableAfter: 3,
+      unreachablePauseMs: 60,
+      url: URL,
+    })
+
+    // Three refusals, retries and all, and the backend stops trying.
+    await rejectsSync(backend.addressSummary(STRANGER), 'UNREACHABLE', /3 times in a row/)
+    assert.equal(calls, 3)
+    await rejectsSync(backend.addressSummary(STRANGER), 'UNREACHABLE')
+    await rejectsSync(backend.tip(), 'UNREACHABLE')
+    assert.equal(calls, 3)
+
+    // After the pause, one request tries; it fails, and the pause doubles.
+    await new Promise(resolve => setTimeout(resolve, 70))
+    await rejectsSync(backend.addressSummary(STRANGER), 'UNREACHABLE')
+    assert.equal(calls, 4)
+    await new Promise(resolve => setTimeout(resolve, 70))
+    await rejectsSync(backend.addressSummary(STRANGER), 'UNREACHABLE')
+    assert.equal(calls, 4)
+  })
+
+  test('a connection that times out counts; any answer, even an error, proves the server reachable', async () => {
+    const slow = scripted(['hang'])
+    const hanging = esploraBackend({
+      fetch: slow.fetch,
+      network: 'testnet',
+      retries: 5,
+      retryDelayMs: 1,
+      timeoutMs: 10,
+      unreachableAfter: 2,
+      url: URL,
+    })
+    await rejectsSync(hanging.tip(), 'UNREACHABLE')
+    assert.equal(slow.calls.length, 2)
+
+    // Refused, refused, a 503, refused, refused: never three refusals in a row.
+    const mixed = scripted([
+      new TypeError('fetch failed'),
+      new TypeError('fetch failed'),
+      new Response('busy', {status: 503}),
+      new TypeError('fetch failed'),
+      new TypeError('fetch failed'),
+      new Response('0011'),
+    ])
+    const flaky = esploraBackend({
+      fetch: mixed.fetch,
+      network: 'testnet',
+      retries: 5,
+      retryDelayMs: 1,
+      unreachableAfter: 3,
+      url: URL,
+    })
+    assert.equal(await flaky.transactionHex('ab'.repeat(32)), '0011')
+    assert.equal(mixed.calls.length, 6)
   })
 })

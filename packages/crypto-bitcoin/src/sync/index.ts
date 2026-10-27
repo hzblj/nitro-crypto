@@ -23,7 +23,15 @@ export type {
   HistoryPage,
 } from './backend'
 export {isSyncError, SYNC_ERROR_CODES, SyncError, type SyncErrorCode} from './errors'
-export {ESPLORA_URLS, type EsploraOptions, esploraBackend} from './esplora'
+export {
+  ESPLORA_URLS,
+  type EsploraOptions,
+  esploraBackend,
+  isPublicEsplora,
+  OWN_PACING,
+  PUBLIC_ESPLORA_HOSTS,
+  PUBLIC_PACING,
+} from './esplora'
 export {type ExtendedKeyNetwork, formatExtendedKey, type ParsedExtendedKey, parseExtendedKey} from './extended-key'
 export type {HttpOptions, RequestOptions} from './http'
 export type {ScriptType} from './script-types'

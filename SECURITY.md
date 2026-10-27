@@ -119,6 +119,10 @@ What it does expose is privacy, and what it trusts is the backend:
 - **The backend sees the whole account.** Every address is asked about, so the server learns they are one wallet,
   which were used, when the app looks and from which IP address. Run your own Esplora (electrs, or mempool behind a
   `url`), or reach one through Tor; mempool.space and blockstream.info are conveniences.
+- **Public servers rate-limit, and block.** mempool.space and blockstream.info protect themselves from heavy use and
+  may refuse an IP address outright; the backend paces itself for them (two requests a second) and leaves an
+  unreachable server alone for a while, but a wallet with real users should run or rent its own Esplora and pass its
+  `url`. An app that cannot sync is not a safe one.
 - **The backend is trusted for chain data.** It can hide coins, invent them, or misstate a history and a balance.
   Its answers are parsed strictly, and the previous transactions a PSBT carries are checked against the coins they
   pay before a signer sees them, so the values a signer verifies are not the backend's word.

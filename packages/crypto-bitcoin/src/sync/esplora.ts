@@ -26,10 +26,38 @@ export type EsploraOptions = HttpOptions & {
   /** The network the server serves: checked against the account's, so a mainnet key never asks a testnet server. */
   readonly network: BitcoinNetworkName
   /**
-   * The API's base URL, `https://mempool.space/testnet4/api` or `https://blockstream.info/api` (any Esplora:
-   * electrs, mempool.space's, your own). mempool.space's for the network unless stated; required for regtest.
+   * The API's base URL: your own Esplora (electrs, or a mempool instance), `https://esplora.example.com/api`, or a
+   * public one such as `https://mempool.space/testnet4/api` or `https://blockstream.info/api`. mempool.space's for the
+   * network unless stated; required for regtest. A wallet with real users should run or rent its own: public servers
+   * rate-limit, and block an IP address that asks too much.
    */
   readonly url?: string
+}
+
+/** Hosts that serve Esplora to everyone, for free, and protect themselves: `PUBLIC_PACING` applies to them. */
+export const PUBLIC_ESPLORA_HOSTS: readonly string[] = Object.freeze(['mempool.space', 'blockstream.info'])
+
+/**
+ * The defaults for a public server (mempool.space, blockstream.info). Neither publishes its limits, and mempool.space
+ * blocked the IP address these were written on after a minute or so of syncing a large account two requests at a
+ * time, unpaced: its every address was refused afterwards, mainnet included. Two requests a second, in bursts of five,
+ * two at once, stays far under that. A one-address sync (about six requests) is immediate; a fresh account's first
+ * sync (about 45 requests at the default gap limit) takes some 20 seconds; a long history spreads out instead of
+ * piling up. Retries start at a second.
+ */
+export const PUBLIC_PACING = Object.freeze({burst: 5, concurrency: 2, requestsPerSecond: 2, retryDelayMs: 1000})
+
+/**
+ * The defaults for any other `url`: your own server. Fifty requests a second in bursts of twenty, eight at once:
+ * electrs answers that without effort, and the cap only keeps a runaway loop from becoming a flood.
+ */
+export const OWN_PACING = Object.freeze({burst: 20, concurrency: 8, requestsPerSecond: 50, retryDelayMs: 500})
+
+/** Whether a URL is one of `PUBLIC_ESPLORA_HOSTS`, or a subdomain of one. */
+export const isPublicEsplora = (url: string): boolean => {
+  const host = /^https?:\/\/([^/:?#]+)/i.exec(url)?.[1]?.toLowerCase() ?? ''
+
+  return PUBLIC_ESPLORA_HOSTS.some(known => host === known || host.endsWith(`.${known}`))
 }
 
 /** Esplora's page of confirmed transactions in an address's history. */
@@ -226,13 +254,17 @@ const feeLevels = (byTarget: Readonly<Record<number, number>>, recommended: unkn
 }
 
 /**
- * A backend over an Esplora HTTP API: mempool.space, blockstream.info, or your own electrs. Every request has a
- * timeout, follows the caller's `AbortSignal`, is retried with backoff on 429 and 5xx (honouring `Retry-After`), and
- * waits its turn behind `concurrency` others; every answer is read strictly.
+ * A backend over an Esplora HTTP API: your own electrs or mempool instance, or mempool.space and blockstream.info.
+ * Every request has a timeout, follows the caller's `AbortSignal`, is retried with backoff on 429 and 5xx (honouring
+ * `Retry-After`), waits its turn behind `concurrency` others and starts no faster than `requestsPerSecond`; a server
+ * that cannot be reached at all is left alone for a while (`UNREACHABLE`). Every answer is read strictly.
+ *
+ * Public servers get polite defaults (`PUBLIC_PACING`: two requests a second), any other `url` fast ones
+ * (`OWN_PACING`); every option overrides them.
  *
  * ```ts
- * const backend = esploraBackend({network: 'testnet'}) // mempool.space's testnet4
- * const own = esploraBackend({network: 'mainnet', url: 'https://electrs.example.com/api'})
+ * const own = esploraBackend({network: 'mainnet', url: 'https://esplora.example.com/api'}) // what a real wallet uses
+ * const trial = esploraBackend({network: 'testnet'}) // mempool.space's testnet4, paced
  * ```
  */
 export const esploraBackend = (options: EsploraOptions): BitcoinBackend => {
@@ -253,7 +285,14 @@ export const esploraBackend = (options: EsploraOptions): BitcoinBackend => {
     )
   }
 
-  const http = createHttpClient(url, options)
+  const pacing = isPublicEsplora(url) ? PUBLIC_PACING : OWN_PACING
+  const http = createHttpClient(url, {
+    ...options,
+    burst: options.burst ?? pacing.burst,
+    concurrency: options.concurrency ?? pacing.concurrency,
+    requestsPerSecond: options.requestsPerSecond ?? pacing.requestsPerSecond,
+    retryDelayMs: options.retryDelayMs ?? pacing.retryDelayMs,
+  })
 
   const tip = async (request?: RequestOptions) => {
     const height = Number(await http.text({path: '/blocks/tip/height'}, request))

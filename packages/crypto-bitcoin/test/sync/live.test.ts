@@ -5,18 +5,22 @@ import {createBitcoinSync, esploraBackend, parseExtendedKey} from '../../src/syn
 import {ACCOUNT_PATH, chain, crypto} from './helpers'
 
 /**
- * Against mempool.space's testnet4, for real: off unless `BITCOIN_SYNC_LIVE=1`, so the suite never depends on the
- * network or on a public server's limits. By default it follows a fresh account (a new phrase from the engine: a
- * handful of requests); `BITCOIN_SYNC_LIVE_KEY` (a tpub or vpub) follows that account instead. Not the published test
- * phrase's: its testnet4 account has hundreds of transactions, and mempool.space drops connections long before a
- * sync of it is done.
+ * Against a real Esplora: off unless `BITCOIN_SYNC_LIVE=1`, so the suite never depends on the network or on a public
+ * server's limits. mempool.space's testnet4 unless `BITCOIN_SYNC_LIVE_URL` names another (blockstream.info's
+ * `https://blockstream.info/testnet/api` serves testnet3, whose addresses look the same: a fresh account works on
+ * both). It follows a fresh account (a new phrase from the engine: a few dozen requests, paced as the backend's
+ * defaults pace that server), or the tpub or vpub in `BITCOIN_SYNC_LIVE_KEY`. Not the published test phrase's: its
+ * testnet4 account has hundreds of transactions, and syncing it unpaced got this machine's IP address blocked by
+ * mempool.space.
  *
- * BITCOIN_SYNC_LIVE=1 node --conditions=source --import tsx --test test/sync/live.test.ts
+ * BITCOIN_SYNC_LIVE=1 BITCOIN_SYNC_LIVE_URL=https://blockstream.info/testnet/api \
+ *   node --conditions=source --import tsx --test test/sync/live.test.ts
  */
 const live = process.env.BITCOIN_SYNC_LIVE === '1'
+const url = process.env.BITCOIN_SYNC_LIVE_URL || undefined
 const key = process.env.BITCOIN_SYNC_LIVE_KEY
 
-describe('mempool.space testnet4', {
+describe(`Esplora at ${url ?? 'mempool.space testnet4'}`, {
   skip: live ? false : 'set BITCOIN_SYNC_LIVE=1 to run against the network',
 }, async () => {
   const wallet = await crypto.createEphemeralWallet()
@@ -32,6 +36,7 @@ describe('mempool.space testnet4', {
         return globalThis.fetch(input, init)
       },
       network: 'testnet',
+      url,
     })
     const sync = createBitcoinSync({
       backend,

@@ -37,6 +37,11 @@ export const SYNC_ERROR_CODES = [
   'KEY_MISMATCH',
   /** The backend could not be reached. */
   'NETWORK_ERROR',
+  /**
+   * The backend could not be reached several times in a row (no network, or a server that blocked this IP address):
+   * requests fail at once, without going out, until a pause has passed.
+   */
+  'UNREACHABLE',
   /** The backend did not answer in time, after every retry. */
   'TIMEOUT',
   /** The caller's `AbortSignal` fired. */
@@ -75,6 +80,7 @@ const DEFAULT_MESSAGES: Record<SyncErrorCode, string> = {
   SNAPSHOT_MISMATCH: 'The snapshot belongs to another account or network.',
   TIMEOUT: 'The backend did not answer in time.',
   UNKNOWN_COIN: 'The coin is not one this account can spend.',
+  UNREACHABLE: 'The backend could not be reached several times in a row: it is left alone for a while.',
   UNSUPPORTED: 'This is not supported in this version.',
 }
 

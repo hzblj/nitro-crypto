@@ -44,7 +44,14 @@ type Setup = {
 export const setup = async ({recommended, sync = {}}: Setup = {}) => {
   const wallet = await openWallet()
   const esplora = createFakeEsplora({recommended})
-  const backend = esploraBackend({fetch: esplora.fetch, network: 'testnet', retryDelayMs: 1, url: URL})
+  // Unpaced: these tests are about what a sync reads, and the pacing has tests of its own.
+  const backend = esploraBackend({
+    fetch: esplora.fetch,
+    network: 'testnet',
+    requestsPerSecond: Number.POSITIVE_INFINITY,
+    retryDelayMs: 1,
+    url: URL,
+  })
   const options = {
     backend,
     chain,

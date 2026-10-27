@@ -185,7 +185,8 @@ engine's or the signer's.
 import {createBitcoinSync, esploraBackend, parseExtendedKey} from '@hzblj/crypto-bitcoin/sync'
 
 const sync = createBitcoinSync({
-  backend: esploraBackend({network: 'testnet'}), // mempool.space's testnet4
+  // Your own Esplora; `{network: 'testnet'}` alone is mempool.space's testnet4, paced for trying things out.
+  backend: esploraBackend({network: 'testnet', url: 'https://esplora.example.com/testnet4/api'}),
   chain: crypto.chains.bitcoin,
   extendedKey: wallet.extendedPublicKey("m/84'/1'/0'"), // or parseExtendedKey(vpub, crypto.hash.sha256).extendedKey
   fingerprint: wallet.fingerprint, // the master key's, which PSBTs name
@@ -229,7 +230,7 @@ sync forgets it.
 | `sync.broadcast({hex, txid})` | Sends a signed transaction and records it, so its coins are spent and its change is there before the next sync. A node that has it already is a success |
 | `sync.transactionStatus(txid)` | `confirmed` (with confirmations), `pending` or `unknown` |
 | `parseExtendedKey(text, sha256)`, `formatExtendedKey(key, {network, scriptType?}, sha256)` | Extended public keys to and from text: xpub, tpub, zpub, vpub. A private key is `PRIVATE_KEY_MATERIAL`; ypub and the multisig forms are `UNSUPPORTED` |
-| `esploraBackend({network, url?, timeoutMs?, retries?, retryDelayMs?, concurrency?, headers?, fetch?})` | An Esplora server: mempool.space's for mainnet, testnet (testnet4) and signet unless `url` says otherwise (regtest needs one). 15 s per attempt, 3 retries with backoff on timeouts, lost connections, 429 (honouring `Retry-After`) and 5xx, 4 requests at once |
+| `esploraBackend({network, url?, ...})` | An Esplora server: `url`, or mempool.space's for mainnet, testnet (testnet4) and signet (regtest needs a `url`). Paced and retried as below |
 
 | The view | |
 | --- | --- |
@@ -275,6 +276,7 @@ else's coins or pays several recipients, and one whose change another pending tr
 | Code | When |
 | --- | --- |
 | `NETWORK_ERROR`, `TIMEOUT`, `RATE_LIMITED`, `BACKEND_ERROR` | The backend, after every retry: unreachable, too slow, 429, an error status |
+| `UNREACHABLE` | The backend could not be reached several times in a row: no request goes out until a pause has passed |
 | `ABORTED` | The `AbortSignal` fired |
 | `INVALID_RESPONSE` | An answer Esplora would not give, or a previous transaction that is not the coin it spends |
 | `BROADCAST_REJECTED` | The node refused the transaction; the message is its reason |
@@ -287,11 +289,40 @@ else's coins or pays several recipients, and one whose change another pending tr
 Every error is a `SyncError` with one of these codes (`isSyncError(error, 'INSUFFICIENT_FUNDS')`); messages never
 quote an address or a key.
 
+### Public servers, and your own
+
+**Public Esplora servers rate-limit, and block an IP address that asks too much.** mempool.space and
+blockstream.info serve everyone for free and protect themselves: a few minutes of syncing a large account, unpaced,
+got the machine this was written on refused by every mempool.space address, mainnet included. A sync asks once per
+address (Esplora has no batch), so the first sync of an account with a long history is hundreds of requests. **A
+wallet with real users should run or rent its own Esplora** (electrs, or a mempool instance with its Esplora API) and
+pass its base URL:
+
+```ts
+esploraBackend({network: 'mainnet', url: 'https://esplora.example.com/api'}) // your electrs: /api is its REST root
+esploraBackend({network: 'testnet', url: 'http://10.0.2.2:3002'}) // a local one, from the Android emulator
+```
+
+| Option | A public server (mempool.space, blockstream.info) | Any other `url` | |
+| --- | --- | --- | --- |
+| `requestsPerSecond` | 2 | 50 | Request starts per second, sustained, across every call (retries included) |
+| `burst` | 5 | 20 | Requests that may start at once after a quiet spell |
+| `concurrency` | 2 | 8 | Requests in flight at once |
+| `retryDelayMs` | 1000 | 500 | The first wait before a retry, doubled each time with jitter, at most 30 s |
+| `retries` | 3 | 3 | Retries of a timeout, a lost connection, a 429 (honouring `Retry-After`) or a 5xx |
+| `timeoutMs` | 15000 | 15000 | One attempt, the body included |
+| `unreachableAfter` | 5 | 5 | Connection failures in a row (refused, timed out) before the server is left alone (`UNREACHABLE`) |
+| `unreachablePauseMs` | 30000 | 30000 | How long it is left alone before one request tries again, doubled after each failed try, at most 10 minutes |
+
+At the public defaults a one-address sync (about six requests) is immediate, and a fresh account's first sync (about
+45) takes some 20 seconds; every option overrides them, and `headers` carries a hosted service's API key.
+`isPublicEsplora(url)`, `PUBLIC_PACING` and `OWN_PACING` say which applies.
+
 ### Privacy and trust
 
 **The backend sees the whole account.** Esplora is asked about every address, so the server learns that they are one
 wallet, which ones were used, when the app looks, and from which IP address. Run your own (electrs or mempool behind
-`url`), or reach it through Tor; a public server is a convenience, and mempool.space limits how hard it can be asked.
+`url`), or reach it through Tor; a public server is a convenience.
 **It is trusted for what it says:** a lying backend can hide coins, invent them, or misstate a history. A PSBT with
 previous transactions lets a signer check the values it signs, and the sync checks those transactions against their
 coins before writing them; a balance is still the backend's word. **The snapshot is the account's history** in plain

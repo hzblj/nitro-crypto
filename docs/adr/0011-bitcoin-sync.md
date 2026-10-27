@@ -30,6 +30,14 @@ that layer; for Bitcoin in React Native there was none to use:
   `esploraBackend` is one, an Electrum or Bitcoin Core one is another, later. The HTTP layer is a wallet's: a timeout
   per attempt, the caller's `AbortSignal`, retries with backoff on 429 and 5xx (honouring `Retry-After`), bounded
   concurrency, every answer parsed strictly, every failure a `SyncError` with a stable code.
+- **Polite to public servers by default.** Esplora has no batch, so the first sync of a large account is hundreds of
+  requests; done unpaced at two at a time while this was written, it got the machine's IP address blocked by every
+  mempool.space address. Every request of a backend (retries included) now starts no faster than a rate, after a
+  small burst: two a second, five at once, two in flight for mempool.space and blockstream.info, whose limits are
+  unpublished; fifty a second for any other `url`, taken to be the app's own server. Repeated connection failures
+  (refused, timed out) mean the server is unreachable or refusing this address: every request then fails at once
+  (`UNREACHABLE`) and none goes out for a pause that doubles up to ten minutes. The README tells a wallet with real
+  users to run or rent its own Esplora.
 - **Incremental, from a JSON snapshot.** The state is the tip, each used address's summary as Esplora counts it, and
   each transaction as the account needs it; `snapshot()` is plain JSON (bigints as strings) for MMKV and the like. A
   sync reads the tip, compares the blocks of the account's confirmed transactions with the best chain (newest first,
@@ -55,7 +63,8 @@ that layer; for Bitcoin in React Native there was none to use:
 - The backend sees every address of the account, links them, and is trusted for balances and history. The README and
   `SECURITY.md` say so, and recommend running one's own. Previous transactions in a PSBT are checked against their
   coins, so a lying backend cannot misstate the values a signer verifies.
-- Esplora has no batch and no push: a sync asks once per address and polls. An Electrum backend (one connection,
+- Esplora has no batch and no push: a sync asks once per address and polls. On a public server, paced, a fresh
+  account's first sync takes some 20 seconds; on the app's own, under one. An Electrum backend (one connection,
   scripthash subscriptions) is the next step for large accounts.
 - A wallet with keys and network in one package would be simpler to call and harder to audit; this keeps the line
   ADR 0004 drew: keys in the engine, everything else outside it.
