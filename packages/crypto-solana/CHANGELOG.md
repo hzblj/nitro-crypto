@@ -1,5 +1,16 @@
 # @hzblj/crypto-solana
 
+## 0.3.0
+
+### Minor Changes
+
+- [#12](https://github.com/hzblj/nitro-crypto/pull/12) [`05bc44f`](https://github.com/hzblj/nitro-crypto/commit/05bc44f1dfe64aee0c0bca3e060e081bd5bc24c9) Thanks [@hzblj](https://github.com/hzblj)! - Versioned transactions, off-chain messages and a @solana/kit signer, so a wallet can sign what modern Solana dApps send. `account.signTransaction` and `chain.compileMessage` take `version: 0` and `addressLookupTables`, and compile a v0 message that loads accounts from the tables as kit's `compressTransactionMessageUsingAddressLookupTables` and compiler do, byte for byte. `decodeMessage` reads legacy and v0 messages and names looked-up accounts from the tables' addresses when given (`{addressLookupTables}`), `decodeTransaction` reads a wire transaction with its signature slots, and `account.partiallySignTransaction` signs the account's own slot of a transaction others sign too. `account.signOffchainMessage`, `chain.encodeOffchainMessage`, `decodeOffchainMessage` and `verifyOffchainMessage` handle Solana's off-chain messages, versions 0 and 1, encoded as kit encodes them. `@hzblj/crypto-solana/kit` exports `toKitSigner(account)`, a kit `TransactionPartialSigner` and `MessagePartialSigner`; `@solana/kit` is an optional peer dependency that only this entry names, for its types. `features.versionedTransactions` and `features.offchainMessages` are now `true`. Changed: a decoded account's `address` is `undefined` for a v0 account loaded from a table that was not supplied (`DecodedSolanaAccount`, `DecodedSolanaInstruction`), decoded messages say their `version` and `addressTableLookups`, and compiling refuses what kit refuses (more than 64 accounts, 12 signers or 64 instructions) for legacy messages too.
+
+### Patch Changes
+
+- Updated dependencies [[`315484b`](https://github.com/hzblj/nitro-crypto/commit/315484b5ec891b6b45f38c2415d323841243df8a), [`dc6062d`](https://github.com/hzblj/nitro-crypto/commit/dc6062d9d700ddf9e33e7cc4ff43836c658f65f6), [`c1ceb75`](https://github.com/hzblj/nitro-crypto/commit/c1ceb759f9c3b840153933d6c288d6c887f28a2d), [`fbd3720`](https://github.com/hzblj/nitro-crypto/commit/fbd37205d4c57696f91e988b513d04cef29b2cb8), [`b8ee6b2`](https://github.com/hzblj/nitro-crypto/commit/b8ee6b24c3fb198ad25b4e7baa8854fb856dba46)]:
+  - @hzblj/nitro-crypto@0.1.5
+
 ## 0.2.0
 
 ### Minor Changes

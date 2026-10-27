@@ -1968,7 +1968,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@hzblj/crypto-bitcoin@npm:^0.2.0, @hzblj/crypto-bitcoin@workspace:*, @hzblj/crypto-bitcoin@workspace:packages/crypto-bitcoin":
+"@hzblj/crypto-bitcoin@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@hzblj/crypto-bitcoin@npm:0.2.0"
+  peerDependencies:
+    "@hzblj/nitro-crypto": ^0.1.2
+  checksum: 10c0/bab9491be717567537543f34f8be885a4711a74235eee3c994ac42a066bb177e1cfbeb4ba37a1e800c8854cafd352d507878451eadcd9bc6f120a0c9b0372cad
+  languageName: node
+  linkType: hard
+
+"@hzblj/crypto-bitcoin@workspace:*, @hzblj/crypto-bitcoin@workspace:packages/crypto-bitcoin":
   version: 0.0.0-use.local
   resolution: "@hzblj/crypto-bitcoin@workspace:packages/crypto-bitcoin"
   dependencies:
@@ -1986,7 +1995,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hzblj/crypto-ethereum@npm:^0.2.0, @hzblj/crypto-ethereum@workspace:*, @hzblj/crypto-ethereum@workspace:packages/crypto-ethereum":
+"@hzblj/crypto-ethereum@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@hzblj/crypto-ethereum@npm:0.2.0"
+  peerDependencies:
+    "@hzblj/nitro-crypto": ^0.1.2
+  checksum: 10c0/15778fc2a675461d48116c0a3ecaf10379c7166f370bc20c0a81ebe80d5a790fe20947537ebf5bafce29f863f1048c190dd832c234684993876bacc30715f773
+  languageName: node
+  linkType: hard
+
+"@hzblj/crypto-ethereum@workspace:*, @hzblj/crypto-ethereum@workspace:packages/crypto-ethereum":
   version: 0.0.0-use.local
   resolution: "@hzblj/crypto-ethereum@workspace:packages/crypto-ethereum"
   dependencies:
@@ -2004,7 +2022,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@hzblj/crypto-solana@npm:^0.2.0, @hzblj/crypto-solana@workspace:*, @hzblj/crypto-solana@workspace:packages/crypto-solana":
+"@hzblj/crypto-solana@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@hzblj/crypto-solana@npm:0.2.0"
+  peerDependencies:
+    "@hzblj/nitro-crypto": ^0.1.2
+  checksum: 10c0/089b5dbfc5f09b8e7d1c36e5ac3884205913fceb4ca711dd5ac24d7aab8d883cda60d027f6a49c3e5ed9c7af9e2f093c4aca55e5791a3ee518dd9ed49edf751a
+  languageName: node
+  linkType: hard
+
+"@hzblj/crypto-solana@workspace:*, @hzblj/crypto-solana@workspace:packages/crypto-solana":
   version: 0.0.0-use.local
   resolution: "@hzblj/crypto-solana@workspace:packages/crypto-solana"
   dependencies:
