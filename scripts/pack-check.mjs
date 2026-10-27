@@ -133,36 +133,24 @@ for (const {directory, name} of packages) {
     fail(`${name} publishes a \`source\` condition in its exports, to a src/ it does not ship`)
   }
 
-  // An optional peer dependency belongs to its subpath alone: no other file may import it, or installing the package
-  // without it would break the main entry.
-  for (const [peer, meta] of Object.entries(packed.peerDependenciesMeta ?? {})) {
-    if (!meta.optional) {
-      continue
-    }
-    const importers = files.filter(
-      file =>
-        /^build\/.*\.js$/.test(file) &&
-        file !== `build/${peer}.js` &&
-        new RegExp(`from ['"]${peer}(/[^'"]*)?['"]`).test(run('tar', ['-xzOf', tarball, `package/${file}`]))
-    )
-    if (importers.length > 0) {
-      fail(`${name} imports its optional peer ${peer} outside build/${peer}.js:\n  ${importers.join('\n  ')}`)
-    }
-  }
-
   const installed = path.join(WORK, 'node_modules', name)
   await mkdir(installed, {recursive: true})
   run('tar', ['-xzf', tarball, '-C', installed, '--strip-components', '1'])
   fileCount += files.length
 
-  // An optional peer dependency is the app's to install or not: no published JavaScript may load it (its types may
-  // be named, as `@hzblj/crypto-solana/kit` names @solana/kit's, since declarations load nothing).
+  // An optional peer dependency is the app's to install or not: only its own subpath's file may load it
+  // (`build/viem.js` loads viem), so the main entry installs without it. Types may be named anywhere, as
+  // `@hzblj/crypto-solana/kit` names @solana/kit's, since declarations load nothing.
   const optional = Object.entries(packed.peerDependenciesMeta ?? {}).flatMap(([peer, meta]) =>
     meta.optional ? [peer] : []
   )
   for (const file of files.filter(file => file.endsWith('.js'))) {
     const code = await readFile(path.join(installed, file), 'utf8')
-    const loaded = optional.filter(peer => new RegExp(`(from|import|require)\\s*\\(?\\s*['"]${peer}['"/]`).test(code))
+    const loaded = optional.filter(
+      peer =>
+        file !== `build/${peer.split('/').pop()}.js` &&
+        new RegExp(`(from|import|require)\\s*\\(?\\s*['"]${peer}['"/]`).test(code)
+    )
     if (loaded.length > 0) {
       fail(`${name}'s ${file} loads ${loaded.join(', ')}, an optional peer dependency`)
     }
