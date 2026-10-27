@@ -5,7 +5,7 @@ import {hex} from '@hzblj/nitro-crypto/adapter'
 import {Transaction} from '@scure/btc-signer'
 
 import type {BitcoinAccount} from '../../src'
-import {type BitcoinSync, createBitcoinSync, esploraBackend, type Payment} from '../../src/sync'
+import {type BitcoinSync, createBitcoinSync, esploraBackend, type Payment, type SignerRequest} from '../../src/sync'
 import {STRANGER} from './fake-esplora'
 import {
   ACCOUNT_PATH,
@@ -43,8 +43,8 @@ const signedByScure = (psbt: Uint8Array, payment: Payment) => {
   return hex.encode(transaction.extract())
 }
 
-const engineSigner = (wallet: Awaited<ReturnType<typeof setup>>['wallet']) => (path: string) =>
-  wallet.deriveAccount({chain: 'bitcoin', path}) as Promise<BitcoinAccount<string>>
+const engineSigner = (wallet: Awaited<ReturnType<typeof setup>>['wallet']) => (request: SignerRequest) =>
+  wallet.deriveAccount({chain: 'bitcoin', ...request}) as Promise<BitcoinAccount<string>>
 
 /** Plans, writes, signs in the engine, finalizes and broadcasts: a hot wallet's send. */
 const send = async (sync: BitcoinSync, wallet: Awaited<ReturnType<typeof setup>>['wallet'], payment: Payment) => {

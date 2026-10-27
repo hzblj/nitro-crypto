@@ -70,7 +70,7 @@ describe('your own HTTP client', () => {
       assert.equal(view.balance.total, 50_000n)
 
       const psbt = await sync.createPsbt(sync.createPayment({amount: 10_000n, feeRate: 2, to: STRANGER}))
-      const signed = await sync.signPsbt(psbt, path => wallet.deriveAccount({chain: 'bitcoin', path}))
+      const signed = await sync.signPsbt(psbt, request => wallet.deriveAccount({chain: 'bitcoin', ...request}))
       const txid = await sync.broadcast(chain.finalizePsbt(signed))
       assert.ok(esplora.inMempool(txid))
       wallet.dispose()

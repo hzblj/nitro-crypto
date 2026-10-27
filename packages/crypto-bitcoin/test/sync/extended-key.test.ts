@@ -189,10 +189,19 @@ describe('extended keys', async () => {
         }),
       'NETWORK_MISMATCH'
     )
+    // Taproot's account key sits at BIP-86's path, the default for it.
+    assert.equal(
+      createBitcoinSync({
+        backend: offline,
+        chain,
+        extendedKey: wallet.extendedPublicKey("m/86'/1'/0'"),
+        scriptType: 'p2tr',
+      }).path,
+      "m/86'/1'/0'"
+    )
     throwsSync(
-      () => createBitcoinSync({backend: offline, chain, extendedKey, scriptType: 'p2tr'}),
-      'UNSUPPORTED',
-      /Taproot/
+      () => createBitcoinSync({backend: offline, chain, extendedKey, scriptType: 'p2sh' as 'p2tr'}),
+      'UNSUPPORTED'
     )
     throwsSync(() => createBitcoinSync({backend: offline, chain, extendedKey, gapLimit: 0}), 'INVALID_ARGUMENT')
     throwsSync(() => createBitcoinSync({backend: offline, chain, extendedKey, fingerprint: -1}), 'INVALID_ARGUMENT')

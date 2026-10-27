@@ -201,13 +201,27 @@ const payment = sync.createPayment({amount: 25_000n, feeRate: fees.halfHour, to}
 const psbt = await sync.createPsbt(payment) // every coin's key origin, each from its own address
 
 // The engine signs (an air-gapped signer takes the same PSBT through @hzblj/crypto-airgap-bitcoin):
-const signed = await sync.signPsbt(psbt, path => wallet.deriveAccount({chain: 'bitcoin', path}))
+const signed = await sync.signPsbt(psbt, request => wallet.deriveAccount({chain: 'bitcoin', ...request}))
 await sync.broadcast(crypto.chains.bitcoin.finalizePsbt(signed)) // recorded as pending at once
+```
+
+A Taproot account (BIP-86) is the same with `scriptType: 'p2tr'`: its key is an xpub or tpub at `m/86'/…` (Taproot
+has no SLIP-132 prefix), its addresses are Bech32m, its PSBTs carry BIP-371's fields, and `signPsbt` derives each key
+as a Taproot account, which signs with Schnorr.
+
+```ts
+const taproot = createBitcoinSync({
+  backend,
+  chain: crypto.chains.bitcoin,
+  extendedKey: wallet.extendedPublicKey("m/86'/1'/0'"), // or parseExtendedKey(tpub, sha256).extendedKey
+  fingerprint: wallet.fingerprint,
+  scriptType: 'p2tr',
+})
 ```
 
 | It follows | |
 | --- | --- |
-| `{extendedKey, path?, fingerprint?, scriptType?}` | An account: `wallet.extendedPublicKey(path)`, or a signer's xpub, tpub, zpub or vpub (`parseExtendedKey`). `path` defaults to BIP-84's account at the key's index on the adapter's network; `fingerprint` is needed for PSBTs only; `scriptType` is `p2wpkh` |
+| `{extendedKey, path?, fingerprint?, scriptType?}` | An account: `wallet.extendedPublicKey(path)`, or a signer's xpub, tpub, zpub or vpub (`parseExtendedKey`). `scriptType` is `p2wpkh` (the default) or `p2tr`; `path` defaults to BIP-84's account (`m/84'/…`), or BIP-86's (`m/86'/…`) for `p2tr`, at the key's index on the adapter's network; `fingerprint` is needed for PSBTs only |
 | `{account}` | One key's address, receiving and change alike: an account of the engine (`wallet.deriveAccount`) or a watch-only one (`chain.watchAccount`). No discovery |
 | `{address}` | An address alone, of any type: its balance and history, no payments (`MISSING_KEY`) |
 
@@ -226,10 +240,10 @@ sync forgets it.
 | `sync.createPayment({to, amount, feeRate, coins?, unconfirmed?})` | A plan: its coins with their paths, the change address, the fee rate. `amount: 'max'` sends everything selection may spend |
 | `sync.createFeeBump(txid, {feeRate})` | A replacement (BIP-125) of the account's own pending transaction, as a payment |
 | `sync.createPsbt(payment, {previousTransactions?})` | One PSBT for coins of any addresses of the account: each input's witness UTXO and key origin, the origin on change, each coin's previous transaction (checked against it) unless `false` |
-| `sync.signPsbt(psbt, derive)` | Signs with the engine, every key of the account the PSBT names, each derived by `derive` and checked against it |
+| `sync.signPsbt(psbt, derive)` | Signs with the engine, every key of the account the PSBT names (BIP-32 derivations for P2WPKH, Taproot derivations for P2TR), each derived by `derive({path, addressType})` and checked against it |
 | `sync.broadcast({hex, txid})` | Sends a signed transaction and records it, so its coins are spent and its change is there before the next sync. A node that has it already is a success |
 | `sync.transactionStatus(txid)` | `confirmed` (with confirmations), `pending` or `unknown` |
-| `parseExtendedKey(text, sha256)`, `formatExtendedKey(key, {network, scriptType?}, sha256)` | Extended public keys to and from text: xpub, tpub, zpub, vpub. A private key is `PRIVATE_KEY_MATERIAL`; ypub and the multisig forms are `UNSUPPORTED` |
+| `parseExtendedKey(text, sha256)`, `formatExtendedKey(key, {network, scriptType?}, sha256)` | Extended public keys to and from text: xpub, tpub, zpub, vpub (`scriptType: 'p2wpkh'` for zpub and vpub). Taproot has no prefix of its own: its account is an xpub or tpub at `m/86'/…`, followed with `scriptType: 'p2tr'`. A private key is `PRIVATE_KEY_MATERIAL`; ypub and the multisig forms are `UNSUPPORTED` |
 | `esploraBackend({network, url?, fetch?, ...})` | An Esplora server: `url`, or mempool.space's for mainnet, testnet (testnet4) and signet (regtest needs a `url`), over the global `fetch` or yours. Paced and retried as below |
 
 | The view | |
@@ -264,9 +278,11 @@ it: they are derived again from the key.
 Coin selection is the adapter's own (largest coins first, change when it is worth an output) over the coins
 `unconfirmed` allows: confirmed coins and the account's own unconfirmed change by default (`own`), any (`all`) or none
 (`none`); `coins` is coin control. Change goes to the next change address, every input is replaceable (BIP-125), and
-the transaction is version 2 with lock time 0, as `createTransaction` makes it. `createPsbt` writes one PSBT per key
-with the adapter's `createPsbt` and takes each input's fields from its own key's: the PSBT a hardware wallet, an
-air-gapped phone or the engine reads is the adapter's, field for field.
+the transaction is version 2 with lock time 0, as `createTransaction` makes it (sizing inputs for the account's type:
+68 vB for P2WPKH, 57.5 for Taproot). `createPsbt` writes one PSBT per key with the adapter's `createPsbt` and takes
+each input's fields from its own key's: the PSBT a hardware wallet, an air-gapped phone or the engine reads is the
+adapter's, field for field (P2WPKH's BIP-32 derivations; Taproot's internal key and BIP-371 derivations, on inputs and
+change).
 
 A fee bump spends the same coins (or fewer of them), pays the same recipient the same amount and takes the fee from
 the change, at least the original fee plus 1 sat/vB of its own size and at a higher rate (BIP-125's rules; else
@@ -283,7 +299,7 @@ else's coins or pays several recipients, and one whose change another pending tr
 | `INSUFFICIENT_FUNDS`, `UNKNOWN_COIN`, `INVALID_ADDRESS` | A payment the coins cannot pay, coin control outside the account, a recipient of another network |
 | `FEE_BUMP_UNAVAILABLE`, `FEE_TOO_LOW` | A replacement this account cannot make, or one that pays too little |
 | `MISSING_KEY`, `MISSING_FINGERPRINT`, `KEY_MISMATCH` | A payment from an address alone, a PSBT without the master fingerprint, a derived key that is not the PSBT's |
-| `INVALID_EXTENDED_KEY`, `PRIVATE_KEY_MATERIAL`, `UNSUPPORTED` | Key text that does not read, or does not fit its path; an xprv; P2TR, ypub, multisig |
+| `INVALID_EXTENDED_KEY`, `PRIVATE_KEY_MATERIAL`, `UNSUPPORTED` | Key text that does not read, or does not fit its path; an xprv; ypub, multisig, an engine without public derivation or Taproot |
 | `NETWORK_MISMATCH`, `INVALID_SNAPSHOT`, `SNAPSHOT_MISMATCH`, `INVALID_ARGUMENT` | The key, adapter and backend on different networks; a snapshot this version did not write, or another account's |
 
 Every error is a `SyncError` with one of these codes (`isSyncError(error, 'INSUFFICIENT_FUNDS')`); messages never
@@ -378,10 +394,10 @@ previous transactions lets a signer check the values it signs, and the sync chec
 coins before writing them; a balance is still the backend's word. **The snapshot is the account's history** in plain
 JSON: keep it where the app keeps private data.
 
-**Not in this version:** Taproot accounts (P2TR, BIP-86: the script type is reserved and `UNSUPPORTED` until the
-adapter has Taproot), P2SH-wrapped and multisig accounts (ypub, Zpub), backends other than Esplora (the
-`BitcoinBackend` interface takes them, as above), push updates (a sync polls), branch-and-bound coin selection, CPFP (a child
-paying for its parent), payments to several recipients, and more than 50 pending transactions on one address (Esplora
-lists 50).
+**Not in this version:** Taproot script paths (an account's keys are BIP-86 key paths), accounts of two script
+types at once (sync each), P2SH-wrapped and multisig accounts (ypub, Zpub), backends other than Esplora (the
+`BitcoinBackend` interface takes them, as above), push updates (a sync polls), branch-and-bound coin selection, CPFP
+(a child paying for its parent), payments to several recipients, and more than 50 pending transactions on one
+address (Esplora lists 50).
 
 [Documentation](https://github.com/hzblj/nitro-crypto#readme) · [Security](https://github.com/hzblj/nitro-crypto/blob/main/SECURITY.md)

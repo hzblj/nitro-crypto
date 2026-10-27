@@ -43,6 +43,7 @@ export {
   type Payment,
   type PaymentRequest,
   type PsbtOptions,
+  type SignerRequest,
   type SyncOptions,
   type SyncSource,
   type TransactionStatus,

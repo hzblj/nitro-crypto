@@ -303,6 +303,19 @@ export const sync = async (zpub: string) => {
   const psbt: Uint8Array = await account.createPsbt(payment)
   const txid: string = await account.broadcast(crypto.chains.bitcoin.finalizePsbt(psbt))
 
+  // A Taproot account: an xpub at BIP-86's path, the type said; its keys derived as Taproot accounts to sign.
+  const wallet = await crypto.createEphemeralWallet()
+  const taproot = createBitcoinSync({
+    backend: esploraBackend({network: 'testnet'}),
+    chain: crypto.chains.bitcoin,
+    extendedKey: wallet.extendedPublicKey("m/86'/1'/0'"),
+    fingerprint: wallet.fingerprint,
+    scriptType: 'p2tr',
+  })
+  const signed: Uint8Array = await taproot.signPsbt(psbt, request => wallet.deriveAccount({chain: 'bitcoin', ...request}))
+  // @ts-expect-error: script types are p2wpkh and p2tr
+  createBitcoinSync({backend: esploraBackend({network: 'testnet'}), chain: crypto.chains.bitcoin, extendedKey, scriptType: 'p2sh'})
+
   // Any HTTP client that answers like fetch: here, a hand-written one.
   const own: SyncFetch = async (url, {method, signal}) => ({headers: {get: () => null}, ok: !signal.aborted, status: 200, text: async () => method + url})
   esploraBackend({fetch: own, network: 'testnet', url: 'https://esplora.example.com/api'})
@@ -314,7 +327,7 @@ export const sync = async (zpub: string) => {
   // @ts-expect-error: amounts are satoshis as bigints
   account.createPayment({amount: 10_000, feeRate: 1, to: ''})
 
-  return [total, saved, txid, isSyncError(null, 'INSUFFICIENT_FUNDS')]
+  return [total, saved, txid, signed, isSyncError(null, 'INSUFFICIENT_FUNDS')]
 }
 
 export const customChain = defineAdapter({

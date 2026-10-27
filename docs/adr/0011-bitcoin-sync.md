@@ -49,8 +49,10 @@ that layer; for Bitcoin in React Native there was none to use:
   first) over the coins the sync allows (confirmed, and the account's own unconfirmed change); the PSBT is the
   adapter's `createPsbt`, once per key, each input's fields taken from its own key's (BIP-174's combiner, which
   `sync/psbt.ts` is). Fee bumps are payments of the same coins at a higher rate, held to BIP-125's rules. A script type
-  is a `ScriptSupport` (an address from a key, a watch-only account of one key): P2WPKH now; P2TR (BIP-86) plugs in
-  there once the adapter has Taproot, and nothing else in the sync knows a script's fields.
+  is a `ScriptSupport` (an address from a key, a watch-only account of one key): P2WPKH (BIP-84) and Taproot key
+  paths (BIP-86), whose watch-only accounts size Taproot inputs and write BIP-371's fields; nothing else in the sync
+  knows a script's fields. Taproot has no SLIP-132 prefix, so its account is an xpub or tpub at `m/86'/…` with
+  `scriptType: 'p2tr'`, and a snapshot is tied to the type as well as the key.
 - **A subpath of the adapter, `@hzblj/crypto-bitcoin/sync`.** It needs the adapter's internals (the PSBT maps, the
   plan's checks) and moves with them, so it ships with them; a separate package would pin one adapter version against
   another for every change. The main entry stays network-free: nothing in it imports `sync/` or calls `fetch` (a test

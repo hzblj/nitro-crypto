@@ -184,13 +184,14 @@ export type BitcoinSync = {
    */
   readonly createPsbt: (payment: Payment | BitcoinTransactionPlan, options?: PsbtOptions) => Promise<Uint8Array>
   /**
-   * Signs a PSBT with keys the engine holds: every key of this account it names, each derived by `derive` (as
-   * `path => wallet.deriveAccount({chain: 'bitcoin', path})`) and checked against the PSBT's (`KEY_MISMATCH`).
-   * Signing is agreeing: show what it pays first. Finalize with `chain.finalizePsbt`.
+   * Signs a PSBT with keys the engine holds: every key under this account's fingerprint it names (BIP-32 derivations
+   * for P2WPKH, BIP-371's Taproot derivations for P2TR), each derived by `derive` with its path and type (as
+   * `request => wallet.deriveAccount({chain: 'bitcoin', ...request})`) and checked against the PSBT's
+   * (`KEY_MISMATCH`). Signing is agreeing: show what it pays first. Finalize with `chain.finalizePsbt`.
    */
   readonly signPsbt: (
     psbt: Uint8Array,
-    derive: (path: string) => Promise<BitcoinAccount<string>>
+    derive: (request: SignerRequest) => Promise<BitcoinAccount<string>>
   ) => Promise<Uint8Array>
   /**
    * Sends a signed transaction (`chain.finalizePsbt`'s, or an account's `signTransaction`) and records it as pending,
@@ -202,6 +203,14 @@ export type BitcoinSync = {
     options?: RequestOptions
   ) => Promise<string>
   readonly transactionStatus: (txid: string, options?: RequestOptions) => Promise<TransactionStatus>
+}
+
+/** Which key `signPsbt` asks `derive` for: its path, and the type of account it signs as. */
+export type SignerRequest = {
+  /** From the master key, as the PSBT names it: `m/86'/1'/0'/1/2`. */
+  readonly path: string
+  /** `p2wpkh` for a BIP-32 derivation, `p2tr` for a Taproot one. */
+  readonly addressType: ScriptType
 }
 
 type Source = {
@@ -1084,18 +1093,29 @@ export const createBitcoinSync = (options: BitcoinSyncOptions): BitcoinSync => {
     return combined
   }
 
-  const signPsbt = async (psbt: Uint8Array, derive: (path: string) => Promise<BitcoinAccount<string>>) => {
+  const signPsbt = async (psbt: Uint8Array, derive: (request: SignerRequest) => Promise<BitcoinAccount<string>>) => {
     if (source.fingerprint === undefined) {
       throw new SyncError('MISSING_FINGERPRINT')
     }
 
     const decoded = guarded(() => chain.decodePsbt(psbt))
-    const keys = new Map<string, Uint8Array>()
+    // By type and path: P2WPKH names a compressed key (33 bytes), Taproot an x-only one (32).
+    const keys = new Map<string, {readonly addressType: ScriptType; readonly path: string; readonly key: Uint8Array}>()
 
     for (const input of decoded.inputs) {
+      if (input.finalized) {
+        continue
+      }
+
       for (const origin of input.derivations) {
-        if (origin.fingerprint === source.fingerprint && !input.finalized) {
-          keys.set(origin.path, origin.publicKey)
+        if (origin.fingerprint === source.fingerprint) {
+          keys.set(`p2wpkh ${origin.path}`, {addressType: 'p2wpkh', key: origin.publicKey, path: origin.path})
+        }
+      }
+
+      for (const origin of input.taprootDerivations) {
+        if (origin.fingerprint === source.fingerprint) {
+          keys.set(`p2tr ${origin.path}`, {addressType: 'p2tr', key: origin.publicKey, path: origin.path})
         }
       }
     }
@@ -1106,10 +1126,11 @@ export const createBitcoinSync = (options: BitcoinSyncOptions): BitcoinSync => {
 
     let signed = psbt
 
-    for (const [path, publicKey] of keys) {
-      const signer = await derive(path)
+    for (const {addressType, key, path} of keys.values()) {
+      const signer = await derive({addressType, path})
+      const named = addressType === 'p2tr' ? signer.publicKey.subarray(1) : signer.publicKey
 
-      if (!bytes.equal(signer.publicKey, publicKey)) {
+      if (signer.addressType !== addressType || !bytes.equal(named, key)) {
         throw new SyncError('KEY_MISMATCH', 'The key derived at a path of the PSBT is not the key it names there.')
       }
 

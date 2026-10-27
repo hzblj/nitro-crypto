@@ -33,8 +33,8 @@ TypeScript over `@hzblj/nitro-crypto/adapter` and nothing else: no native code, 
   the pack check's required files.
 - **The adapter plans and writes; the sync combines.** Coin selection is `createTransaction`'s and PSBT fields are
   `createPsbt`'s, one watch-only account per key; `sync/psbt.ts` only picks which PSBT each map comes from. A new
-  script type is a `ScriptSupport` in `script-types.ts` (P2TR is reserved there): nothing else in `src/sync/` knows a
-  script's fields.
+  script type is a `ScriptSupport` in `script-types.ts` (P2WPKH and P2TR are): nothing else in `src/sync/` knows a
+  script's fields. `signPsbt` reads both kinds of derivation and asks `derive` for `{path, addressType}`.
 - **Addresses come from the key, never from storage.** A snapshot holds what the backend said; the receiving and change
   addresses are derived again on every load.
 - **The backend is read strictly and trusted only for chain data.** Every Esplora answer is parsed field by field
